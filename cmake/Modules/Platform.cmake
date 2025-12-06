@@ -1,0 +1,20 @@
+# Platform detection
+if(WIN32)
+    set(AX_PLATFORM "WINDOWS")
+    set(AX_PLATFORM_UNIFIED_NAME "win32")
+elseif(APPLE)
+    set(AX_PLATFORM "MACOS")
+    set(AX_PLATFORM_UNIFIED_NAME "apple")
+elseif(UNIX)
+    set(AX_PLATFORM "LINUX")
+    set(AX_PLATFORM_UNIFIED_NAME "linux")
+else()
+    set(AX_PLATFORM "UNKNOWN")
+    set(AX_PLATFORM_UNIFIED_NAME "misc")
+endif()
+
+# WebAssembly detection
+if(DEFINED AX_BUILD_EMWEB AND AX_BUILD_EMWEB)
+    add_definitions(-D__EMSCRIPTEN__)
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+endif()
