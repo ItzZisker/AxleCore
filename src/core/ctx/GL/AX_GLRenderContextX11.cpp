@@ -210,7 +210,7 @@ void* GL_RenderContextX11::OpenLibGLOnce() {
         }
     }
 
-    std::cerr << "[DBG] Could not open any GL library.\n";
+    std::cerr << "AX Error: OpenLibGLOnce() Could not open any GL library.\n";
     return nullptr;
 }
 
@@ -237,7 +237,7 @@ void* GL_RenderContextX11::GetGLProcAddressRaw(const char* name) {
 }
 
 // Add Debugger/Debug builds, Logger, cleaner debug management
-bool GL_RenderContextX11::LoadGLXFunctions() {
+bool GL_RenderContextX11::LoadGLFunctions() {
     return gladLoadGLLoader((GLADloadproc)GetGLProcAddressRaw);
 }
 

@@ -19,6 +19,9 @@ bool GL_RenderContextWin32::Init(IApplication* app) {
     m_hwnd = reinterpret_cast<HWND>(app->GetNativeWindowHandle());
 
     // 1. Acquire device context
+    // What the hell is DC? why you can't just call it GetDeviceContext?
+    // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdc
+    // Oh god, without internet, writing windows specific code is Impossible
     m_hdc = GetDC((HWND)m_hwnd);
     if (!m_hdc) {
         std::cerr << "AX Error: Failed to GetDC()\n";

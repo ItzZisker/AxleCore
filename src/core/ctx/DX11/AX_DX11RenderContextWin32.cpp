@@ -1,7 +1,7 @@
 #include "axle/core/ctx/DX11/AX_DX11_RenderContextWin32.hpp"
-#include "AX_PCH.hpp"
 
 #if defined(__AX_GRAPHICS_DX11__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
+#include "AX_PCH.hpp"
 
 #include <windows.h>
 
@@ -24,8 +24,8 @@ bool DX11_RenderContextWin32::Init(IApplication* app) {
 
     RECT rect{};
     GetClientRect((HWND)m_hwnd, &rect);
-    UINT width  = rect.right  - rect.left;
-    UINT height = rect.bottom - rect.top;
+    UINT width  = static_cast<UINT>(rect.right  - rect.left);
+    UINT height = static_cast<UINT>(rect.bottom - rect.top);
 
     // --- 1. Create DXGI swapchain + device ---
     DXGI_SWAP_CHAIN_DESC scDesc{};

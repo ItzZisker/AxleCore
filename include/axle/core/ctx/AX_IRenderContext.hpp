@@ -29,10 +29,6 @@ public:
     virtual void* GetContextHandle() const = 0;
 
 #ifdef __AX_GRAPHICS_GL__
-    // Define GLAD 3.3 Functions, must be called post Context Creation.
-    // Returns true if success, false if none or atleast one of functions failed to load.
-    virtual bool LoadGLFunctions() = 0;
-
     // Load GLAD 3.3 Functions Directly by some wrapper/custom/platform context loader
     inline bool LoadGLFunctionsDirect(void *contextLoader) {
         if (contextLoader) return gladLoadGLLoader((GLADloadproc)contextLoader);

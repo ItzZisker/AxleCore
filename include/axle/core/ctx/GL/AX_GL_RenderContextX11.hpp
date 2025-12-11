@@ -34,8 +34,10 @@ public:
     */
     void* GetGLProcAddressRaw(const char* name);
 
-    // Load Xlib GLAD Functions based on unix, Xorg-based/X-To-Wayland-based host
-    bool LoadGL();
+    // Define GLAD 3.3 Functions, must be called post Context Creation.
+    // Returns true if success, false if none or atleast one of functions failed to load.
+    // Xlib GLAD Functions based on unix, Xorg-based/X-To-Wayland-based host
+    bool LoadGLFunctions();
 private:
     Display* m_Display = nullptr;
     Window   m_Window  = 0;

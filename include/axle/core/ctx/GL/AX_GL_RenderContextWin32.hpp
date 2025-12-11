@@ -22,7 +22,7 @@ public:
 
     void* GetContextHandle() const override;
 
-    bool LoadGLFunctions() override;
+    bool LoadGLFunctions();
 private:
     vHGLRC m_hglrc = nullptr;
     vHDC   m_hdc = nullptr;
