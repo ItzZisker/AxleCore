@@ -2,24 +2,24 @@
 
 #include "AX_PCH.hpp"
 
-#if defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
+#if defined(__AX_GRAPHICS_GL__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include <windows.h>
 #include <gl/GL.h>
 
 namespace axle::core {
 
-GL_RenderContext::GL_RenderContext() = default;
-GL_RenderContext::~GL_RenderContext() {
+GL_RenderContextWin32::GL_RenderContextWin32() = default;
+GL_RenderContextWin32::~GL_RenderContextWin32() {
     Shutdown();
 }
 
-bool GL_RenderContext::Init(IApplication* app) {
+bool GL_RenderContextWin32::Init(IApplication* app) {
     if (m_Initialized) return true;
 
-    m_hwnd = reinterpret_cast<HWND>(app.GetNativeWindowHandle());
+    m_hwnd = reinterpret_cast<HWND>(app->GetNativeWindowHandle());
 
     // 1. Acquire device context
-    m_hdc = GetDC(m_hwnd);
+    m_hdc = GetDC((HWND)m_hwnd);
     if (!m_hdc) {
         std::cerr << "AX Error: Failed to GetDC()\n";
         return false;
@@ -40,27 +40,27 @@ bool GL_RenderContext::Init(IApplication* app) {
     pfd.cStencilBits = 8;
     pfd.iLayerType = PFD_MAIN_PLANE;
 
-    int pixelFormat = ChoosePixelFormat(m_hdc, &pfd);
+    int pixelFormat = ChoosePixelFormat((HDC)m_hdc, &pfd);
     if (!pixelFormat) {
         std::cerr << "AX Error: ChoosePixelFormat failed!\n";
         return false;
     }
-    if (!SetPixelFormat(m_hdc, pixelFormat, &pfd)) {
+    if (!SetPixelFormat((HDC)m_hdc, pixelFormat, &pfd)) {
         std::cerr << "AX Error: SetPixelFormat failed!\n";
         return false;
     }
 
     // 3. Create OpenGL context
-    m_hglrc = wglCreateContext(m_hdc);
+    m_hglrc = wglCreateContext((HDC)m_hdc);
     if (!m_hglrc) {
         std::cerr << "AX Error: wglCreateContext failed!\n";
         return false;
     }
 
     // 4. Make it current
-    if (!wglMakeCurrent(m_hdc, m_hglrc)) {
+    if (!wglMakeCurrent((HDC)m_hdc, (HGLRC)m_hglrc)) {
         std::cerr << "AX Error: wglMakeCurrent failed!\n";
-        wglDeleteContext(m_hglrc);
+        wglDeleteContext((HGLRC)m_hglrc);
         m_hglrc = nullptr;
         return false;
     }
@@ -72,17 +72,17 @@ bool GL_RenderContext::Init(IApplication* app) {
     return true;
 }
 
-void GL_RenderContext::MakeCurrent() {
+void GL_RenderContextWin32::MakeCurrent() {
     if (m_hdc && m_hglrc) {
-        wglMakeCurrent(m_hdc, m_hglrc);
+        wglMakeCurrent((HDC)m_hdc, (HGLRC)m_hglrc);
     }
 }
 
-void GL_RenderContext::SwapBuffers() {
-    if (m_hdc) ::SwapBuffers(m_hdc);
+void GL_RenderContextWin32::SwapBuffers() {
+    if (m_hdc) ::SwapBuffers((HDC)m_hdc);
 }
 
-void GL_RenderContext::SetVSync(bool enabled) {
+void GL_RenderContextWin32::SetVSync(bool enabled) {
     typedef BOOL(WINAPI *PFNWGLSWAPINTERVALEXTPROC)(int);
     static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = nullptr;
 
@@ -94,16 +94,16 @@ void GL_RenderContext::SetVSync(bool enabled) {
     }
 }
 
-void GL_RenderContext::Shutdown() {
+void GL_RenderContextWin32::Shutdown() {
     if (!m_Initialized) return;
 
     if (m_hglrc) {
         wglMakeCurrent(nullptr, nullptr);
-        wglDeleteContext(m_hglrc);
+        wglDeleteContext((HGLRC)m_hglrc);
         m_hglrc = nullptr;
     }
     if (m_hdc) {
-        ReleaseDC(m_hwnd, m_hdc);
+        ReleaseDC((HWND)m_hwnd, (HDC)m_hdc);
         m_hdc = nullptr;
     }
 
@@ -111,8 +111,12 @@ void GL_RenderContext::Shutdown() {
     m_Initialized = false;
 }
 
-void* GL_RenderContext::GetContextHandle() const {
+void* GL_RenderContextWin32::GetContextHandle() const {
     return reinterpret_cast<void*>(m_hglrc);
+}
+
+bool GL_RenderContextWin32::LoadGLFunctions() {
+    return gladLoadGLLoader((GLADloadproc)wglGetProcAddress);
 }
 
 }

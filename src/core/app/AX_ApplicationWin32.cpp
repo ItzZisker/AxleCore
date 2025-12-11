@@ -1,14 +1,15 @@
 #include "axle/core/app/AX_ApplicationWin32.hpp"
+#include <minwindef.h>
 
-#if defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
+#ifdef __AX_PLATFORM_WIN32__
 
-#include "AX_CorePCH.h"
+#include <AX_PCH.hpp>
 
 #include <Windows.h>
 #include <windowsx.h>
 
-namespace axle
-{
+namespace axle::core {
+
 static ApplicationWin32* g_App = nullptr; // global pointer for static WndProc (Window procedure)
 
 ApplicationWin32::ApplicationWin32(const ApplicationSpecification& spec) {
@@ -29,8 +30,8 @@ void ApplicationWin32::Launch() {
 
     // Register window class
     WNDCLASS wc = {};
-    wc.lpfnWndProc = ApplicationWin32::WndProc;
-    wc.hInstance = m_Instance;
+    wc.lpfnWndProc = (WNDPROC)ApplicationWin32::WndProc;
+    wc.hInstance = (HINSTANCE)m_Instance;
     wc.lpszClassName = "AXWin32WindowClass";
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClass(&wc);
@@ -51,7 +52,7 @@ void ApplicationWin32::Launch() {
         rect.bottom - rect.top,
         nullptr,
         nullptr,
-        m_Instance,
+        (HINSTANCE)m_Instance,
         nullptr
     );
 
@@ -60,12 +61,12 @@ void ApplicationWin32::Launch() {
         exit(1);
     }
 
-    ShowWindow(m_Hwnd, SW_SHOW);
+    ShowWindow((HWND)m_Hwnd, SW_SHOW);
 }
 
 void ApplicationWin32::Shutdown() {
     if (m_Hwnd) {
-        DestroyWindow(m_Hwnd);
+        DestroyWindow((HWND)m_Hwnd);
         m_Hwnd = nullptr;
     }
 }
@@ -84,13 +85,13 @@ void ApplicationWin32::PollEvents() {
 
 void ApplicationWin32::SetTitle(const std::string& title) {
     m_Title = title;
-    SetWindowText(m_Hwnd, m_Title.c_str());
+    SetWindowText((HWND)m_Hwnd, m_Title.c_str());
 }
 
 void ApplicationWin32::SetResizable(bool enabled) {
     m_Resizable = enabled;
 
-    LONG style = GetWindowLong(m_Hwnd, GWL_STYLE);
+    LONG style = GetWindowLong((HWND)m_Hwnd, GWL_STYLE);
 
     if (enabled) {
         style |= (WS_THICKFRAME | WS_MAXIMIZEBOX);
@@ -98,8 +99,8 @@ void ApplicationWin32::SetResizable(bool enabled) {
         style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
     }
 
-    SetWindowLong(m_Hwnd, GWL_STYLE, style);
-    SetWindowPos(m_Hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
+    SetWindowLong((HWND)m_Hwnd, GWL_STYLE, style);
+    SetWindowPos((HWND)m_Hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
 }
 
 void ApplicationWin32::SetCursorMode(CursorMode mode) {
@@ -117,32 +118,36 @@ void ApplicationWin32::SetCursorMode(CursorMode mode) {
         ShowCursor(FALSE);
 
         RECT rect;
-        GetClientRect(m_Hwnd, &rect);
+        GetClientRect((HWND)m_Hwnd, &rect);
         POINT ul = { rect.left, rect.top };
         POINT lr = { rect.right, rect.bottom };
-        ClientToScreen(m_Hwnd, &ul);
-        ClientToScreen(m_Hwnd, &lr);
+        ClientToScreen((HWND)m_Hwnd, &ul);
+        ClientToScreen((HWND)m_Hwnd, &lr);
         rect = { ul.x, ul.y, lr.x, lr.y };
 
         ClipCursor(&rect);
     }
 }
 
-LRESULT CALLBACK ApplicationWin32::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam)
 {
     ApplicationWin32* app = g_App;
 
+    bool pressed;
     switch (msg)
     {
     case WM_CLOSE:
+    {
         app->m_ShouldQuit = true;
         return 0;
-
+    }
     case WM_DESTROY:
+    {
         PostQuitMessage(0);
         return 0;
-
+    }
     case WM_SIZE:
+    {
         uint32_t w = LOWORD(lParam);
         uint32_t h = HIWORD(lParam);
         app->m_Width = w;
@@ -151,45 +156,51 @@ LRESULT CALLBACK ApplicationWin32::WndProc(HWND hwnd, UINT msg, WPARAM wParam, L
         if (app->m_ResizeCallback)
             app->m_ResizeCallback({ w, h });
         return 0;
-
+    }
     case WM_KEYDOWN:
     case WM_KEYUP:
-        bool pressed = (msg == WM_KEYDOWN);
+    {
+        pressed = (msg == WM_KEYDOWN);
         if (app->m_KeyCallback)
             app->m_KeyCallback({ (unsigned long)wParam, pressed });
         return 0;
-
+    }
     case WM_MOUSEMOVE:
+    {
         float x = (float)GET_X_LPARAM(lParam);
         float y = (float)GET_Y_LPARAM(lParam);
 
         if (app->m_MouseMoveCallback)
             app->m_MouseMoveCallback({ x, y });
         return 0;
-
+    }
     case WM_LBUTTONDOWN:
     case WM_LBUTTONUP:
-        bool pressed = (msg == WM_LBUTTONDOWN);
+    {
+        pressed = (msg == WM_LBUTTONDOWN);
         if (app->m_MouseButtonCallback)
             app->m_MouseButtonCallback({ 0, pressed });
         return 0;
-
+    }
     case WM_RBUTTONDOWN:
     case WM_RBUTTONUP:
-        bool pressed = (msg == WM_RBUTTONDOWN);
+    {
+        pressed = (msg == WM_RBUTTONDOWN);
         if (app->m_MouseButtonCallback)
             app->m_MouseButtonCallback({ 1, pressed });
         return 0;
-
+    }
     case WM_MBUTTONDOWN:
     case WM_MBUTTONUP:
-        bool pressed = (msg == WM_MBUTTONDOWN);
+    {
+        pressed = (msg == WM_MBUTTONDOWN);
         if (app->m_MouseButtonCallback)
             app->m_MouseButtonCallback({ 2, pressed });
         return 0;
     }
+    }
 
-    return DefWindowProc(hwnd, msg, wParam, lParam);
+    return DefWindowProc((HWND)hwnd, msg, wParam, lParam);
 }
 
 }

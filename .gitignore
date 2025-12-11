@@ -1,0 +1,9 @@
+out
+out/
+out/**
+external/bullet
+external/bullet/*
+external/bullet/**
+external/assimp
+external/assimp/*
+external/assimp/**

@@ -186,5 +186,60 @@ void* GL_RenderContextX11::GetContextHandle() const {
     return reinterpret_cast<void*>(m_Context);
 }
 
+// One-time libGL handle (or libOpenGL)
+void* GL_RenderContextX11::OpenLibGLOnce() {
+    static void* handle = nullptr;
+    static bool tried = false;
+
+    if (tried) return handle;
+    tried = true;
+
+    // All BSD, Linux, ... Based, OpenGL shared-lib names
+    const char* candidates[] = {
+        "libOpenGL.so.0",  // GLVND style
+        "libGL.so.1", // classic
+        "libGL.so" // fallback
+    };
+    for (const char* name : candidates) {
+        handle = dlopen(name, RTLD_LAZY | RTLD_LOCAL);
+        if (handle) {
+            return handle;
+        } else {
+            std::cerr << "AX Error: OpenLibGLOnce() dlopen(" << name << ") failed: "
+                      << (dlerror() ? dlerror() : "(no dlerror)") << "\n";
+        }
+    }
+
+    std::cerr << "[DBG] Could not open any GL library.\n";
+    return nullptr;
+}
+
+
+void* GL_RenderContextX11::GetGLProcAddressRaw(const char* name) {
+    // 1) glXGetProcAddressARB
+    auto p1 = (void*)glXGetProcAddressARB((const GLubyte*)name);
+    if (p1) return p1;
+
+    // 2) dlsym
+    void* lib = OpenLibGLOnce();
+    if (!lib) {
+        std::cerr << "AX Error: GetGLProcAddrRaw() no libGL handle for " << name << "\n";
+        return nullptr;
+    }
+
+    void* p2 = dlsym(lib, name);
+    if (!p2) {
+        // This is especially important for core functions like glGetString/glGetIntegerv
+        std::cerr << "AX Error: GetGLProcAddrRaw() dlsym(" << name << ") failed: "
+                  << (dlerror() ? dlerror() : "(no dlerror)") << "\n";
+    }
+    return p2;
+}
+
+// Add Debugger/Debug builds, Logger, cleaner debug management
+bool GL_RenderContextX11::LoadGLXFunctions() {
+    return gladLoadGLLoader((GLADloadproc)GetGLProcAddressRaw);
+}
+
 }
 #endif

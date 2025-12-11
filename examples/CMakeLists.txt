@@ -1,1 +1,2 @@
-add_subdirectory(hellowindow)
+add_subdirectory(hellowindow_win32)
+add_subdirectory(hellowindow_x11)

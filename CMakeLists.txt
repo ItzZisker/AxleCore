@@ -25,7 +25,8 @@ set(PROJECT_SRC
     src/core/app/AX_ApplicationWin32.cpp
     src/core/app/AX_ApplicationX11.cpp
 
-    src/core/ctx/GL/AX_GLRenderContext.cpp
+    src/core/ctx/DX11/AX_DX11RenderContextWin32.cpp
+
     src/core/ctx/GL/AX_GLRenderContextWin32.cpp
     src/core/ctx/GL/AX_GLRenderContextX11.cpp
 
@@ -143,6 +144,24 @@ if (AX_IMPL_LAYER_X11)
     endif()
 endif()
 
+if (AX_IMPL_LAYER_WIN32)
+    message(STATUS "Win32 Application Layer Support")
+
+    add_compile_definitions(__AX_PLATFORM_WIN32__)
+    target_link_libraries(${PROJECT_NAME} PUBLIC
+        user32
+        gdi32
+        winmm
+        imm32
+        shell32
+        ole32
+        oleaut32
+        uuid
+        version
+        setupapi
+    )
+endif()
+
 # Apply common libraries
 set(AX_COMMON_LIBS "")
 
@@ -165,6 +184,16 @@ if (AX_IMPL_GRAPHICS_GL)
     endif()
     add_compile_definitions(__AX_GRAPHICS_GL__)
     target_include_directories(${PROJECT_NAME} PUBLIC ${OPENGL_INCLUDE_DIR})
+endif()
+
+if (AX_IMPL_GRAPHICS_DX11)
+    if (WIN32)
+        target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/external)
+        list(APPEND AX_COMMON_LIBS d3d11 dxgi dxguid)
+        add_compile_definitions(__AX_GRAPHICS_DX11__)
+    else()
+        message(FATAL_ERROR "DirectX 11 is only supported on Windows.")
+    endif()
 endif()
 
 target_link_libraries(${PROJECT_NAME} PUBLIC ${AX_COMMON_LIBS})

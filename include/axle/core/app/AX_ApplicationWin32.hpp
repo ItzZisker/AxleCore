@@ -3,8 +3,23 @@
 #if defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include "AX_IApplication.hpp"
 
-typedef void* HWND;
-typedef void* HINSTANCE;
+#ifndef CALLBACK
+#if defined(_ARM_)
+#define CALLBACK
+#else
+#define CALLBACK __stdcall
+#endif
+#endif
+
+using vHINSTANCE = void*;
+using vHWND = void*;
+
+using vLRESULT = intptr_t;
+using vUINT = uint32_t;
+using vWPARAM = uintptr_t;
+using vLPARAM = intptr_t;
+
+namespace axle::core {
 
 class ApplicationWin32 : public IApplication {
 public:
@@ -36,10 +51,8 @@ public:
     void SetMouseButtonCallback(std::function<void(const EventMouseButton&)> func) override { m_MouseButtonCallback = std::move(func); }
 
     void* GetNativeWindowHandle() const override { return (void*)m_Hwnd; }
-
 private:
-    static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
+    static vLRESULT CALLBACK WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam);
 private:
     std::string m_Title;
     uint32_t m_Width, m_Height;
@@ -48,13 +61,15 @@ private:
 
     CursorMode m_CursorMode = CursorMode::Normal;
 
-    HWND m_Hwnd = nullptr;
-    HINSTANCE m_Instance = nullptr;
+    vHWND m_Hwnd = nullptr;
+    vHINSTANCE m_Instance = nullptr;
 
     std::function<void(const EventWindowResize&)> m_ResizeCallback;
     std::function<void(const EventKey&)> m_KeyCallback;
     std::function<void(const EventMouseMove&)> m_MouseMoveCallback;
     std::function<void(const EventMouseButton&)> m_MouseButtonCallback;
 };
+
+}
 
 #endif

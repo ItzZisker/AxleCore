@@ -17,12 +17,25 @@ public:
     virtual ~GL_RenderContextX11();
 
     bool Init(IApplication* app) override;
-    void MakeCurrent() override;
+    void MakeCurrent();
     void SwapBuffers() override;
     void SetVSync(bool enabled) override;
     void Shutdown() override;
 
     void* GetContextHandle() const override;
+
+    // One-time libGL handle (or libOpenGL)
+    void* OpenLibGLOnce();
+
+    /*
+    * Low-level symbol resolver:
+    *   1) Try glXGetProcAddressARB
+    *   2) Fallback to dlsym on libGL or libOpenGL
+    */
+    void* GetGLProcAddressRaw(const char* name);
+
+    // Load Xlib GLAD Functions based on unix, Xorg-based/X-To-Wayland-based host
+    bool LoadGL();
 private:
     Display* m_Display = nullptr;
     Window   m_Window  = 0;
