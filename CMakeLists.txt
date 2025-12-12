@@ -41,20 +41,25 @@ set(PROJECT_SRC
     # src/core/concurrency/AX_TaskQueue.cpp
     # src/core/concurrency/AX_TaskQueueRunnable.cpp
 
-    # src/assets/serialization/AX_DataSerializer.cpp
-    # src/assets/serialization/AX_DataTemplates.cpp
+    src/data/AX_DataSerializer.cpp
+    src/data/AX_DataDeserializer.cpp
+    src/data/AX_DataStreamImplBuffer.cpp
+    src/data/AX_DataStreamImplFile.cpp
+    src/data/AX_LittleEndian.cpp
+    # src/data/AX_DataTemplates.cpp
+
     # src/assets/AX_AssetImporter.cpp
     # src/assets/AX_AssetExporter.cpp
     # src/assets/AX_AssetManager.cpp
     # src/assets/AX_AssetPacker.cpp
 	
-	# src/audio/AL/AX_AudioSource.cpp
-	# src/audio/AL/AX_AudioBuffer.cpp
-	# src/audio/AL/AX_AudioPlayer.cpp
-	# src/audio/serialization/AX_AudioDataWAV.cpp
-	# src/audio/serialization/AX_AudioDataOGG.cpp
-	# src/audio/serialization/AX_AudioDataMP3.cpp
-	# src/audio/utils/AX_AudioUtils.cpp
+	src/audio/AL/AX_ALAudioSource.cpp
+	src/audio/AL/AX_ALAudioBuffer.cpp
+	src/audio/AL/AX_ALAudioPlayer.cpp
+	src/audio/data/AX_AudioWAV.cpp
+	# src/audio/data/AX_AudioDataOGG.cpp
+	# src/audio/data/AX_AudioDataMP3.cpp
+	src/audio/AX_AudioUtils.cpp
     
 	# src/graphics/material/AX_Material.cpp
     # src/graphics/material/AX_MaterialMetadata.cpp
@@ -70,10 +75,11 @@ set(PROJECT_SRC
     # src/graphics/model/AX_Mesh.cpp
     # src/graphics/model/AX_MeshInstance.cpp
 	
-    # src/graphics/texture/AX_TextureCommons.cpp
-    # src/graphics/texture/AX_TextureBRDFLUT.cpp
-    # src/graphics/texture/AX_TextureDXT.cpp
-    # src/graphics/texture/AX_TextureASTC.cpp
+    src/graphics/base/texture/AX_Texture.cpp
+    src/graphics/base/texture/AX_TextureSTB.cpp
+    src/graphics/base/texture/AX_TextureBRDFLUT.cpp
+    src/graphics/base/texture/AX_TextureDXT.cpp
+    src/graphics/base/texture/AX_TextureASTC.cpp
 	
     # src/graphics/GL/platform/AX_GL_GPUSupport.cpp
 	

@@ -1,31 +1,37 @@
 #pragma once
 
-#include <string>
-#include <vector>
+#include "axle/audio/data/AX_AudioWAV.hpp"
 
 #include <AL/al.h>
 #include <AL/alc.h>
 
+#include <string>
+
+namespace axle::audio {
+
 class AX_ALAudioSource;
+
+// For these types of objects that hold onto driver/GPU/etc. external unique IDs,
+// we should enforce unique ownership!
 
 class AX_ALAudioBuffer
 {
 public:
     AX_ALAudioBuffer();
-    explicit AX_ALAudioBuffer(const std::string& filePath);
     ~AX_ALAudioBuffer();
 
+    // We are holding onto m_BufferID, copies shouldn't happen!
     AX_ALAudioBuffer(const AX_ALAudioBuffer&) = delete;
     AX_ALAudioBuffer& operator=(const AX_ALAudioBuffer&) = delete;
 
+    // But moving is allowed
     AX_ALAudioBuffer(AX_ALAudioBuffer&& other) noexcept;
     AX_ALAudioBuffer& operator=(AX_ALAudioBuffer&& other) noexcept;
 
-    bool LoadFromFile(const std::string& filePath); // WAV, OGG, or other supported formats
-    bool LoadFromMemory(const void* data, size_t size, ALenum format, ALsizei freq);
+    bool Load(const void* data, size_t size, ALenum format, ALsizei freq);
+    bool Load(const WAVAudio& wav);
     void Unload();
 
-    // --- OpenAL Info ---
     ALuint GetBufferID() const { return m_bufferID; }
     ALenum GetFormat() const { return m_format; }
     ALsizei GetFrequency() const { return m_frequency; }
@@ -43,11 +49,6 @@ public:
     void SetGain(float gain);
     float GetGain() const;
 
-    // optional for large audio
-    bool StreamFromFile(const std::string& filePath, size_t bufferSize = 4096);
-    void UpdateStream(const void* data, size_t size);
-
-    // --- Utility / Debug ---
     static bool IsFormatSupported(ALenum format);
     std::string GetDebugInfo() const;
 
@@ -61,11 +62,7 @@ private:
     float m_pitch;
     float m_gain;
 
-    std::string m_filePath; // Optional, for debugging and streaming
-    std::vector<ALuint> m_streamBuffers; // For streaming large audio
-
-    // Move these to AudioData
-    bool LoadWAV(const std::string& filePath);
-    bool LoadOGG(const std::string& filePath);
     void ClearBuffer();
 };
+
+}

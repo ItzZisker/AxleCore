@@ -29,7 +29,6 @@ struct ASTCImage {
 ASTCImage ASTC_LoadFile(const std::filesystem::path& path);
 ASTCImage ASTC_LoadFileBytes(data::DataDeserializer *buffer);
 ASTCImage ASTC_LoadFileBytes(const uint8_t* bytes, int length);
-ASTCImage ASTC_LoadASTC_File(const std::filesystem::path& path);
 
 bool ASTC_isValidFileBytes(data::DataDeserializer *buffer);
 bool ASTC_isValidFileBytes(const uint8_t* bytes, int length);
