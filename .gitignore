@@ -7,3 +7,6 @@ external/bullet/**
 external/assimp
 external/assimp/*
 external/assimp/**
+external/openalsoft
+external/openalsoft/*
+external/openalsoft/**

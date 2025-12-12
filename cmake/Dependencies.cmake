@@ -1,17 +1,7 @@
 include(FetchContent)
 
-# SDL3
-if(NOT EXISTS ${CMAKE_BINARY_DIR}/_deps/sdl3-build)
-    FetchContent_Declare(
-        SDL3
-        GIT_REPOSITORY https://github.com/libsdl-org/SDL
-        GIT_TAG release-3.2.26
-    )
-    FetchContent_MakeAvailable(SDL3)
-endif()
-
 # FreeType
-if(NOT EXISTS ${CMAKE_BINARY_DIR}/_deps/freetype-build)
+if(AX_IMPL_TRUETYPES AND NOT EXISTS ${CMAKE_BINARY_DIR}/_deps/freetype-build)
     set(CMAKE_POLICY_VERSION_MINIMUM_PREV ${CMAKE_POLICY_VERSION_MINIMUM})
     set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
@@ -22,6 +12,7 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/_deps/freetype-build)
     FetchContent_MakeAvailable(freetype)
 
     set(CMAKE_POLICY_VERSION_MINIMUM ${CMAKE_POLICY_VERSION_MINIMUM_PREV})
+    unset(CMAKE_POLICY_VERSION_MINIMUM_PREV)
 endif()
 
 # === GLM ===

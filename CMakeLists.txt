@@ -20,6 +20,10 @@ include(cmake/Dependencies.cmake)
 include(external/bullet.cmake)
 include(external/assimp.cmake)
 
+if (AX_IMPL_AUDIO_SOFTOPENAL)
+    include(external/openalsoft.cmake)
+endif()
+
 # === Source files ===
 set(PROJECT_SRC
     src/core/app/AX_ApplicationWin32.cpp
@@ -165,10 +169,6 @@ endif()
 # Apply common libraries
 set(AX_COMMON_LIBS "")
 
-if (AX_IMPL_LAYER_SDL3)
-    list(APPEND AX_COMMON_LIBS "SDL3")
-endif()
-
 if (AX_IMPL_GRAPHICS_GL)
     include_directories(${CMAKE_SOURCE_DIR}/external/glad/include)
 
@@ -179,7 +179,7 @@ if (AX_IMPL_GRAPHICS_GL)
     elseif (WIN32)  # Windows
         list(APPEND AX_COMMON_LIBS opengl32)
     elseif (APPLE)
-        # Todo: write cocoa implementation, do find_package and remove these horribly linked one line code that could break
+        # Todo: Write Objective-C .mm file and implement the IApplication interface header on Macbook.
         list(APPEND AX_COMMON_LIBS "-framework OpenGL" "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
     endif()
     add_compile_definitions(__AX_GRAPHICS_GL__)
@@ -188,7 +188,6 @@ endif()
 
 if (AX_IMPL_GRAPHICS_DX11)
     if (WIN32)
-        target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/external)
         list(APPEND AX_COMMON_LIBS d3d11 dxgi dxguid)
         add_compile_definitions(__AX_GRAPHICS_DX11__)
     else()
@@ -197,6 +196,16 @@ if (AX_IMPL_GRAPHICS_DX11)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PUBLIC ${AX_COMMON_LIBS})
+
+if (AX_IMPL_AUDIO_SOFTOPENAL)
+    message("-- Audio OpenAL-soft support enabled.")
+
+    if (WIN32)
+        target_link_libraries(${PROJECT_NAME} PUBLIC ${AX_ALSOFT_LINK})
+    endif()
+    target_include_directories(${PROJECT_NAME} PUBLIC ${OPENALSOFT_INSTALL_DIR}/include)
+    add_compile_definitions(__AX_AUDIO_ALSOFT__)
+endif()
 
 if (AX_IMPL_ASSIMP)
     message("-- Assimp support enabled.")

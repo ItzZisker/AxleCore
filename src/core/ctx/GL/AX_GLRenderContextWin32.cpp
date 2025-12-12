@@ -1,4 +1,4 @@
-#include "axle/core/ctx/GL/AX_GL_RenderContextWin32.hpp"
+#include "axle/core/ctx/GL/AX_GLRenderContextWin32.hpp"
 
 #include "AX_PCH.hpp"
 
@@ -8,12 +8,12 @@
 
 namespace axle::core {
 
-GL_RenderContextWin32::GL_RenderContextWin32() = default;
-GL_RenderContextWin32::~GL_RenderContextWin32() {
+GLRenderContextWin32::GLRenderContextWin32() = default;
+GLRenderContextWin32::~GLRenderContextWin32() {
     Shutdown();
 }
 
-bool GL_RenderContextWin32::Init(IApplication* app) {
+bool GLRenderContextWin32::Init(IApplication* app) {
     if (m_Initialized) return true;
 
     m_hwnd = reinterpret_cast<HWND>(app->GetNativeWindowHandle());
@@ -75,17 +75,17 @@ bool GL_RenderContextWin32::Init(IApplication* app) {
     return true;
 }
 
-void GL_RenderContextWin32::MakeCurrent() {
+void GLRenderContextWin32::MakeCurrent() {
     if (m_hdc && m_hglrc) {
         wglMakeCurrent((HDC)m_hdc, (HGLRC)m_hglrc);
     }
 }
 
-void GL_RenderContextWin32::SwapBuffers() {
+void GLRenderContextWin32::SwapBuffers() {
     if (m_hdc) ::SwapBuffers((HDC)m_hdc);
 }
 
-void GL_RenderContextWin32::SetVSync(bool enabled) {
+void GLRenderContextWin32::SetVSync(bool enabled) {
     typedef BOOL(WINAPI *PFNWGLSWAPINTERVALEXTPROC)(int);
     static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = nullptr;
 
@@ -97,7 +97,7 @@ void GL_RenderContextWin32::SetVSync(bool enabled) {
     }
 }
 
-void GL_RenderContextWin32::Shutdown() {
+void GLRenderContextWin32::Shutdown() {
     if (!m_Initialized) return;
 
     if (m_hglrc) {
@@ -114,12 +114,20 @@ void GL_RenderContextWin32::Shutdown() {
     m_Initialized = false;
 }
 
-void* GL_RenderContextWin32::GetContextHandle() const {
+void* GLRenderContextWin32::GetContextHandle() const {
     return reinterpret_cast<void*>(m_hglrc);
 }
 
-bool GL_RenderContextWin32::LoadGLFunctions() {
-    return gladLoadGLLoader((GLADloadproc)wglGetProcAddress);
+void* GetGLProcAddressRaw(const char* name) {
+    void* p = (void*)wglGetProcAddress(name);
+    if (p) return p;
+    HMODULE mod = LoadLibraryA("opengl32.dll");
+    if (!mod) return nullptr;
+    return (void*)GetProcAddress(mod, name);
+}
+
+bool GLRenderContextWin32::LoadGLFunctions() {
+    return gladLoadGLLoader((GLADloadproc)GetGLProcAddressRaw);
 }
 
 }

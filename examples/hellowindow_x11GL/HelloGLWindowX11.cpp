@@ -2,7 +2,7 @@
 #include "axle/core/app/AX_ApplicationX11.hpp"
 #include "axle/core/app/AX_IApplication.hpp"
 
-#include "axle/core/ctx/GL/AX_GL_RenderContextX11.hpp"
+#include "axle/core/ctx/GL/AX_GLRenderContextX11.hpp"
 
 #ifdef __AX_GRAPHICS_GL__
 #include "glad/glad.h"
@@ -49,7 +49,7 @@ int main() {
     app.Launch();
 
 #ifdef __AX_GRAPHICS_GL__
-    axle::core::GL_RenderContextX11 ctx;
+    axle::core::GLRenderContextX11 ctx;
     ctx.Init(&app);
     ctx.MakeCurrent();
     if (!ctx.LoadGLFunctions()) {

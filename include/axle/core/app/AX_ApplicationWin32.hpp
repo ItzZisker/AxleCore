@@ -64,8 +64,8 @@ private:
     vHWND m_Hwnd = nullptr;
     vHINSTANCE m_Instance = nullptr;
 
-    std::function<void(const EventWindowResize&)> m_ResizeCallback;
     std::function<void(const EventKey&)> m_KeyCallback;
+    std::function<void(const EventWindowResize&)> m_ResizeCallback;
     std::function<void(const EventMouseMove&)> m_MouseMoveCallback;
     std::function<void(const EventMouseButton&)> m_MouseButtonCallback;
 };

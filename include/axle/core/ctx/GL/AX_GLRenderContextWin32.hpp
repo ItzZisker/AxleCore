@@ -9,10 +9,10 @@ typedef void* vHWND;
 
 namespace axle::core {
 
-class GL_RenderContextWin32 : public IRenderContext {
+class GLRenderContextWin32 : public IRenderContext {
 public:
-    GL_RenderContextWin32();
-    virtual ~GL_RenderContextWin32();
+    GLRenderContextWin32();
+    virtual ~GLRenderContextWin32();
 
     bool Init(IApplication* app) override;
     void MakeCurrent();

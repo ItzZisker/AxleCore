@@ -14,12 +14,12 @@
 
 namespace axle::core {
 
-GL_RenderContextX11::GL_RenderContextX11() = default;
-GL_RenderContextX11::~GL_RenderContextX11() {
+GLRenderContextX11::GLRenderContextX11() = default;
+GLRenderContextX11::~GLRenderContextX11() {
     Shutdown();
 }
 
-bool GL_RenderContextX11::Init(IApplication* app) {
+bool GLRenderContextX11::Init(IApplication* app) {
     if (m_Initialized) return true;
 
     ApplicationX11& appX11 = *(ApplicationX11*)(app);
@@ -129,17 +129,17 @@ bool GL_RenderContextX11::Init(IApplication* app) {
     return true;
 }
 
-void GL_RenderContextX11::MakeCurrent() {
+void GLRenderContextX11::MakeCurrent() {
     if (m_Display && m_Context) {
         glXMakeCurrent(m_Display, m_Window, m_Context);
     }
 }
 
-void GL_RenderContextX11::SwapBuffers() {
+void GLRenderContextX11::SwapBuffers() {
     if (m_Display) glXSwapBuffers(m_Display, m_Window);
 }
 
-void GL_RenderContextX11::SetVSync(bool enabled) {
+void GLRenderContextX11::SetVSync(bool enabled) {
     // Try to use glXSwapIntervalEXT or glXSwapIntervalSGI if available
     // We'll attempt several methods; ignore failures.
     typedef void (*glXSwapIntervalEXTProc)(Display*, GLXDrawable, int);
@@ -168,7 +168,7 @@ void GL_RenderContextX11::SetVSync(bool enabled) {
     }
 }
 
-void GL_RenderContextX11::Shutdown() {
+void GLRenderContextX11::Shutdown() {
     if (!m_Initialized) return;
 
     if (m_Display && m_Context) {
@@ -182,12 +182,12 @@ void GL_RenderContextX11::Shutdown() {
 }
 
 // ret ctx
-void* GL_RenderContextX11::GetContextHandle() const {
+void* GLRenderContextX11::GetContextHandle() const {
     return reinterpret_cast<void*>(m_Context);
 }
 
 // One-time libGL handle (or libOpenGL)
-void* GL_RenderContextX11::OpenLibGLOnce() {
+void* GLRenderContextX11::OpenLibGLOnce() {
     static void* handle = nullptr;
     static bool tried = false;
 
@@ -215,7 +215,7 @@ void* GL_RenderContextX11::OpenLibGLOnce() {
 }
 
 
-void* GL_RenderContextX11::GetGLProcAddressRaw(const char* name) {
+void* GLRenderContextX11::GetGLProcAddressRaw(const char* name) {
     // 1) glXGetProcAddressARB
     auto p1 = (void*)glXGetProcAddressARB((const GLubyte*)name);
     if (p1) return p1;
@@ -237,7 +237,7 @@ void* GL_RenderContextX11::GetGLProcAddressRaw(const char* name) {
 }
 
 // Add Debugger/Debug builds, Logger, cleaner debug management
-bool GL_RenderContextX11::LoadGLFunctions() {
+bool GLRenderContextX11::LoadGLFunctions() {
     return gladLoadGLLoader((GLADloadproc)GetGLProcAddressRaw);
 }
 

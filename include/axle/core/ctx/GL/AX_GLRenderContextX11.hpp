@@ -11,10 +11,10 @@ using GLXContext = struct __GLXcontextRec*;
 
 namespace axle::core {
 
-class GL_RenderContextX11 : public IRenderContext {
+class GLRenderContextX11 : public IRenderContext {
 public:
-    GL_RenderContextX11();
-    virtual ~GL_RenderContextX11();
+    GLRenderContextX11();
+    virtual ~GLRenderContextX11();
 
     bool Init(IApplication* app) override;
     void MakeCurrent();

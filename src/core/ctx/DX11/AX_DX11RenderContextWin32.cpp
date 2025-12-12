@@ -1,4 +1,4 @@
-#include "axle/core/ctx/DX11/AX_DX11_RenderContextWin32.hpp"
+#include "axle/core/ctx/DX11/AX_DX11RenderContextWin32.hpp"
 
 #if defined(__AX_GRAPHICS_DX11__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include "AX_PCH.hpp"
@@ -7,13 +7,13 @@
 
 namespace axle::core {
 
-DX11_RenderContextWin32::DX11_RenderContextWin32() = default;
+DX11RenderContextWin32::DX11RenderContextWin32() = default;
 
-DX11_RenderContextWin32::~DX11_RenderContextWin32() {
+DX11RenderContextWin32::~DX11RenderContextWin32() {
     Shutdown();
 }
 
-bool DX11_RenderContextWin32::Init(IApplication* app) {
+bool DX11RenderContextWin32::Init(IApplication* app) {
     if (m_Initialized) return true;
 
     m_hwnd = reinterpret_cast<HWND>(app->GetNativeWindowHandle());
@@ -92,16 +92,16 @@ bool DX11_RenderContextWin32::Init(IApplication* app) {
     return true;
 }
 
-void DX11_RenderContextWin32::SwapBuffers() {
+void DX11RenderContextWin32::SwapBuffers() {
     if (!m_SwapChain) return;
     m_SwapChain->Present(m_VSyncEnabled ? 1 : 0, 0);
 }
 
-void DX11_RenderContextWin32::SetVSync(bool enabled) {
+void DX11RenderContextWin32::SetVSync(bool enabled) {
     m_VSyncEnabled = enabled;
 }
 
-void DX11_RenderContextWin32::Shutdown() {
+void DX11RenderContextWin32::Shutdown() {
     if (!m_Initialized) return;
 
     if (m_DeviceContext) {
@@ -118,19 +118,19 @@ void DX11_RenderContextWin32::Shutdown() {
     m_Initialized = false;
 }
 
-ComPtr<IDXGISwapChain> DX11_RenderContextWin32::GetSwapChain() const {
+ComPtr<IDXGISwapChain> DX11RenderContextWin32::GetSwapChain() const {
     return this->m_SwapChain;
 }
 
-ComPtr<ID3D11RenderTargetView> DX11_RenderContextWin32::GetRenderTargetView() const {
+ComPtr<ID3D11RenderTargetView> DX11RenderContextWin32::GetRenderTargetView() const {
     return this->m_RenderTargetView;
 }
 
-ComPtr<ID3D11DeviceContext> DX11_RenderContextWin32::GetDeviceContext() const {
+ComPtr<ID3D11DeviceContext> DX11RenderContextWin32::GetDeviceContext() const {
     return this->m_DeviceContext;
 }
 
-void* DX11_RenderContextWin32::GetContextHandle() const {
+void* DX11RenderContextWin32::GetContextHandle() const {
     // Return the ID3D11Device* as the context handle
     return reinterpret_cast<void*>(m_Device.Get());
 }
