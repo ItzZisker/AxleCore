@@ -8,19 +8,19 @@
 
 namespace axle::audio {
 
-class AX_ALAudioPlayer
+class ALAudioPlayer
 {
 public:
-    AX_ALAudioPlayer(size_t maxSources = 32);
-    ~AX_ALAudioPlayer();
+    ALAudioPlayer(std::size_t maxSources = 32);
+    ~ALAudioPlayer();
 
-    AX_ALAudioPlayer(const AX_ALAudioPlayer&) = delete;
-    AX_ALAudioPlayer& operator=(const AX_ALAudioPlayer&) = delete;
+    ALAudioPlayer(const ALAudioPlayer&) = delete;
+    ALAudioPlayer& operator=(const ALAudioPlayer&) = delete;
 
-    AX_ALAudioPlayer(AX_ALAudioPlayer&&) = delete;
-    AX_ALAudioPlayer& operator=(AX_ALAudioPlayer&&) = delete;
+    ALAudioPlayer(ALAudioPlayer&&) = delete;
+    ALAudioPlayer& operator=(ALAudioPlayer&&) = delete;
 
-    void PlaySound(AX_ALAudioBuffer& buffer);
+    void PlaySound(ALAudioBuffer& buffer);
 
     void SetLooping(bool loop);
     void SetPitch(float pitch);
@@ -29,7 +29,7 @@ public:
     void SetVelocity(float x, float y, float z);
 private:
     struct SourceWrapper {
-        AX_ALAudioSource source;
+        ALAudioSource source;
         bool inUse = false;
     };
 

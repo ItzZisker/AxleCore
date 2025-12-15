@@ -1,11 +1,23 @@
 
+#include "axle/audio/AL/AX_ALAudioContext.hpp"
+#include "axle/audio/AL/AX_ALAudioPlayer.hpp"
+#include "axle/audio/data/AX_AudioWAV.hpp"
 #include "axle/core/app/AX_ApplicationX11.hpp"
 #include "axle/core/app/AX_IApplication.hpp"
 
 #include "axle/core/ctx/GL/AX_GLRenderContextX11.hpp"
+#include <exception>
+#include <iostream>
+#include <ostream>
 
 #ifdef __AX_GRAPHICS_GL__
 #include "glad/glad.h"
+#endif
+
+#ifdef __AX_AUDIO_ALSOFT__
+#include "axle/audio/AL/AX_ALAudioSource.hpp"
+#include "axle/audio/AL/AX_ALAudioBuffer.hpp"
+#include "axle/audio/AL/AX_ALAudioListener.hpp"
 #endif
 
 #include <chrono>
@@ -33,23 +45,23 @@ float HW_DeltaTime() {
 
 int main() {
 #ifdef __AX_PLATFORM_X11__
-    axle::core::ApplicationSpecification spec;
+    core::ApplicationSpecification spec;
     spec.title = "Hello GL X11";
     spec.width = HW_WIDTH;
     spec.height = HW_HEIGHT;
     spec.resizable = true;
 
-    axle::core::ApplicationX11 app(spec);
-    app.SetResizeCallback([](const axle::core::EventWindowResize& e) {
+    core::ApplicationX11 app(spec);
+    app.SetResizeCallback([](const core::EventWindowResize& e) {
         glViewport(0, 0, (int)e.width, (int)e.height);
     });
-    app.SetKeyCallback([](const axle::core::EventKey& k) {
+    app.SetKeyCallback([](const core::EventKey& k) {
         printf("Key %lu %s\n", k.key, k.pressed ? "pressed" : "released");
     });
     app.Launch();
 
 #ifdef __AX_GRAPHICS_GL__
-    axle::core::GLRenderContextX11 ctx;
+    core::GLRenderContextX11 ctx;
     ctx.Init(&app);
     ctx.MakeCurrent();
     if (!ctx.LoadGLFunctions()) {
@@ -62,6 +74,31 @@ int main() {
     glEnable(GL_DEPTH_TEST);
 #endif
 
+#ifdef __AX_AUDIO_ALSOFT__
+    if (!audio::AL_CreateContext(nullptr)) {
+        std::cerr << "Failed to create Audio Context\n";
+    }
+
+    audio::ALAudioPlayer player(16);
+    audio::ALAudioSource src;
+    audio::ALAudioBuffer buff;
+    try {
+        std::cout << "1\n";
+        std::cout << "2\n";
+        auto wav = audio::WAV_LoadFile("test_mono.wav");
+        std::cout << wav.header.sampleRate << std::endl;
+        std::cout << wav.samples.size() << std::endl;
+        int err;
+        if ((err = buff.Load(wav))) {
+            std::cerr << "Failed to load test.wav audio onto ALAudioBuffer\n";
+            std::cerr << "err=" << err << std::endl;
+        }
+        player.PlaySound(buff);
+    } catch (const std::exception& ex) {
+        std::cerr << ex.what() << std::endl;
+    }
+#endif
+
     float t = 0.0f;
     while (!app.ShouldQuit()) {
         app.PollEvents();
@@ -72,6 +109,20 @@ int main() {
         glClearColor(r, g, b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ctx.SwapBuffers();
+#ifdef __AX_AUDIO_ALSOFT__
+        float x = std::sin(1.65f * t) * 3.0f;
+        if (src.IsPlaying()) {
+            audio::ALAudioListener::SetPosition(x, 0.0f, 0.0f);
+        }
+        static bool cutoff = false;
+        if (!cutoff && !src.IsPlaying()) {
+            cutoff = true;
+            buff.DetachFromSource(src);
+            buff.Unload();
+            src.Purge();
+            audio::AL_ShutdownContext();
+        }
+#endif
 #endif
     }
 

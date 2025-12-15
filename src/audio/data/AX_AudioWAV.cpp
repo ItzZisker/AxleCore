@@ -2,33 +2,62 @@
 
 #include "axle/data/AX_DataStreamImplFile.hpp"
 #include "axle/data/AX_DataStreamImplBuffer.hpp"
+#include "axle/data/AX_LittleEndian.hpp"
+
+#include <cstdint>
 #include <cstring>
-#include <stdexcept>
+#include <iostream>
+#include <ostream>
 
 namespace axle::audio {
 
 WAVAudio WAV_LoadFileBytes(data::DataDeserializer *buffer) {
-    WAVAudio res;
-    WAVHeader& header = res.header;
-
-    buffer->Read(reinterpret_cast<char *>(&header), sizeof(WAVHeader));
-    if (strncmp(header.riff, "RIFF", 4) != 0 || strncmp(header.wave, "WAVE", 4) != 0) {
-        throw std::runtime_error("Invalid WAV, riff=" + std::string(header.riff) + ", wave=" + std::string(header.wave));
+    if (!WAV_isValidFileBytes(buffer)) {
+        std::cout << "FF\n";
+        throw std::runtime_error("Invalid WAV");
     }
 
-    if (header.numChannels == 1 && header.bitsPerSample == 8) res.format = AL_FORMAT_MONO8;
-    else if (header.numChannels == 1 && header.bitsPerSample == 16) res.format = AL_FORMAT_MONO16;
-    else if (header.numChannels == 2 && header.bitsPerSample == 8) res.format = AL_FORMAT_STEREO8;
-    else if (header.numChannels == 2 && header.bitsPerSample == 16) res.format = AL_FORMAT_STEREO16;
-    else throw std::runtime_error("Invalid WAV Format, numChannels=" 
-        + std::to_string(header.numChannels) + ", bitsPerSample=" 
-        + std::to_string(header.bitsPerSample)
-    );
+    std::cout << "readpos=" << buffer->GetReadPos() << std::endl;
 
-    res.samples.resize(header.dataSize);
-    buffer->Read(res.samples.data(), header.dataSize);
+        std::cout << "A\n";
+    WAVAudio wav;
+    buffer->Read(wav.header.riff, 4);
+    buffer->Skip(4);
+    buffer->Read(wav.header.wave, 4);
+    buffer->Read(wav.header.fmt, 4);
+    buffer->Skip(4);
+    wav.header.audioFormat = data::LE_Read<uint16_t>(buffer);
+    wav.header.numChannels = data::LE_Read<uint16_t>(buffer);
+    wav.header.sampleRate = data::LE_Read<uint32_t>(buffer);
+    wav.header.byteRate = data::LE_Read<uint32_t>(buffer);
+    wav.header.blockAlign = data::LE_Read<uint16_t>(buffer);
+    wav.header.bitsPerSample = data::LE_Read<uint16_t>(buffer);
 
-    return res;
+    std::cout << "wav.header.audioFormat=" << wav.header.audioFormat << std::endl;
+    std::cout << "wav.header.numChannels=" << wav.header.numChannels << std::endl;
+    std::cout << "wav.header.sampleRate=" << wav.header.sampleRate << std::endl;
+    std::cout << "wav.header.byteRate=" << wav.header.byteRate << std::endl;
+    std::cout << "wav.header.blockAlign=" << wav.header.blockAlign << std::endl;
+    std::cout << "wav.header.bitsPerSample=" << wav.header.bitsPerSample << std::endl;
+
+    char dataHeader[4];
+    uint32_t dataSize;
+    do {
+        std::cout << "B\n";
+        buffer->Read(dataHeader, 4);
+        dataSize = data::LE_Read<uint32_t>(buffer);
+        std::cout << "dataHeader=" << std::string(dataHeader) << std::endl;
+        if(std::string(dataHeader, 4) != "data")
+            buffer->Skip(dataSize);
+    } while (std::string(dataHeader,4) != "data");
+
+    wav.format = (wav.header.numChannels == 1 ?
+                 (wav.header.bitsPerSample == 8 ? AL_FORMAT_MONO8 : AL_FORMAT_MONO16) :
+                 (wav.header.bitsPerSample == 8 ? AL_FORMAT_STEREO8 : AL_FORMAT_STEREO16));
+    wav.samples.resize(dataSize);
+    buffer->Read((uint8_t*) wav.samples.data(), dataSize);
+
+    return wav;
 }
 
 WAVAudio WAV_LoadFileBytes(const uint8_t* bytes, int length) {
@@ -40,21 +69,28 @@ WAVAudio WAV_LoadFileBytes(const uint8_t* bytes, int length) {
 }
 
 WAVAudio WAV_LoadFile(const std::filesystem::path& path) {
+        std::cout << "a\n";
     std::shared_ptr<data::FileDataStream> stream = std::make_shared<data::FileDataStream>(path, true, false);
     data::DataDeserializer *buffer = new data::DataDeserializer(stream);
+        std::cout << "b\n";
     WAVAudio wav = WAV_LoadFileBytes(buffer);
+        std::cout << "c\n";
     delete buffer;
     return wav;
 }
 
 bool WAV_isValidFileBytes(data::DataDeserializer *buffer) {
-    if (buffer->GetLength() < sizeof(WAVHeader)) return false;
-    WAVHeader header;
-    buffer->Read(reinterpret_cast<char*>(&header), sizeof(WAVHeader));
-    if (std::strncmp(header.riff, "RIFF", 4) != 0 ||
-        std::strncmp(header.wave, "WAVE", 4) != 0) {
+    if (buffer->GetLength() < 12) return false;
+    char riff[4], wave[4];
+    buffer->Read((uint8_t*) riff, 4);
+    buffer->Skip(4);
+    buffer->Read((uint8_t*) wave, 4);
+    if (std::strncmp(riff, "RIFF", 4) != 0 ||
+        std::strncmp(wave, "WAVE", 4) != 0) {
+        buffer->Rewind(12);
         return false;
     }
+    buffer->Rewind(12);
     return true;
 }
 

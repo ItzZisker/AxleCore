@@ -17,7 +17,8 @@
         "AX_IMPL_BULLET3": "ON",
         "AX_IMPL_LAYER_SDL3": "OFF",
         "AX_IMPL_LAYER_WIN32": "ON",
-        "AX_IMPL_GRAPHICS_DX11": "ON",
+        "AX_IMPL_LAYER_X11": "ON",
+        "AX_IMPL_GRAPHICS_DX11": "OFF",
         "AX_IMPL_GRAPHICS_GL": "ON",
         "AX_IMPL_AUDIO_SOFTOPENAL": "ON",
         "AX_BUILD_EXAMPLES": "ON"

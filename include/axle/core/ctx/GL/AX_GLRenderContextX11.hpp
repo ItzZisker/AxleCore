@@ -24,17 +24,7 @@ public:
 
     void* GetContextHandle() const override;
 
-    // One-time libGL handle (or libOpenGL)
-    void* OpenLibGLOnce();
-
-    /*
-    * Low-level symbol resolver:
-    *   1) Try glXGetProcAddressARB
-    *   2) Fallback to dlsym on libGL or libOpenGL
-    */
-    void* GetGLProcAddressRaw(const char* name);
-
-    // Define GLAD 3.3 Functions, must be called post Context Creation.
+    // Define GLAD/glx 3.3 Functions, must be called post Context Creation.
     // Returns true if success, false if none or atleast one of functions failed to load.
     // Xlib GLAD Functions based on unix, Xorg-based/X-To-Wayland-based host
     bool LoadGLFunctions();

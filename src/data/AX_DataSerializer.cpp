@@ -19,11 +19,11 @@ void DataSerializer::Write(const void* bytes, size_t size) {
 }
 
 void DataSerializer::Skip(uint64_t pos) {
-    m_Stream->SeekWrite(pos);
+    m_Stream->SkipWrite(pos);
 }
 
 void DataSerializer::Rewind(uint64_t pos) {
-    m_Stream->SeekWrite(-pos);
+    m_Stream->SkipWrite(-pos);
 }
 
 }

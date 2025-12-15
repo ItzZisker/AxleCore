@@ -31,12 +31,18 @@ ExternalProject_Add(
     BUILD_IN_SOURCE 0
 )
 
+add_library(ALSoft SHARED IMPORTED GLOBAL)
+
 # Create imported target for linking
 if (WIN32)
-    add_library(ALSoft SHARED IMPORTED GLOBAL)
     set_target_properties(ALSoft PROPERTIES
         IMPORTED_LOCATION "${OPENALSOFT_INSTALL_DIR}/bin/OpenAL32.dll"
         IMPORTED_IMPLIB  "${OPENALSOFT_INSTALL_DIR}/lib/libOpenAL32.dll.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${OPENALSOFT_INSTALL_DIR}/include"
+    )
+elseif (UNIX AND NOT APPLE)
+    set_target_properties(ALSoft PROPERTIES
+        IMPORTED_LOCATION "${OPENALSOFT_INSTALL_DIR}/lib/libopenal.so"
         INTERFACE_INCLUDE_DIRECTORIES "${OPENALSOFT_INSTALL_DIR}/include"
     )
 endif()

@@ -45,7 +45,6 @@ set(PROJECT_SRC
     src/data/AX_DataDeserializer.cpp
     src/data/AX_DataStreamImplBuffer.cpp
     src/data/AX_DataStreamImplFile.cpp
-    src/data/AX_LittleEndian.cpp
     # src/data/AX_DataTemplates.cpp
 
     # src/assets/AX_AssetImporter.cpp
@@ -53,12 +52,14 @@ set(PROJECT_SRC
     # src/assets/AX_AssetManager.cpp
     # src/assets/AX_AssetPacker.cpp
 	
+	src/audio/AL/AX_ALAudioContext.cpp
+	src/audio/AL/AX_ALAudioListener.cpp
 	src/audio/AL/AX_ALAudioSource.cpp
 	src/audio/AL/AX_ALAudioBuffer.cpp
 	src/audio/AL/AX_ALAudioPlayer.cpp
 	src/audio/data/AX_AudioWAV.cpp
-	# src/audio/data/AX_AudioDataOGG.cpp
-	# src/audio/data/AX_AudioDataMP3.cpp
+	# src/audio/data/AX_AudioOGG.cpp
+	# src/audio/data/AX_AudioMP3.cpp
 	src/audio/AX_AudioUtils.cpp
     
 	# src/graphics/material/AX_Material.cpp
@@ -154,7 +155,7 @@ if (AX_IMPL_LAYER_X11)
     endif()
 endif()
 
-if (AX_IMPL_LAYER_WIN32)
+if (WIN32 AND AX_IMPL_LAYER_WIN32)
     message(STATUS "Win32 Application Layer Support")
 
     add_compile_definitions(__AX_PLATFORM_WIN32__)
@@ -206,9 +207,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${AX_COMMON_LIBS})
 if (AX_IMPL_AUDIO_SOFTOPENAL)
     message("-- Audio OpenAL-soft support enabled.")
 
-    if (WIN32)
-        target_link_libraries(${PROJECT_NAME} PUBLIC ${AX_ALSOFT_LINK})
-    endif()
+    target_link_libraries(${PROJECT_NAME} PUBLIC ALSoft)
     target_include_directories(${PROJECT_NAME} PUBLIC ${OPENALSOFT_INSTALL_DIR}/include)
     add_compile_definitions(__AX_AUDIO_ALSOFT__)
 endif()

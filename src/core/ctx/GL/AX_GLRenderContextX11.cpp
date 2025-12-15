@@ -5,12 +5,15 @@
 #include "axle/core/app/AX_ApplicationX11.hpp"
 #include "axle/core/app/AX_IApplication.hpp"
 
-#include "axle/core/ctx/GL/AX_GL_RenderContextX11.hpp"
+#include "axle/core/ctx/GL/AX_GLRenderContextX11.hpp"
 
 #include <X11/Xlib.h>
 
 #include <glad/glad.h>
 #include <GL/glx.h>
+
+// Shared Objects Util
+#include <dlfcn.h>
 
 namespace axle::core {
 
@@ -187,7 +190,7 @@ void* GLRenderContextX11::GetContextHandle() const {
 }
 
 // One-time libGL handle (or libOpenGL)
-void* GLRenderContextX11::OpenLibGLOnce() {
+void* OpenLibGLOnce() {
     static void* handle = nullptr;
     static bool tried = false;
 
@@ -214,8 +217,7 @@ void* GLRenderContextX11::OpenLibGLOnce() {
     return nullptr;
 }
 
-
-void* GLRenderContextX11::GetGLProcAddressRaw(const char* name) {
+void* GetGLProcAddressRaw(const char* name) {
     // 1) glXGetProcAddressARB
     auto p1 = (void*)glXGetProcAddressARB((const GLubyte*)name);
     if (p1) return p1;

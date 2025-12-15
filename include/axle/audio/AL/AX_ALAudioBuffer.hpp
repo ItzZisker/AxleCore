@@ -9,27 +9,27 @@
 
 namespace axle::audio {
 
-class AX_ALAudioSource;
+class ALAudioSource;
 
 // For these types of objects that hold onto driver/GPU/etc. external unique IDs,
 // we should enforce unique ownership!
 
-class AX_ALAudioBuffer
+class ALAudioBuffer
 {
 public:
-    AX_ALAudioBuffer();
-    ~AX_ALAudioBuffer();
+    ALAudioBuffer();
+    ~ALAudioBuffer();
 
     // We are holding onto m_BufferID, copies shouldn't happen!
-    AX_ALAudioBuffer(const AX_ALAudioBuffer&) = delete;
-    AX_ALAudioBuffer& operator=(const AX_ALAudioBuffer&) = delete;
+    ALAudioBuffer(const ALAudioBuffer&) = delete;
+    ALAudioBuffer& operator=(const ALAudioBuffer&) = delete;
 
     // But moving is allowed
-    AX_ALAudioBuffer(AX_ALAudioBuffer&& other) noexcept;
-    AX_ALAudioBuffer& operator=(AX_ALAudioBuffer&& other) noexcept;
+    ALAudioBuffer(ALAudioBuffer&& other) noexcept;
+    ALAudioBuffer& operator=(ALAudioBuffer&& other) noexcept;
 
-    bool Load(const void* data, size_t size, ALenum format, ALsizei freq);
-    bool Load(const WAVAudio& wav);
+    int Load(const void* data, size_t size, ALenum format, ALsizei freq);
+    int Load(const WAVAudio& wav);
     void Unload();
 
     ALuint GetBufferID() const { return m_bufferID; }
@@ -37,8 +37,8 @@ public:
     ALsizei GetFrequency() const { return m_frequency; }
     ALsizei GetSize() const { return m_size; }
 
-    void BindToSource(AX_ALAudioSource& source) const;
-    void DetachFromSource(AX_ALAudioSource& source) const;
+    void BindToSource(ALAudioSource& source) const;
+    void DetachFromSource(ALAudioSource& source) const;
 
     void SetLooping(bool loop);
     bool IsLooping() const;

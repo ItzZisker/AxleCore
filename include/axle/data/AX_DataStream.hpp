@@ -17,8 +17,8 @@ public:
     virtual void SkipWrite(int64_t offset) = 0;
     virtual bool EndOfStream() const = 0;
 
-    virtual size_t Read(void* out, size_t size) = 0;
-    virtual size_t Write(const void* in, size_t size) = 0;
+    virtual std::size_t Read(void* out, std::size_t size) = 0;
+    virtual std::size_t Write(const void* in, std::size_t size) = 0;
 
     virtual uint64_t GetLength() { return 0; }
 };

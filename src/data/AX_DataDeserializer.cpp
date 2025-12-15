@@ -25,7 +25,7 @@ void DataDeserializer::Read(void* out, size_t size) {
 }
 
 void DataDeserializer::Rewind(uint64_t offset_inv) {
-    m_Stream->SeekRead(-offset_inv);
+    m_Stream->SkipRead(-offset_inv);
 }
 
 void DataDeserializer::Skip(uint64_t offset) {

@@ -17,7 +17,7 @@ BufferDataStream::BufferDataStream(uint64_t length) : m_Length(length) {
 }
 
 BufferDataStream::~BufferDataStream() {
-    delete this->m_Buffer;
+    delete[] this->m_Buffer;
     m_ReadIndex = m_WriteIndex = m_Length = 0;
 }
 
@@ -49,21 +49,21 @@ bool BufferDataStream::EndOfStream() const {
     return this->m_ReadIndex >= this->m_Length;
 }
 
-size_t BufferDataStream::Read(void* out, size_t size) {
+std::size_t BufferDataStream::Read(void* out, std::size_t size) {
     size = std::min(size, this->m_Length - this->m_ReadIndex);
     std::memcpy(out, this->m_Buffer + this->m_ReadIndex, size);
     this->m_ReadIndex += size;
     return size;
 }
 
-size_t BufferDataStream::Write(const void* in, size_t size) {
+std::size_t BufferDataStream::Write(const void* in, std::size_t size) {
     size = std::min(size, this->m_Length - this->m_WriteIndex);
     std::memcpy(this->m_Buffer + this->m_WriteIndex, in, size);
     this->m_WriteIndex += size;
     return size;
 }
 
-void BufferDataStream::PeekBytes(void* out, uint64_t pos, size_t size) {
+void BufferDataStream::PeekBytes(void* out, uint64_t pos, std::size_t size) {
     pos = std::clamp(pos, uint64_t(0), this->m_Length);
     size = std::min(size, this->m_Length - pos);
     std::memcpy(out, this->m_Buffer + pos, size);

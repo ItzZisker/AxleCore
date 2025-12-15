@@ -26,8 +26,8 @@ public:
     void SkipWrite(int64_t offset) override;
     bool EndOfStream() const override;
 
-    size_t Read(void* out, size_t size) override;
-    size_t Write(const void* in, size_t size) override;
+    std::size_t Read(void* out, std::size_t size) override;
+    std::size_t Write(const void* in, std::size_t size) override;
 
     uint64_t GetLength() override;
 };

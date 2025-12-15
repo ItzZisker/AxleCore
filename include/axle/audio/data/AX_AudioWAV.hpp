@@ -13,10 +13,8 @@ namespace axle::audio {
 // PCM only
 struct WAVHeader {
     char riff[4];
-    uint32_t chunkSize;
     char wave[4];
     char fmt[4];
-    uint32_t subChunk1Size;
     uint16_t audioFormat;
     uint16_t numChannels;
     uint32_t sampleRate;

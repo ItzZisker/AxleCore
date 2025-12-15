@@ -1,5 +1,4 @@
 #include "axle/core/app/AX_ApplicationWin32.hpp"
-#include <minwindef.h>
 
 #ifdef __AX_PLATFORM_WIN32__
 

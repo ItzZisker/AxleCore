@@ -10,21 +10,22 @@
 
 namespace axle::audio {
 
-class AX_ALAudioSource
+class ALAudioSource
 {
 public:
-    AX_ALAudioSource();
-    ~AX_ALAudioSource();
+    ALAudioSource();
+    ~ALAudioSource();
 
-    AX_ALAudioSource(const AX_ALAudioSource&) = delete;
-    AX_ALAudioSource& operator=(const AX_ALAudioSource&) = delete;
+    ALAudioSource(const ALAudioSource&) = delete;
+    ALAudioSource& operator=(const ALAudioSource&) = delete;
 
-    AX_ALAudioSource(AX_ALAudioSource&& other) noexcept;
-    AX_ALAudioSource& operator=(AX_ALAudioSource&& other) noexcept;
+    ALAudioSource(ALAudioSource&& other) noexcept;
+    ALAudioSource& operator=(ALAudioSource&& other) noexcept;
 
     void Play();
     void Pause();
     void Stop();
+    void Purge();
 
     bool IsPlaying() const;
     bool IsLooping() const;
@@ -40,8 +41,8 @@ public:
     float GetPitch() const;
     float GetGain() const;
 
-    void AttachBuffer(const AX_ALAudioBuffer& buffer);
-    void DetachBuffer(const AX_ALAudioBuffer& buffer);
+    void AttachBuffer(const ALAudioBuffer& buffer);
+    void DetachBuffer(const ALAudioBuffer& buffer);
 
     ALuint GetSourceID() const { return m_sourceID; }
 private:
