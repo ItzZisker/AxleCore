@@ -2,6 +2,8 @@
 
 #include <AL/al.h>
 #include <AL/alc.h>
+#include <iostream>
+#include <ostream>
 
 namespace axle::audio {
 

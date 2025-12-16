@@ -1,25 +1,29 @@
-
-#include "axle/audio/AL/AX_ALAudioContext.hpp"
-#include "axle/audio/AL/AX_ALAudioPlayer.hpp"
-#include "axle/audio/data/AX_AudioWAV.hpp"
+// X11 Window Application
 #include "axle/core/app/AX_ApplicationX11.hpp"
 #include "axle/core/app/AX_IApplication.hpp"
 
+// GL RenderContext For Xorg
 #include "axle/core/ctx/GL/AX_GLRenderContextX11.hpp"
-#include <exception>
-#include <iostream>
-#include <ostream>
 
+// GL Functions
 #ifdef __AX_GRAPHICS_GL__
 #include "glad/glad.h"
 #endif
 
+// ALSoft Audio
 #ifdef __AX_AUDIO_ALSOFT__
-#include "axle/audio/AL/AX_ALAudioSource.hpp"
+#include "axle/audio/data/AX_AudioWAV.hpp"
+
+#include "axle/audio/AL/AX_ALAudioContext.hpp"
+#include "axle/audio/AL/AX_ALAudioPlayer.hpp"
 #include "axle/audio/AL/AX_ALAudioBuffer.hpp"
 #include "axle/audio/AL/AX_ALAudioListener.hpp"
 #endif
 
+// C++ Standards
+#include <exception>
+#include <iostream>
+#include <ostream>
 #include <chrono>
 #include <cmath>
 
@@ -80,22 +84,15 @@ int main() {
     }
 
     audio::ALAudioPlayer player(16);
-    audio::ALAudioSource src;
     audio::ALAudioBuffer buff;
     try {
-        std::cout << "1\n";
-        std::cout << "2\n";
         auto wav = audio::WAV_LoadFile("test_mono.wav");
-        std::cout << wav.header.sampleRate << std::endl;
-        std::cout << wav.samples.size() << std::endl;
-        int err;
-        if ((err = buff.Load(wav))) {
+        if (buff.Load(wav)) {
             std::cerr << "Failed to load test.wav audio onto ALAudioBuffer\n";
-            std::cerr << "err=" << err << std::endl;
         }
         player.PlaySound(buff);
     } catch (const std::exception& ex) {
-        std::cerr << ex.what() << std::endl;
+        std::cerr << "Audio Exception: " << ex.what() << std::endl;
     }
 #endif
 
@@ -111,17 +108,8 @@ int main() {
         ctx.SwapBuffers();
 #ifdef __AX_AUDIO_ALSOFT__
         float x = std::sin(1.65f * t) * 3.0f;
-        if (src.IsPlaying()) {
-            audio::ALAudioListener::SetPosition(x, 0.0f, 0.0f);
-        }
-        static bool cutoff = false;
-        if (!cutoff && !src.IsPlaying()) {
-            cutoff = true;
-            buff.DetachFromSource(src);
-            buff.Unload();
-            src.Purge();
-            audio::AL_ShutdownContext();
-        }
+        float z = std::cos(1.65f * t) * 3.0f;
+        audio::ALAudioListener::SetPosition(x, 0.0f, z);
 #endif
 #endif
     }

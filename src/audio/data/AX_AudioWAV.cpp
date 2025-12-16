@@ -6,20 +6,14 @@
 
 #include <cstdint>
 #include <cstring>
-#include <iostream>
-#include <ostream>
 
 namespace axle::audio {
 
 WAVAudio WAV_LoadFileBytes(data::DataDeserializer *buffer) {
     if (!WAV_isValidFileBytes(buffer)) {
-        std::cout << "FF\n";
         throw std::runtime_error("Invalid WAV");
     }
 
-    std::cout << "readpos=" << buffer->GetReadPos() << std::endl;
-
-        std::cout << "A\n";
     WAVAudio wav;
     buffer->Read(wav.header.riff, 4);
     buffer->Skip(4);
@@ -33,22 +27,12 @@ WAVAudio WAV_LoadFileBytes(data::DataDeserializer *buffer) {
     wav.header.blockAlign = data::LE_Read<uint16_t>(buffer);
     wav.header.bitsPerSample = data::LE_Read<uint16_t>(buffer);
 
-    std::cout << "wav.header.audioFormat=" << wav.header.audioFormat << std::endl;
-    std::cout << "wav.header.numChannels=" << wav.header.numChannels << std::endl;
-    std::cout << "wav.header.sampleRate=" << wav.header.sampleRate << std::endl;
-    std::cout << "wav.header.byteRate=" << wav.header.byteRate << std::endl;
-    std::cout << "wav.header.blockAlign=" << wav.header.blockAlign << std::endl;
-    std::cout << "wav.header.bitsPerSample=" << wav.header.bitsPerSample << std::endl;
-
     char dataHeader[4];
     uint32_t dataSize;
     do {
-        std::cout << "B\n";
         buffer->Read(dataHeader, 4);
         dataSize = data::LE_Read<uint32_t>(buffer);
-        std::cout << "dataHeader=" << std::string(dataHeader) << std::endl;
-        if(std::string(dataHeader, 4) != "data")
-            buffer->Skip(dataSize);
+        if (std::string(dataHeader, 4) != "data") buffer->Skip(dataSize);
     } while (std::string(dataHeader,4) != "data");
 
     wav.format = (wav.header.numChannels == 1 ?
@@ -69,12 +53,9 @@ WAVAudio WAV_LoadFileBytes(const uint8_t* bytes, int length) {
 }
 
 WAVAudio WAV_LoadFile(const std::filesystem::path& path) {
-        std::cout << "a\n";
     std::shared_ptr<data::FileDataStream> stream = std::make_shared<data::FileDataStream>(path, true, false);
     data::DataDeserializer *buffer = new data::DataDeserializer(stream);
-        std::cout << "b\n";
     WAVAudio wav = WAV_LoadFileBytes(buffer);
-        std::cout << "c\n";
     delete buffer;
     return wav;
 }
