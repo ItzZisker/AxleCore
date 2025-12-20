@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AX_ALAudioBuffer.hpp"
+#include "buffer/AX_ALAudioBuffer.hpp"
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -22,6 +22,9 @@ public:
     ALAudioSource(ALAudioSource&& other) noexcept;
     ALAudioSource& operator=(ALAudioSource&& other) noexcept;
 
+    // Configure for music, bypass HRTF filter
+    void BypassHRTF();
+
     void Play();
     void Pause();
     void Stop();
@@ -41,16 +44,13 @@ public:
     float GetPitch() const;
     float GetGain() const;
 
-    void AttachBuffer(const ALAudioBuffer& buffer);
-    void DetachBuffer(const ALAudioBuffer& buffer);
-
     ALuint GetSourceID() const { return m_sourceID; }
-private:
-    ALuint m_sourceID;
+protected:
+    ALuint m_sourceID{0};
 
-    bool m_looping;
-    float m_pitch;
-    float m_gain;
+    bool m_looping{false};
+    float m_pitch{1.0f};
+    float m_gain{1.0f};
 };
 
 }

@@ -1,13 +1,13 @@
 #pragma once
 
-#include "AX_DataStream.hpp"
+#include "AX_IDataStream.hpp"
 
 #include <filesystem>
 #include <fstream>
 
 namespace axle::data {
 
-class FileDataStream : public DataStream {
+class FileDataStream : public IDataStream {
 private:
     std::fstream m_File;
     uint64_t m_CachedLength = 0;

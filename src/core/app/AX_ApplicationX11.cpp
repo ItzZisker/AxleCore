@@ -1,4 +1,5 @@
 #include "axle/core/app/AX_ApplicationX11.hpp"
+#include <X11/X.h>
 
 #ifdef __AX_PLATFORM_X11__
 
@@ -79,8 +80,6 @@ void ApplicationX11::CreateWindow(void *vi_raw) {
     Visual* visual;
     unsigned long valuemask = CWEventMask;
     XVisualInfo* vi = (XVisualInfo*)(vi_raw);
-    
-    std::cout << "vi=" << vi << std::endl;
 
     if (vi) {
         depth  = vi->depth;
@@ -172,6 +171,13 @@ void ApplicationX11::PollEvents() {
             XFreeGC(m_Display, gc);
         }
 
+        if (ev.type == FocusIn) {
+            m_FocusCallback({true});
+        }
+        if (ev.type == FocusOut) {
+            m_FocusCallback({false});
+        }
+
         // Keyboard / mouse events
         TranslateAndDispatchKeyEvent(ev);
         TranslateAndDispatchMouseEvent(ev);
@@ -236,6 +242,10 @@ void ApplicationX11::SetCursorMode(CursorMode mode) {
             }
             break;
     }
+}
+
+void ApplicationX11::SetFocusCallback(std::function<void(const EventWindowFocus&)> func) {
+    m_FocusCallback = std::move(func);
 }
 
 void ApplicationX11::SetResizeCallback(std::function<void(const EventWindowResize&)> func) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AX_DataStream.hpp"
+#include "AX_IDataStream.hpp"
 
 #include <memory>
 #include <cstdint>
@@ -9,10 +9,10 @@ namespace axle::data {
 
 class DataDeserializer {
 protected:
-    std::shared_ptr<DataStream> m_Stream;
+    std::shared_ptr<IDataStream> m_Stream;
     uint64_t m_ChunkSize;
 public:
-    DataDeserializer(std::shared_ptr<DataStream> stream, uint64_t chunkSize = 4096);
+    DataDeserializer(std::shared_ptr<IDataStream> stream, uint64_t chunkSize = 4096);
 
     uint64_t GetLength();
     uint64_t GetReadPos();

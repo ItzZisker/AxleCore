@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AX_PCH.hpp"
+#include <functional>
 
 // IMPORTANT!
 // We have to implement joystick calliberation/choose or anything support later; 
@@ -25,6 +26,10 @@ struct ApplicationSpecification {
 struct EventWindowResize {
     uint32_t width;
     uint32_t height;
+};
+
+struct EventWindowFocus {
+    bool focused;
 };
 
 struct EventKey {
@@ -70,6 +75,7 @@ public:
     virtual bool ShouldQuit() const = 0;
 
     // Callbacks
+    virtual void SetFocusCallback(std::function<void(const EventWindowFocus&)> func) = 0;
     virtual void SetResizeCallback(std::function<void(const EventWindowResize&)> func) = 0;
     virtual void SetKeyCallback(std::function<void(const EventKey&)> func) = 0;
     virtual void SetMouseMoveCallback(std::function<void(const EventMouseMove&)> func) = 0;

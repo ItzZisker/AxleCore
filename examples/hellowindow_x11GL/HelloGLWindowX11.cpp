@@ -1,4 +1,8 @@
 // X11 Window Application
+#include "axle/audio/AL/stream/AX_ALAudioStreamVorbis.hpp"
+#include "axle/audio/AL/stream/AX_ALAudioStreamVorbisSource.hpp"
+#include "axle/audio/AL/stream/AX_ALIAudioStream.hpp"
+#include "axle/audio/data/AX_AudioOGG.hpp"
 #include "axle/core/app/AX_ApplicationX11.hpp"
 #include "axle/core/app/AX_IApplication.hpp"
 
@@ -15,9 +19,12 @@
 #include "axle/audio/data/AX_AudioWAV.hpp"
 
 #include "axle/audio/AL/AX_ALAudioContext.hpp"
-#include "axle/audio/AL/AX_ALAudioPlayer.hpp"
-#include "axle/audio/AL/AX_ALAudioBuffer.hpp"
 #include "axle/audio/AL/AX_ALAudioListener.hpp"
+
+#include "axle/audio/AL/buffer/AX_ALAudioBufferPlayer.hpp"
+#include "axle/audio/AL/buffer/AX_ALAudioBuffer.hpp"
+
+#include "axle/audio/AL/stream/AX_ALAudioStreamVorbisPlayer.hpp"
 #endif
 
 // C++ Standards
@@ -40,10 +47,14 @@ void HW_RGBScroll(float t, float& r, float& g, float& b) {
 }
 
 float HW_DeltaTime() {
-    static auto last = std::chrono::high_resolution_clock::now();
-    auto now = std::chrono::high_resolution_clock::now();
+    using clock = std::chrono::steady_clock;
+
+    static auto last = clock::now();
+    auto now = clock::now();
+
     std::chrono::duration<float> diff = now - last;
     last = now;
+
     return diff.count();
 }
 
@@ -53,11 +64,12 @@ int main() {
     spec.title = "Hello GL X11";
     spec.width = HW_WIDTH;
     spec.height = HW_HEIGHT;
-    spec.resizable = true;
+    spec.resizable = false;
 
+    bool focused = false;
     core::ApplicationX11 app(spec);
-    app.SetResizeCallback([](const core::EventWindowResize& e) {
-        glViewport(0, 0, (int)e.width, (int)e.height);
+    app.SetFocusCallback([&](const core::EventWindowFocus& f) {
+        focused = f.focused;
     });
     app.SetKeyCallback([](const core::EventKey& k) {
         printf("Key %lu %s\n", k.key, k.pressed ? "pressed" : "released");
@@ -83,23 +95,44 @@ int main() {
         std::cerr << "Failed to create Audio Context\n";
     }
 
-    audio::ALAudioPlayer player(16);
+    alDistanceModel(AL_NONE);
+    audio::ALAudioStreamVorbisPlayer music(4);
+    music.ApplyToSources([](audio::ALAudioStreamVorbisSource& src){
+        src.BypassHRTF();
+    });
+
+    audio::ALAudioBufferPlayer soundCues(16);
     audio::ALAudioBuffer buff;
+
+    audio::AudioStreamDesc desc;
+    auto ogg = audio::OGG_LoadFile("test.ogg");
+    audio::ALAudioStreamVorbis stream(ogg);
+    try {
+        music.Play(&stream);
+    } catch (const std::exception& ex) {
+        std::cerr << "Audio Exception: " << ex.what() << std::endl;
+    }
     try {
         auto wav = audio::WAV_LoadFile("test_mono.wav");
-        if (buff.Load(wav)) {
-            std::cerr << "Failed to load test.wav audio onto ALAudioBuffer\n";
+        if (!buff.Load(wav)) {
+            std::cerr << "Failed to load test_mono.wav audio onto ALAudioBuffer\n";
         }
-        player.PlaySound(buff);
+        //soundCues.Play(buff);
     } catch (const std::exception& ex) {
         std::cerr << "Audio Exception: " << ex.what() << std::endl;
     }
 #endif
 
+    int frames = 0;
     float t = 0.0f;
     while (!app.ShouldQuit()) {
+        glViewport(0, 0, app.GetHeight(), app.GetWidth());
+
+        float dt = HW_DeltaTime();
+        t += dt;
+
         app.PollEvents();
-        t += HW_DeltaTime();
+
         float r, g, b;
         HW_RGBScroll(t, r, g, b);
 #ifdef __AX_GRAPHICS_GL__
@@ -110,6 +143,9 @@ int main() {
         float x = std::sin(1.65f * t) * 3.0f;
         float z = std::cos(1.65f * t) * 3.0f;
         audio::ALAudioListener::SetPosition(x, 0.0f, z);
+        if (frames++ >= 10) {
+            music.Tick(10 * dt);
+        }
 #endif
 #endif
     }

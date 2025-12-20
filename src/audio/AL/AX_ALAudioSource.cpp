@@ -1,14 +1,19 @@
 #include "axle/audio/AL/AX_ALAudioSource.hpp"
+#include "axle/audio/AL/AX_ALExtensions.hpp"
 
 #include <AL/al.h>
 #include <AL/alc.h>
+#include <AL/alext.h>
+
 #include <iostream>
-#include <ostream>
 
 namespace axle::audio {
 
 ALAudioSource::ALAudioSource() : m_looping(false), m_pitch(1.0f), m_gain(1.0f) {
     alGenSources(1, &m_sourceID);
+    if (alIsExtensionPresent("AL_SOFT_source_resampler")) {
+        alSourcei(m_sourceID, AL_SOURCE_RESAMPLER_SOFT, AL_RESAMPLER_CUBIC_SOFT);
+    }
     alSourcei(m_sourceID, AL_SOURCE_RELATIVE, AL_FALSE);
     alSourcef(m_sourceID, AL_PITCH, m_pitch);
     alSourcef(m_sourceID, AL_GAIN, m_gain);
@@ -34,6 +39,30 @@ ALAudioSource& ALAudioSource::operator=(ALAudioSource&& other) noexcept {
     return *this;
 }
 
+void ALAudioSource::BypassHRTF() {
+    if (alIsExtensionPresent("AL_SOFT_direct_channels_remix")) {
+        ALuint channels = 2;
+        ALuint mapping[2] = { AL_FRONT_LEFT, AL_FRONT_RIGHT };
+
+        alSourceiv(m_sourceID, AL_DIRECT_CHANNELS_SOFT, (ALint*)mapping);
+    }
+
+    alSourcei(m_sourceID, AL_SOURCE_RELATIVE, AL_TRUE);
+    alSourcef(m_sourceID, AL_ROLLOFF_FACTOR, 0.0f);
+    alSourcef(m_sourceID, AL_GAIN, 0.85f);
+
+    alSource3f(m_sourceID, AL_POSITION, 0.0f, 0.0f, 0.0f);
+    alSource3f(m_sourceID, AL_VELOCITY, 0.0f, 0.0f, 0.0f);
+
+    alSourcef(m_sourceID, AL_ROLLOFF_FACTOR, 0.0f);
+    alSourcef(m_sourceID, AL_REFERENCE_DISTANCE, 1.0f);
+    alSourcef(m_sourceID, AL_MAX_DISTANCE, 1000000.0f);
+
+    alSourcef(m_sourceID, AL_CONE_INNER_ANGLE, 360.0f);
+    alSourcef(m_sourceID, AL_CONE_OUTER_ANGLE, 360.0f);
+    alSourcef(m_sourceID, AL_CONE_OUTER_GAIN, 1.0f);
+}
+
 void ALAudioSource::Play() {
     if (m_sourceID) alSourcePlay(m_sourceID);
 }
@@ -43,6 +72,7 @@ void ALAudioSource::Pause() {
 }
 
 void ALAudioSource::Stop() {
+    std::cout << "Stop()\n";
     if (m_sourceID) alSourceStop(m_sourceID);
 }
 
@@ -97,21 +127,6 @@ void ALAudioSource::SetPosition(float x, float y, float z) {
 void ALAudioSource::SetVelocity(float x, float y, float z) {
     if (!m_sourceID) return;
     alSource3f(m_sourceID, AL_VELOCITY, x, y, z);
-}
-
-void ALAudioSource::AttachBuffer(const ALAudioBuffer& buffer) {
-    if (!m_sourceID) return;
-    alSourcei(m_sourceID, AL_BUFFER, (ALint)buffer.GetBufferID());
-}
-
-// Only detach if the same buffer is bound
-void ALAudioSource::DetachBuffer(const ALAudioBuffer& buffer) {
-    if (!m_sourceID) return;
-    ALint bound;
-    alGetSourcei(m_sourceID, AL_BUFFER, &bound);
-    if ((ALuint)bound == buffer.GetBufferID()) {
-        alSourcei(m_sourceID, AL_BUFFER, 0);
-    }
 }
 
 bool ALAudioSource::IsLooping() const {

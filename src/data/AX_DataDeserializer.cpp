@@ -3,7 +3,7 @@
 namespace axle::data
 {
 
-DataDeserializer::DataDeserializer(std::shared_ptr<DataStream> stream, uint64_t chunkSize)
+DataDeserializer::DataDeserializer(std::shared_ptr<IDataStream> stream, uint64_t chunkSize)
     : m_Stream(stream), m_ChunkSize(chunkSize) {}
 
 uint64_t DataDeserializer::GetLength() {

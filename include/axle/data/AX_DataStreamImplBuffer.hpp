@@ -1,12 +1,12 @@
 #pragma once
 
-#include "AX_DataStream.hpp"
+#include "AX_IDataStream.hpp"
 
 #include <filesystem>
 
 namespace axle::data {
 
-class BufferDataStream : public DataStream {
+class BufferDataStream : public IDataStream {
 private:
     uint8_t* m_Buffer = nullptr;
     uint64_t m_ReadIndex = 0;

@@ -26,6 +26,8 @@ endif()
 
 # === Source files ===
 set(PROJECT_SRC
+    src/external/AX_stb.c
+
     src/core/app/AX_ApplicationWin32.cpp
     src/core/app/AX_ApplicationX11.cpp
 
@@ -55,11 +57,18 @@ set(PROJECT_SRC
 	src/audio/AL/AX_ALAudioContext.cpp
 	src/audio/AL/AX_ALAudioListener.cpp
 	src/audio/AL/AX_ALAudioSource.cpp
-	src/audio/AL/AX_ALAudioBuffer.cpp
-	src/audio/AL/AX_ALAudioPlayer.cpp
+    
+	src/audio/AL/buffer/AX_ALAudioBuffer.cpp
+	src/audio/AL/buffer/AX_ALAudioBufferSource.cpp
+	src/audio/AL/buffer/AX_ALAudioBufferPlayer.cpp
+
+	src/audio/AL/stream/AX_ALAudioStreamVorbis.cpp
+	src/audio/AL/stream/AX_ALAudioStreamVorbisSource.cpp
+	src/audio/AL/stream/AX_ALAudioStreamVorbisPlayer.cpp
+
 	src/audio/data/AX_AudioWAV.cpp
-	# src/audio/data/AX_AudioOGG.cpp
-	# src/audio/data/AX_AudioMP3.cpp
+	src/audio/data/AX_AudioOGG.cpp
+
 	src/audio/AX_AudioUtils.cpp
     
 	# src/graphics/material/AX_Material.cpp

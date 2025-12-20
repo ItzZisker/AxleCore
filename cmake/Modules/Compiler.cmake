@@ -13,14 +13,9 @@ if(MSVC)
 	)
 else()
     add_compile_options(
-        -Wall
         -Wextra
         -Wpedantic
-        -Wshadow
         -Wnon-virtual-dtor
-        -Wcast-align
-        -Wconversion
-        -Wsign-conversion
 		-O3
         -fPIC
     )

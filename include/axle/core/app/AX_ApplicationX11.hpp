@@ -37,6 +37,7 @@ public:
     bool ShouldQuit() const override { return m_ShouldQuit; }
 
     // callbacks
+    void SetFocusCallback(std::function<void(const EventWindowFocus&)> func) override;
     void SetResizeCallback(std::function<void(const EventWindowResize&)> func) override;
     void SetKeyCallback(std::function<void(const EventKey&)> func) override;
     void SetMouseMoveCallback(std::function<void(const EventMouseMove&)> func) override;
@@ -67,6 +68,7 @@ private:
     Cursor m_NormalCursor = 0;
     Cursor m_HiddenCursor = 0;
 
+    std::function<void(const EventWindowFocus&)> m_FocusCallback;
     std::function<void(const EventWindowResize&)> m_ResizeCallback;
     std::function<void(const EventKey&)> m_KeyCallback;
     std::function<void(const EventMouseMove&)> m_MouseMoveCallback;

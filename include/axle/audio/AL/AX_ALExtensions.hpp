@@ -1,0 +1,34 @@
+#pragma once
+
+#ifndef AL_SOFT_source_resampler
+#define AL_SOFT_source_resampler 1
+
+#define AL_SOURCE_RESAMPLER_SOFT        0x1214
+#define AL_NUM_RESAMPLERS_SOFT          0x1215
+#define AL_RESAMPLER_NAME_SOFT          0x1216
+
+#define AL_RESAMPLER_POINT_SOFT         0x0000
+#define AL_RESAMPLER_LINEAR_SOFT        0x0001
+#define AL_RESAMPLER_CUBIC_SOFT         0x0002
+#endif
+
+#ifndef AL_FRONT_LEFT
+#define AL_FRONT_LEFT   0x0001
+#define AL_FRONT_RIGHT  0x0002
+#define AL_FRONT_CENTER 0x0004
+#define AL_LOW_FREQUENCY 0x0008
+#define AL_BACK_LEFT    0x0010
+#define AL_BACK_RIGHT   0x0020
+#define AL_FRONT_LEFT_OF_CENTER 0x0040
+#define AL_FRONT_RIGHT_OF_CENTER 0x0080
+#define AL_BACK_CENTER  0x0100
+#define AL_SIDE_LEFT    0x0200
+#define AL_SIDE_RIGHT   0x0400
+#define AL_TOP_CENTER   0x0800
+#define AL_TOP_FRONT_LEFT  0x1000
+#define AL_TOP_FRONT_CENTER 0x2000
+#define AL_TOP_FRONT_RIGHT 0x4000
+#define AL_TOP_BACK_LEFT    0x8000
+#define AL_TOP_BACK_CENTER   0x10000
+#define AL_TOP_BACK_RIGHT    0x20000
+#endif

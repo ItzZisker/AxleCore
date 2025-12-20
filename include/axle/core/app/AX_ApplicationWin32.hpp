@@ -45,6 +45,7 @@ public:
     void RequestQuit() override { m_ShouldQuit = true; }
     bool ShouldQuit() const override { return m_ShouldQuit; }
 
+    void SetFocusCallback(std::function<void(const EventWindowFocus&)> func) override { m_FocusCallback = std::move(func); }
     void SetResizeCallback(std::function<void(const EventWindowResize&)> func) override { m_ResizeCallback = std::move(func); }
     void SetKeyCallback(std::function<void(const EventKey&)> func) override { m_KeyCallback = std::move(func); }
     void SetMouseMoveCallback(std::function<void(const EventMouseMove&)> func) override { m_MouseMoveCallback = std::move(func); }
@@ -65,6 +66,7 @@ private:
     vHINSTANCE m_Instance = nullptr;
 
     std::function<void(const EventKey&)> m_KeyCallback;
+    std::function<void(const EventWindowFocus&)> m_FocusCallback;
     std::function<void(const EventWindowResize&)> m_ResizeCallback;
     std::function<void(const EventMouseMove&)> m_MouseMoveCallback;
     std::function<void(const EventMouseButton&)> m_MouseButtonCallback;
