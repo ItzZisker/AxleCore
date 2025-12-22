@@ -139,6 +139,7 @@ int main() {
         glClearColor(r, g, b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ctx.SwapBuffers();
+#endif
 #ifdef __AX_AUDIO_ALSOFT__
         float x = std::sin(1.65f * t) * 3.0f;
         float z = std::cos(1.65f * t) * 3.0f;
@@ -146,7 +147,6 @@ int main() {
         if (frames++ >= 10) {
             music.Tick(10 * dt);
         }
-#endif
 #endif
     }
 

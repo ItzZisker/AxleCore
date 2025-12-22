@@ -30,6 +30,8 @@ public:
     void Shutdown() override;
     void PollEvents() override;
 
+    bool IsThrottling() override;
+
     void SetTitle(const std::string& title) override;
     const std::string& GetTitle() const override { return m_Title; }
 
@@ -59,6 +61,10 @@ private:
     uint32_t m_Width, m_Height;
     bool m_Resizable = true;
     bool m_ShouldQuit = false;
+
+    bool m_Grabbed = false;
+    bool m_Focused = false;
+    bool m_IsMouseOnEdge = false;
 
     CursorMode m_CursorMode = CursorMode::Normal;
 

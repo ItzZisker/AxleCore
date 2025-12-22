@@ -1,8 +1,8 @@
 #include "axle/core/app/AX_ApplicationX11.hpp"
-#include <X11/X.h>
 
 #ifdef __AX_PLATFORM_X11__
 
+#include <X11/X.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 

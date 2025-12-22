@@ -5,10 +5,24 @@
 #include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/core/ctx/GL/AX_GLRenderContextWin32.hpp"
 
+// ALSoft Audio
+#ifdef __AX_AUDIO_ALSOFT__
+#include "axle/audio/data/AX_AudioWAV.hpp"
+
+#include "axle/audio/AL/AX_ALAudioContext.hpp"
+#include "axle/audio/AL/AX_ALAudioListener.hpp"
+
+#include "axle/audio/AL/buffer/AX_ALAudioBufferPlayer.hpp"
+#include "axle/audio/AL/buffer/AX_ALAudioBuffer.hpp"
+
+#include "axle/audio/AL/stream/AX_ALAudioStreamVorbisPlayer.hpp"
+#endif
+
 #include <chrono>
 #include <cmath>
-
+#include <thread>
 #include <iostream>
+
 #include <unistd.h>
 
 #define HW_WIDTH  800
@@ -33,6 +47,39 @@ float HW_DeltaTime() {
 
 int main() {
 #if defined(__AX_PLATFORM_WIN32__) && defined(__AX_GRAPHICS_GL__)
+
+#ifdef __AX_AUDIO_ALSOFT__
+    if (!audio::AL_CreateContext(nullptr)) {
+        std::cerr << "Failed to create Audio Context\n";
+    }
+
+    audio::ALAudioStreamVorbisPlayer music(4);
+    music.ApplyToSources([](audio::ALAudioStreamVorbisSource& src){
+        src.BypassHRTF();
+    });
+
+    audio::ALAudioBufferPlayer soundCues(16);
+    audio::ALAudioBuffer buff;
+
+    audio::AudioStreamDesc desc;
+    auto ogg = audio::OGG_LoadFile("test.ogg");
+    audio::ALAudioStreamVorbis stream(ogg);
+    try {
+        music.Play(&stream);
+    } catch (const std::exception& ex) {
+        std::cerr << "Audio Exception: " << ex.what() << std::endl;
+    }
+    try {
+        auto wav = audio::WAV_LoadFile("test_mono.wav");
+        if (!buff.Load(wav)) {
+            std::cerr << "Failed to load test_mono.wav audio onto ALAudioBuffer\n";
+        }
+        //soundCues.Play(buff);
+    } catch (const std::exception& ex) {
+        std::cerr << "Audio Exception: " << ex.what() << std::endl;
+    }
+#endif
+
     core::ApplicationSpecification spec;
     spec.title = "Hello Win32";
     spec.width = HW_WIDTH;
@@ -42,9 +89,6 @@ int main() {
     core::ApplicationWin32 app(spec);
     app.SetKeyCallback([](const core::EventKey& k) {
         printf("Key %lu %s\n", k.key, k.pressed ? "pressed" : "released");
-    });
-    app.SetResizeCallback([](const core::EventWindowResize& r){
-        //glViewport(0, 0, static_cast<int>(r.width), static_cast<int>(r.height));
     });
     app.Launch();
 
@@ -57,18 +101,29 @@ int main() {
     }
     ctx.SetVSync(false);
 
-    glViewport(0, 0, HW_WIDTH, HW_HEIGHT);
     glEnable(GL_DEPTH_TEST);
 
     float t = 0.0f;
     while (!app.ShouldQuit()) {
-        app.PollEvents();
-        t += HW_DeltaTime();
+        //app.PollEvents();
+        glViewport(0, 0, app.GetWidth(), app.GetHeight());
+        float dt = HW_DeltaTime();
+        t += dt;
         float r, g, b;
         HW_RGBScroll(t, r, g, b);
         glClearColor(r, g, b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        ctx.SwapBuffers();
+        if (!app.IsThrottling()) {
+            //ctx.SwapBuffers();
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+#ifdef __AX_AUDIO_ALSOFT__
+        float x = std::sin(1.65f * t) * 3.0f;
+        float z = std::cos(1.65f * t) * 3.0f;
+        audio::ALAudioListener::SetPosition(x, 0.0f, z);
+        music.Tick(dt);
+#endif
     }
 
     app.Shutdown();

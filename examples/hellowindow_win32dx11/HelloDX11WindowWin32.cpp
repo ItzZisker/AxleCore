@@ -30,7 +30,7 @@ float HW_DeltaTime() {
 }
 
 int main() {
-#ifdef __AX_PLATFORM_WIN32__
+#if defined(__AX_PLATFORM_WIN32__) && defined(__AX_GRAPHICS_DX11__)
     core::ApplicationSpecification spec;
     spec.title = "Hello Win32";
     spec.width = HW_WIDTH;
@@ -61,7 +61,7 @@ int main() {
     app.Shutdown();
     return 0;
 #else
-    std::cerr << "Host is not Win32!\n";
+    std::cerr << "Host is not Win32! or, not built using DX11, or doesn't support DX11, idk?\n";
     return -1;
 #endif
 }

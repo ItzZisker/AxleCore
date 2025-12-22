@@ -1,19 +1,23 @@
 #include "axle/core/app/AX_ApplicationWin32.hpp"
+#include <iostream>
+#include <ostream>
+#include <stdexcept>
 
 #ifdef __AX_PLATFORM_WIN32__
 
 #include <AX_PCH.hpp>
+#include <unordered_map>
 
 #include <Windows.h>
 #include <windowsx.h>
 
 namespace axle::core {
 
-static ApplicationWin32* g_App = nullptr; // global pointer for static WndProc (Window procedure)
+static ApplicationWin32* g_App = nullptr; // global pointers for static WndProc (Window procedure)
 
 ApplicationWin32::ApplicationWin32(const ApplicationSpecification& spec) {
+    if (g_App) throw std::runtime_error("Cannot have more than one application, maybe try asking microsoft to not call window events on window object construction, but just on intialization just like other opearting systems. I am lazy and not going to somehow magically overcome this");
     g_App = this;
-
     m_Title = spec.title;
     m_Width = spec.width;
     m_Height = spec.height;
@@ -22,9 +26,11 @@ ApplicationWin32::ApplicationWin32(const ApplicationSpecification& spec) {
 
 ApplicationWin32::~ApplicationWin32() {
     Shutdown();
+    g_App = nullptr;
 }
 
 void ApplicationWin32::Launch() {
+    if (m_Instance) return;
     m_Instance = GetModuleHandle(nullptr);
 
     // Register window class
@@ -80,6 +86,10 @@ void ApplicationWin32::PollEvents() {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+}
+
+bool ApplicationWin32::IsThrottling() {
+    return m_Focused && !m_Grabbed;
 }
 
 void ApplicationWin32::SetTitle(const std::string& title) {
@@ -177,6 +187,11 @@ vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wPara
     case WM_LBUTTONUP:
     {
         pressed = (msg == WM_LBUTTONDOWN);
+        if (pressed) {
+           if (app->m_IsMouseOnEdge) app->m_Grabbed = true;
+        } else {
+            app->m_Grabbed = false;
+        }
         if (app->m_MouseButtonCallback)
             app->m_MouseButtonCallback({ 0, pressed });
         return 0;
@@ -195,6 +210,32 @@ vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wPara
         pressed = (msg == WM_MBUTTONDOWN);
         if (app->m_MouseButtonCallback)
             app->m_MouseButtonCallback({ 2, pressed });
+        return 0;
+    }
+    case WM_ACTIVATE:
+    {
+        app->m_Focused = (LOWORD(wParam) == WA_INACTIVE);
+        if (app->m_FocusCallback)
+            app->m_FocusCallback({app->m_Focused});
+        return 0;
+    }
+    case WM_NCHITTEST:
+    {
+        LRESULT hit = DefWindowProc((HWND)hwnd, msg, wParam, lParam);
+
+        if (hit == HTBOTTOM || hit == HTTOP || hit == HTRIGHT || hit == HTLEFT ||
+            hit == HTBOTTOMLEFT || hit == HTBOTTOMRIGHT || hit == HTTOPLEFT || hit == HTTOPRIGHT) {
+            app->m_IsMouseOnEdge = true;
+        } else {
+            app->m_IsMouseOnEdge = false;
+        }
+        return hit;
+    }
+    case WM_ENTERSIZEMOVE:
+    case WM_EXITSIZEMOVE:
+    {
+        app->m_Grabbed = (msg == WM_ENTERSIZEMOVE);
+        if (!app->m_Grabbed) app->m_IsMouseOnEdge = false;
         return 0;
     }
     }

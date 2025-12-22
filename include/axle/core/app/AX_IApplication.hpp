@@ -58,6 +58,9 @@ public:
     // Run one iteration of event polling
     virtual void PollEvents() = 0;
 
+    // Must be called after PollEvents(), checks if window backbuffer is throttling/blocking so, don't write to it at that moment
+    virtual bool IsThrottling() = 0;
+
     // Window properties
     virtual void SetTitle(const std::string& title) = 0;
     virtual const std::string& GetTitle() const = 0;
