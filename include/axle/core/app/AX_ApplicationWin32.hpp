@@ -1,7 +1,9 @@
 #pragma once
 
+#include <mutex>
 #if defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include "AX_IApplication.hpp"
+#include "axle/tick/AX_Executor.hpp"
 
 #ifndef CALLBACK
 #if defined(_ARM_)
@@ -26,34 +28,30 @@ public:
     ApplicationWin32(const ApplicationSpecification& spec);
     ~ApplicationWin32() override;
 
+    tick::Executor GetExecutor(); // TODO: <- this
+
     void Launch() override;
     void Shutdown() override;
-    void PollEvents() override;
 
-    bool IsThrottling() override;
+    std::deque<Event> PollEvents() override;
+    void PollEventsInternal();
 
     void SetTitle(const std::string& title) override;
-    const std::string& GetTitle() const override { return m_Title; }
+    const std::string& GetTitle() const override;
 
-    uint32_t GetWidth() const override { return m_Width; }
-    uint32_t GetHeight() const override { return m_Height; }
+    uint32_t GetWidth() const override;
+    uint32_t GetHeight() const override;
 
     void SetResizable(bool enabled) override;
-    bool IsResizable() const override { return m_Resizable; }
+    bool IsResizable() const override;
 
     void SetCursorMode(CursorMode mode) override;
-    CursorMode GetCursorMode() const override { return m_CursorMode; }
+    CursorMode GetCursorMode() const override;
 
-    void RequestQuit() override { m_ShouldQuit = true; }
-    bool ShouldQuit() const override { return m_ShouldQuit; }
+    void RequestQuit() override;
+    bool ShouldQuit() const override;
 
-    void SetFocusCallback(std::function<void(const EventWindowFocus&)> func) override { m_FocusCallback = std::move(func); }
-    void SetResizeCallback(std::function<void(const EventWindowResize&)> func) override { m_ResizeCallback = std::move(func); }
-    void SetKeyCallback(std::function<void(const EventKey&)> func) override { m_KeyCallback = std::move(func); }
-    void SetMouseMoveCallback(std::function<void(const EventMouseMove&)> func) override { m_MouseMoveCallback = std::move(func); }
-    void SetMouseButtonCallback(std::function<void(const EventMouseButton&)> func) override { m_MouseButtonCallback = std::move(func); }
-
-    void* GetNativeWindowHandle() const override { return (void*)m_Hwnd; }
+    void* GetNativeWindowHandle() const override;
 private:
     static vLRESULT CALLBACK WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam);
 private:
@@ -66,16 +64,15 @@ private:
     bool m_Focused = false;
     bool m_IsMouseOnEdge = false;
 
+    int32_t m_DequeMaxEvents = 16;
+
     CursorMode m_CursorMode = CursorMode::Normal;
 
     vHWND m_Hwnd = nullptr;
     vHINSTANCE m_Instance = nullptr;
 
-    std::function<void(const EventKey&)> m_KeyCallback;
-    std::function<void(const EventWindowFocus&)> m_FocusCallback;
-    std::function<void(const EventWindowResize&)> m_ResizeCallback;
-    std::function<void(const EventMouseMove&)> m_MouseMoveCallback;
-    std::function<void(const EventMouseButton&)> m_MouseButtonCallback;
+    tick::Executor m_Executor;
+    std::mutex m_Mutex;
 };
 
 }

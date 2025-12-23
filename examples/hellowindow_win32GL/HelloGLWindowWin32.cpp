@@ -94,7 +94,6 @@ int main() {
 
     core::GLRenderContextWin32 ctx;
     ctx.Init(&app);
-    ctx.LoadGLFunctions();
     if (!ctx.LoadGLFunctions()) {
         std::cerr << "Couldn't Load GLAD Functions\n";
         return 1;
@@ -105,16 +104,18 @@ int main() {
 
     float t = 0.0f;
     while (!app.ShouldQuit()) {
-        //app.PollEvents();
-        glViewport(0, 0, app.GetWidth(), app.GetHeight());
+        std::cout << "before pollevents()\n";
+        app.PollEvents();
+        std::cout << "after pollevents()\n";
         float dt = HW_DeltaTime();
         t += dt;
         float r, g, b;
         HW_RGBScroll(t, r, g, b);
-        glClearColor(r, g, b, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (!app.IsThrottling()) {
-            //ctx.SwapBuffers();
+            // glViewport(0, 0, app.GetWidth(), app.GetHeight());
+            // glClearColor(r, g, b, 1.0f);
+            // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            // ctx.SwapBuffers();
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }

@@ -1,7 +1,10 @@
 #pragma once
 
 #include "AX_PCH.hpp"
-#include <functional>
+
+#include <deque>
+#include <mutex>
+#include <thread>
 
 // IMPORTANT!
 // We have to implement joystick calliberation/choose or anything support later; 
@@ -23,43 +26,39 @@ struct ApplicationSpecification {
 };
 
 // Base event structure (will extend it later or plug into ECS/event bus)
-struct EventWindowResize {
-    uint32_t width;
-    uint32_t height;
+enum EventType {
+    Key,
+    WindowResize,
+    WindowFocus,
+    MouseMove,
+    MouseButton
 };
 
-struct EventWindowFocus {
-    bool focused;
+union EventValue {
+    struct { unsigned long key; bool pressed; } key;
+    struct { uint32_t width, height; } windowResize;
+    struct { bool focused; } windowFocus;
+    struct { float x, y; } mouseMove;
+    struct { int button; bool pressed; } mouseButton;
 };
 
-struct EventKey {
-    unsigned long key;
-    bool pressed;
-};
-
-struct EventMouseMove {
-    float x;
-    float y;
-};
-
-struct EventMouseButton {
-    int button;
-    bool pressed;
+struct Event {
+    EventType type;
+    EventValue value;
 };
 
 class IApplication {
 public:
     virtual ~IApplication() = default;
 
+    virtual std::thread::id GetThreadId() const = 0;
+
     // Core lifecycle
     virtual void Launch() = 0;
     virtual void Shutdown() = 0;
 
     // Run one iteration of event polling
-    virtual void PollEvents() = 0;
-
-    // Must be called after PollEvents(), checks if window backbuffer is throttling/blocking so, don't write to it at that moment
-    virtual bool IsThrottling() = 0;
+    virtual std::deque<Event> PollEvents() = 0;
 
     // Window properties
     virtual void SetTitle(const std::string& title) = 0;
@@ -76,13 +75,6 @@ public:
 
     virtual void RequestQuit() = 0;
     virtual bool ShouldQuit() const = 0;
-
-    // Callbacks
-    virtual void SetFocusCallback(std::function<void(const EventWindowFocus&)> func) = 0;
-    virtual void SetResizeCallback(std::function<void(const EventWindowResize&)> func) = 0;
-    virtual void SetKeyCallback(std::function<void(const EventKey&)> func) = 0;
-    virtual void SetMouseMoveCallback(std::function<void(const EventMouseMove&)> func) = 0;
-    virtual void SetMouseButtonCallback(std::function<void(const EventMouseButton&)> func) = 0;
 
     // Backend-specific pointer access (GL/DX/VK surfaces, handles, etc)
     virtual void* GetNativeWindowHandle() const = 0;

@@ -1,19 +1,19 @@
 #include "axle/core/app/AX_ApplicationWin32.hpp"
-#include <iostream>
-#include <ostream>
-#include <stdexcept>
+#include <mutex>
 
 #ifdef __AX_PLATFORM_WIN32__
 
 #include <AX_PCH.hpp>
-#include <unordered_map>
 
 #include <Windows.h>
 #include <windowsx.h>
 
+#include <stdexcept>
+
 namespace axle::core {
 
 static ApplicationWin32* g_App = nullptr; // global pointers for static WndProc (Window procedure)
+static std::mutex g_AppMutex;
 
 ApplicationWin32::ApplicationWin32(const ApplicationSpecification& spec) {
     if (g_App) throw std::runtime_error("Cannot have more than one application, maybe try asking microsoft to not call window events on window object construction, but just on intialization just like other opearting systems. I am lazy and not going to somehow magically overcome this");
@@ -22,6 +22,7 @@ ApplicationWin32::ApplicationWin32(const ApplicationSpecification& spec) {
     m_Width = spec.width;
     m_Height = spec.height;
     m_Resizable = spec.resizable;
+    m_Executor.Init();
 }
 
 ApplicationWin32::~ApplicationWin32() {
@@ -76,7 +77,7 @@ void ApplicationWin32::Shutdown() {
     }
 }
 
-void ApplicationWin32::PollEvents() {
+std::deque<Event> ApplicationWin32::PollEvents() {
     MSG msg;
     while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
@@ -86,10 +87,11 @@ void ApplicationWin32::PollEvents() {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
 }
 
 bool ApplicationWin32::IsThrottling() {
-    return m_Focused && !m_Grabbed;
+    return !m_Focused || m_Grabbed;
 }
 
 void ApplicationWin32::SetTitle(const std::string& title) {
@@ -140,6 +142,7 @@ void ApplicationWin32::SetCursorMode(CursorMode mode) {
 
 vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam)
 {
+    std::lock_guard<std::mutex> lock(g_AppMutex);
     ApplicationWin32* app = g_App;
 
     bool pressed;
@@ -214,7 +217,7 @@ vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wPara
     }
     case WM_ACTIVATE:
     {
-        app->m_Focused = (LOWORD(wParam) == WA_INACTIVE);
+        app->m_Focused = (LOWORD(wParam) == WA_ACTIVE);
         if (app->m_FocusCallback)
             app->m_FocusCallback({app->m_Focused});
         return 0;
