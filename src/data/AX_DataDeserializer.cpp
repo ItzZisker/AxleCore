@@ -6,6 +6,10 @@ namespace axle::data
 DataDeserializer::DataDeserializer(std::shared_ptr<IDataStream> stream, uint64_t chunkSize)
     : m_Stream(stream), m_ChunkSize(chunkSize) {}
 
+bool DataDeserializer::IsEndOfStream() {
+    return m_Stream->EndOfStream();
+}
+
 uint64_t DataDeserializer::GetLength() {
     return m_Stream->GetLength();
 }

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include <stdexcept>
+#include <string>
 
 namespace axle::data
 {
@@ -29,6 +31,10 @@ uint64_t BufferDataStream::GetWriteIndex() {
     return this->m_WriteIndex;
 }
 
+uint64_t BufferDataStream::GetLength() {
+    return this->m_Length;
+}
+
 void BufferDataStream::SeekRead(uint64_t pos) {
     this->m_ReadIndex = pos;
 }
@@ -50,32 +56,35 @@ bool BufferDataStream::EndOfStream() const {
 }
 
 std::size_t BufferDataStream::Read(void* out, std::size_t size) {
-    size = std::min(size, this->m_Length - this->m_ReadIndex);
+    if (EndOfStream()) throw std::runtime_error("EndOfStream");
+    size = std::clamp(size, (size_t) 0, this->m_Length - this->m_ReadIndex);
+    if (size == 0) throw std::runtime_error("Unexpected EOS");
     std::memcpy(out, this->m_Buffer + this->m_ReadIndex, size);
     this->m_ReadIndex += size;
     return size;
 }
 
 std::size_t BufferDataStream::Write(const void* in, std::size_t size) {
-    size = std::min(size, this->m_Length - this->m_WriteIndex);
+    if (EndOfStream()) throw std::runtime_error("EndOfStream");
+    size = std::clamp(size, (size_t) 0, this->m_Length - this->m_WriteIndex);
+    if (size == 0) throw std::runtime_error("Unexpected EOS");
     std::memcpy(this->m_Buffer + this->m_WriteIndex, in, size);
     this->m_WriteIndex += size;
     return size;
 }
 
 void BufferDataStream::PeekBytes(void* out, uint64_t pos, std::size_t size) {
+    if (EndOfStream()) throw std::runtime_error("EndOfStream");
     pos = std::clamp(pos, uint64_t(0), this->m_Length);
-    size = std::min(size, this->m_Length - pos);
+    size = std::clamp(size, (size_t) 0, this->m_Length - pos);
+    if (size == 0) throw std::runtime_error("Unexpected EOS");
     std::memcpy(out, this->m_Buffer + pos, size);
-}
-
-uint64_t BufferDataStream::GetLength() {
-    return this->m_Length;
 }
 
 void BufferDataStream::WriteToFile(uint64_t pos, uint64_t size, const std::filesystem::path &path, uint64_t chunkSize) {
     pos = std::clamp(pos, uint64_t(0), m_Length);
-    size = std::min(size, m_Length - pos);
+    size = std::clamp(size, (size_t) 0, this->m_Length - pos);
+    if (size == 0) throw std::runtime_error("BufferDataStream::WriteToFile(): Size too big! size=" + std::to_string(size));
     uint64_t *chunk = new uint64_t[chunkSize];
     uint64_t end = 0;
     for (uint64_t i = 0; i < size; i += chunkSize) {

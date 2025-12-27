@@ -14,6 +14,7 @@ protected:
 public:
     DataDeserializer(std::shared_ptr<IDataStream> stream, uint64_t chunkSize = 4096);
 
+    bool IsEndOfStream();
     uint64_t GetLength();
     uint64_t GetReadPos();
 

@@ -1,9 +1,10 @@
 #pragma once
 
-#include <mutex>
 #if defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include "AX_IApplication.hpp"
 #include "axle/tick/AX_Executor.hpp"
+
+#include <mutex>
 
 #ifndef CALLBACK
 #if defined(_ARM_)

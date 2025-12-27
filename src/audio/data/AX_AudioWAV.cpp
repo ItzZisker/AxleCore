@@ -20,18 +20,18 @@ WAVAudio WAV_LoadFileBytes(data::DataDeserializer *buffer) {
     buffer->Read(wav.header.wave, 4);
     buffer->Read(wav.header.fmt, 4);
     buffer->Skip(4);
-    wav.header.audioFormat = data::LE_Read<uint16_t>(buffer);
-    wav.header.numChannels = data::LE_Read<uint16_t>(buffer);
-    wav.header.sampleRate = data::LE_Read<uint32_t>(buffer);
-    wav.header.byteRate = data::LE_Read<uint32_t>(buffer);
-    wav.header.blockAlign = data::LE_Read<uint16_t>(buffer);
-    wav.header.bitsPerSample = data::LE_Read<uint16_t>(buffer);
+    wav.header.audioFormat = data::LE_ReadOrThrow<uint16_t>(buffer);
+    wav.header.numChannels = data::LE_ReadOrThrow<uint16_t>(buffer);
+    wav.header.sampleRate = data::LE_ReadOrThrow<uint32_t>(buffer);
+    wav.header.byteRate = data::LE_ReadOrThrow<uint32_t>(buffer);
+    wav.header.blockAlign = data::LE_ReadOrThrow<uint16_t>(buffer);
+    wav.header.bitsPerSample = data::LE_ReadOrThrow<uint16_t>(buffer);
 
     char dataHeader[4];
     uint32_t dataSize;
     do {
         buffer->Read(dataHeader, 4);
-        dataSize = data::LE_Read<uint32_t>(buffer);
+        dataSize = data::LE_ReadOrThrow<uint32_t>(buffer);
         if (std::string(dataHeader, 4) != "data") buffer->Skip(dataSize);
     } while (std::string(dataHeader,4) != "data");
 
