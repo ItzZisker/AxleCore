@@ -4,7 +4,7 @@
 
 #include <deque>
 #include <mutex>
-#include <thread>
+#include <string>
 
 // IMPORTANT!
 // We have to implement joystick calliberation/choose or anything support later; 
@@ -25,17 +25,18 @@ struct ApplicationSpecification {
     bool resizable = true;
 };
 
-// Base event structure (will extend it later or plug into ECS/event bus)
 enum EventType {
+    Void,
     Key,
     WindowResize,
     WindowFocus,
     MouseMove,
-    MouseButton
+    MouseButton,
+    Quit
 };
 
 union EventValue {
-    struct { unsigned long key; bool pressed; } key;
+    struct { uint64_t key; bool pressed; } key;
     struct { uint32_t width, height; } windowResize;
     struct { bool focused; } windowFocus;
     struct { float x, y; } mouseMove;
@@ -43,43 +44,89 @@ union EventValue {
 };
 
 struct Event {
-    EventType type;
+    EventType type = EventType::Void;
     EventValue value;
+};
+
+class SharedState {
+public:
+    explicit SharedState(ApplicationSpecification spec = {}, uint32_t maxEventsQueue = 32);
+    
+    bool IsRunning() const;
+    bool IsResizable() const;
+    bool IsQuitting() const;
+
+    CursorMode GetCursorMode() const;
+
+    uint32_t GetWidth() const;
+    uint32_t GetHeight() const;
+    uint32_t GetMaxEventQueueCapacity() const;
+
+    std::string GetTitle() const;
+
+    void PushEvent(const Event& event);
+
+    std::deque<Event> TakeEvents();
+protected:
+    void SetRunning(bool running);
+    void SetResizable(bool resizable);
+    void SetTitle(const std::string& title);
+    void SetSize(uint32_t width, uint32_t height);
+    void SetCursorMode(CursorMode mode);
+
+    void RequestQuit();
+private:
+    friend class IApplication;
+
+    friend class ApplicationWin32;
+    friend class ApplicationX11;
+
+    CursorMode m_CursorMode{CursorMode::Normal};
+    uint32_t m_Width{1024}, m_Height{768};
+
+    uint32_t m_MaxEventQueueCapacity{32};
+    std::deque<Event> m_SharedEventsQ;
+
+    bool m_IsRunning{false};
+    bool m_IsResizable{false};
+    bool m_ShouldQuit{false};
+
+    std::string m_Title{"Pylo App"};
+
+    mutable std::mutex m_Mutex;
 };
 
 class IApplication {
 public:
+    IApplication(const ApplicationSpecification& spec, uint32_t maxSharedEvents) 
+        : m_State(spec, maxSharedEvents) {}
+
+    IApplication(const IApplication&) = delete;
+    IApplication& operator=(const IApplication&) = delete;
+
+    IApplication(IApplication&&) = delete;
+    IApplication& operator=(const IApplication&&) = delete;
+    
     virtual ~IApplication() = default;
 
-    virtual std::thread::id GetThreadId() const = 0;
-
-    // Core lifecycle
     virtual void Launch() = 0;
     virtual void Shutdown() = 0;
 
-    // Run one iteration of event polling
-    virtual std::deque<Event> PollEvents() = 0;
+    virtual void PollEvents() = 0;
 
-    // Window properties
     virtual void SetTitle(const std::string& title) = 0;
-    virtual const std::string& GetTitle() const = 0;
-
-    virtual uint32_t GetWidth() const = 0;
-    virtual uint32_t GetHeight() const = 0;
-
     virtual void SetResizable(bool enabled) = 0;
-    virtual bool IsResizable() const = 0;
-
     virtual void SetCursorMode(CursorMode mode) = 0;
-    virtual CursorMode GetCursorMode() const = 0;
 
-    virtual void RequestQuit() = 0;
-    virtual bool ShouldQuit() const = 0;
+    virtual void RequestQuit() { m_State.RequestQuit(); }
+    virtual SharedState& GetSharedState() { return m_State; }
 
     // Backend-specific pointer access (GL/DX/VK surfaces, handles, etc)
-    virtual void* GetNativeWindowHandle() const = 0;
+    virtual void* GetNativeWindowHandle() = 0;
 public:
-    static IApplication* Create(const ApplicationSpecification& spec);
+    static IApplication* Create(const ApplicationSpecification& spec, uint32_t maxSharedEvents);
+protected:
+    mutable SharedState m_State;
 };
 
 }

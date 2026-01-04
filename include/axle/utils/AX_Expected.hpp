@@ -66,11 +66,11 @@ private:
 template<typename E>
 class Expected<void, E> {
 public:
-    Expected() : m_HasValue(true) {}
+    Expected() : m_Error({}), m_HasValue(true) {}
+    Expected(E e) : m_Error(e), m_HasValue(false) {}
+
     static Expected error(E e) {
-        Expected r;
-        r.m_HasValue = false;
-        r.m_Error = std::move(e);
+        Expected r(std::move(e));
         return r;
     }
 

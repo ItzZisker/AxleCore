@@ -1,5 +1,7 @@
 #include "axle/core/app/AX_ApplicationWin32.hpp"
-#include <mutex>
+#include "axle/core/app/AX_IApplication.hpp"
+#include <iostream>
+#include <ostream>
 
 #ifdef __AX_PLATFORM_WIN32__
 
@@ -13,16 +15,11 @@
 namespace axle::core {
 
 static ApplicationWin32* g_App = nullptr; // global pointers for static WndProc (Window procedure)
-static std::mutex g_AppMutex;
 
-ApplicationWin32::ApplicationWin32(const ApplicationSpecification& spec) {
+ApplicationWin32::ApplicationWin32(const ApplicationSpecification& spec, uint32_t maxSharedEvents)
+    : IApplication(spec, maxSharedEvents) {
     if (g_App) throw std::runtime_error("Cannot have more than one application, maybe try asking microsoft to not call window events on window object construction, but just on intialization just like other opearting systems. I am lazy and not going to somehow magically overcome this");
     g_App = this;
-    m_Title = spec.title;
-    m_Width = spec.width;
-    m_Height = spec.height;
-    m_Resizable = spec.resizable;
-    m_Executor.Init();
 }
 
 ApplicationWin32::~ApplicationWin32() {
@@ -38,20 +35,20 @@ void ApplicationWin32::Launch() {
     WNDCLASS wc = {};
     wc.lpfnWndProc = (WNDPROC)ApplicationWin32::WndProc;
     wc.hInstance = (HINSTANCE)m_Instance;
-    wc.lpszClassName = "AXWin32WindowClass";
+    wc.lpszClassName = "Application WIN32";
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClass(&wc);
 
     DWORD style = WS_OVERLAPPEDWINDOW;
-    if (!m_Resizable) style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
+    if (!m_State.IsResizable()) style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
 
-    RECT rect = { 0, 0, (LONG)m_Width, (LONG)m_Height };
+    RECT rect = { 0, 0, (LONG)m_State.GetWidth(), (LONG)m_State.GetHeight() };
     AdjustWindowRect(&rect, style, FALSE);
 
     m_Hwnd = CreateWindowEx(
         0,
         wc.lpszClassName,
-        m_Title.c_str(),
+        m_State.GetTitle().c_str(),
         style,
         CW_USEDEFAULT, CW_USEDEFAULT,
         rect.right - rect.left,
@@ -77,31 +74,24 @@ void ApplicationWin32::Shutdown() {
     }
 }
 
-std::deque<Event> ApplicationWin32::PollEvents() {
+void ApplicationWin32::PollEvents() {
     MSG msg;
     while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
-            m_ShouldQuit = true;
-            return;
+            m_State.RequestQuit();
+        } else {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
         }
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
     }
-
-}
-
-bool ApplicationWin32::IsThrottling() {
-    return !m_Focused || m_Grabbed;
 }
 
 void ApplicationWin32::SetTitle(const std::string& title) {
-    m_Title = title;
-    SetWindowText((HWND)m_Hwnd, m_Title.c_str());
+    SetWindowText((HWND)m_Hwnd, title.c_str());
+    m_State.SetTitle(title);
 }
 
 void ApplicationWin32::SetResizable(bool enabled) {
-    m_Resizable = enabled;
-
     LONG style = GetWindowLong((HWND)m_Hwnd, GWL_STYLE);
 
     if (enabled) {
@@ -112,11 +102,11 @@ void ApplicationWin32::SetResizable(bool enabled) {
 
     SetWindowLong((HWND)m_Hwnd, GWL_STYLE, style);
     SetWindowPos((HWND)m_Hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
+    
+    m_State.SetResizable(enabled);
 }
 
 void ApplicationWin32::SetCursorMode(CursorMode mode) {
-    m_CursorMode = mode;
-
     if (mode == CursorMode::Normal) {
         ShowCursor(TRUE);
         ClipCursor(nullptr);
@@ -138,89 +128,85 @@ void ApplicationWin32::SetCursorMode(CursorMode mode) {
 
         ClipCursor(&rect);
     }
+    m_State.SetCursorMode(mode);
 }
 
 vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam)
 {
-    std::lock_guard<std::mutex> lock(g_AppMutex);
     ApplicationWin32* app = g_App;
 
-    bool pressed;
+    Event event;
     switch (msg)
     {
     case WM_CLOSE:
     {
-        app->m_ShouldQuit = true;
-        return 0;
+        app->m_State.RequestQuit();
+        break;
     }
     case WM_DESTROY:
     {
         PostQuitMessage(0);
-        return 0;
+        break;
     }
     case WM_SIZE:
     {
         uint32_t w = LOWORD(lParam);
         uint32_t h = HIWORD(lParam);
-        app->m_Width = w;
-        app->m_Height = h;
+        app->m_State.SetSize(w, h);
 
-        if (app->m_ResizeCallback)
-            app->m_ResizeCallback({ w, h });
-        return 0;
+        event.type = EventType::WindowResize;
+        event.value.windowResize = { w, h };
+        break;
     }
     case WM_KEYDOWN:
     case WM_KEYUP:
     {
-        pressed = (msg == WM_KEYDOWN);
-        if (app->m_KeyCallback)
-            app->m_KeyCallback({ (unsigned long)wParam, pressed });
-        return 0;
+        event.type = EventType::Key;
+        event.value.key = { (uint64_t)wParam, (msg == WM_KEYDOWN) };
+        break;
     }
     case WM_MOUSEMOVE:
     {
         float x = (float)GET_X_LPARAM(lParam);
         float y = (float)GET_Y_LPARAM(lParam);
 
-        if (app->m_MouseMoveCallback)
-            app->m_MouseMoveCallback({ x, y });
-        return 0;
+        event.type = EventType::MouseMove;
+        event.value.mouseMove = { x, y };
+        break;
     }
     case WM_LBUTTONDOWN:
     case WM_LBUTTONUP:
     {
-        pressed = (msg == WM_LBUTTONDOWN);
+        bool pressed = (msg == WM_LBUTTONDOWN);
         if (pressed) {
            if (app->m_IsMouseOnEdge) app->m_Grabbed = true;
         } else {
             app->m_Grabbed = false;
         }
-        if (app->m_MouseButtonCallback)
-            app->m_MouseButtonCallback({ 0, pressed });
-        return 0;
+        event.type = EventType::MouseButton;
+        event.value.mouseButton = { 0, pressed };
+        break;
     }
     case WM_RBUTTONDOWN:
     case WM_RBUTTONUP:
     {
-        pressed = (msg == WM_RBUTTONDOWN);
-        if (app->m_MouseButtonCallback)
-            app->m_MouseButtonCallback({ 1, pressed });
-        return 0;
+        event.type = EventType::MouseButton;
+        event.value.mouseButton = { 1, (msg == WM_RBUTTONDOWN) };
+        break;
     }
     case WM_MBUTTONDOWN:
     case WM_MBUTTONUP:
     {
-        pressed = (msg == WM_MBUTTONDOWN);
-        if (app->m_MouseButtonCallback)
-            app->m_MouseButtonCallback({ 2, pressed });
-        return 0;
+        event.type = EventType::MouseButton;
+        event.value.mouseButton = { 2, (msg == WM_MBUTTONDOWN) };
+        break;
     }
     case WM_ACTIVATE:
     {
         app->m_Focused = (LOWORD(wParam) == WA_ACTIVE);
-        if (app->m_FocusCallback)
-            app->m_FocusCallback({app->m_Focused});
-        return 0;
+        event.type = EventType::WindowFocus;
+        event.value.windowFocus = { app->m_Focused };
+        break;
     }
     case WM_NCHITTEST:
     {
@@ -239,8 +225,13 @@ vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wPara
     {
         app->m_Grabbed = (msg == WM_ENTERSIZEMOVE);
         if (!app->m_Grabbed) app->m_IsMouseOnEdge = false;
-        return 0;
+        break;
     }
+    }
+
+    if (event.type != EventType::Void) {
+        app->m_State.PushEvent(event);
+        return 0;
     }
 
     return DefWindowProc((HWND)hwnd, msg, wParam, lParam);

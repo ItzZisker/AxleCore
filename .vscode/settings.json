@@ -1,4 +1,8 @@
 {
+  "vim.handleKeys": {
+    "<C-p>": false,
+    "<C-f>": false
+  },
   "C_Cpp.intelliSenseEngine": "disabled",
   "clangd.arguments": ["--compile-commands-dir=out/build/clang"],
   "clangd.path": "clangd",

@@ -1,9 +1,12 @@
+#include "axle/core/AX_GameLoop.hpp"
 
-#include "axle/core/app/AX_ApplicationWin32.hpp"
 #include "axle/core/app/AX_IApplication.hpp"
+#include "axle/core/app/AX_ApplicationWin32.hpp"
 
 #include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/core/ctx/GL/AX_GLRenderContextWin32.hpp"
+#include <ostream>
+#include <thread>
 
 // ALSoft Audio
 #ifdef __AX_AUDIO_ALSOFT__
@@ -18,10 +21,10 @@
 #include "axle/audio/AL/stream/AX_ALAudioStreamVorbisPlayer.hpp"
 #endif
 
+#include <iostream>
 #include <chrono>
 #include <cmath>
-#include <thread>
-#include <iostream>
+#include <memory>
 
 #include <unistd.h>
 
@@ -38,9 +41,11 @@ void HW_RGBScroll(float t, float& r, float& g, float& b) {
 }
 
 float HW_DeltaTime() {
-    static auto last = std::chrono::high_resolution_clock::now();
-    auto now = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<float> diff = now - last;
+    namespace sch = std::chrono;
+    
+    static auto last = sch::high_resolution_clock::now();
+    auto now = sch::high_resolution_clock::now();
+    sch::duration<float> diff = now - last;
     last = now;
     return diff.count();
 }
@@ -65,11 +70,6 @@ int main() {
     auto ogg = audio::OGG_LoadFile("test.ogg");
     audio::ALAudioStreamVorbis stream(ogg);
     try {
-        music.Play(&stream);
-    } catch (const std::exception& ex) {
-        std::cerr << "Audio Exception: " << ex.what() << std::endl;
-    }
-    try {
         auto wav = audio::WAV_LoadFile("test_mono.wav");
         if (!buff.Load(wav)) {
             std::cerr << "Failed to load test_mono.wav audio onto ALAudioBuffer\n";
@@ -80,54 +80,80 @@ int main() {
     }
 #endif
 
-    core::ApplicationSpecification spec;
-    spec.title = "Hello Win32";
-    spec.width = HW_WIDTH;
-    spec.height = HW_HEIGHT;
-    spec.resizable = true;
+    core::RenderThreadContext glThread;
+    core::ApplicationThreadContext appThread;
 
-    core::ApplicationWin32 app(spec);
-    app.SetKeyCallback([](const core::EventKey& k) {
-        printf("Key %lu %s\n", k.key, k.pressed ? "pressed" : "released");
+    appThread.EnqueueTask([&appThread, &glThread]() {
+        glThread.StartGraphics([&appThread]() -> std::unique_ptr<core::IRenderContext> {
+            auto* ctx = new core::GLRenderContextWin32();
+            ctx->Init(appThread.GetContext());
+            if (!((core::GLRenderContextWin32*) ctx)->LoadGLFunctions()) {
+                std::cerr << "Couldn't Load GLAD Functions\n";
+                std::exit(1);
+            }
+            ctx->SetVSync(false);
+            return std::unique_ptr<core::GLRenderContextWin32>(ctx);
+        });
     });
-    app.Launch();
-
-    core::GLRenderContextWin32 ctx;
-    ctx.Init(&app);
-    if (!ctx.LoadGLFunctions()) {
-        std::cerr << "Couldn't Load GLAD Functions\n";
-        return 1;
-    }
-    ctx.SetVSync(false);
-
-    glEnable(GL_DEPTH_TEST);
-
-    float t = 0.0f;
-    while (!app.ShouldQuit()) {
-        std::cout << "before pollevents()\n";
-        app.PollEvents();
-        std::cout << "after pollevents()\n";
-        float dt = HW_DeltaTime();
-        t += dt;
+    appThread.StartApp([&glThread]() -> std::unique_ptr<core::IApplication> {
+        core::ApplicationSpecification spec {
+            .title = "Hello Window",
+            .width = HW_WIDTH,
+            .height = HW_HEIGHT,
+            .resizable = true
+        };
+        auto* app = new core::ApplicationWin32(spec);
+        app->Launch();
+        return std::unique_ptr<core::ApplicationWin32>(app);
+    });
+    
+    std::atomic<float> tT{0.0f};
+    glThread.PushWork("Rainbow", [&tT](){
+        tT.store(tT.load() + HW_DeltaTime());
         float r, g, b;
-        HW_RGBScroll(t, r, g, b);
-        if (!app.IsThrottling()) {
-            // glViewport(0, 0, app.GetWidth(), app.GetHeight());
-            // glClearColor(r, g, b, 1.0f);
-            // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            // ctx.SwapBuffers();
-        } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
+        HW_RGBScroll(tT.load(), r, g, b);
+        glClearColor(r, g, b, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    });
+
+    appThread.AwaitStart();
+    glThread.AwaitStart();
+
 #ifdef __AX_AUDIO_ALSOFT__
-        float x = std::sin(1.65f * t) * 3.0f;
-        float z = std::cos(1.65f * t) * 3.0f;
-        audio::ALAudioListener::SetPosition(x, 0.0f, z);
-        music.Tick(dt);
+    try {
+        music.Play(&stream);
+    } catch (const std::exception& ex) {
+        std::cerr << "Audio Exception: " << ex.what() << std::endl;
+    }
 #endif
+
+    auto* appCtx = appThread.GetContext();
+    auto& appState = appCtx->GetSharedState();
+
+    while (!appState.IsQuitting()) {
+        // auto eq = appState.TakeEvents();
+        // for (auto& e : eq) {
+        //     if (e.type == core::EventType::WindowResize) {
+        //         auto& ev = e.value.windowResize;
+        //         // glThread.EnqueueTask([&]() {
+        //         //     std::cout << "Resized to width=" << ev.width << ", height=" << ev.height << std::endl;
+        //         //     glViewport(0, 0, ev.width, ev.height);
+        //         // });
+        //         break;
+        //     }
+        // }
+#ifdef __AX_AUDIO_ALSOFT__
+        music.Tick(1);
+#endif
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    app.Shutdown();
+    glThread.Stop();
+    glThread.GetContext()->Shutdown();
+
+    appThread.Stop();
+    appThread.GetContext()->Shutdown();
+
     return 0;
 #else
     std::cerr << "Host is either not Win32 or doesn't support GL 330!\n";

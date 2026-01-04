@@ -32,7 +32,6 @@ static inline int16_t FloatToPCM16(float v) {
     return (int16_t)std::lrintf(v * 32767.0f);
 }
 
-
 class ALIAudioStream : public tick::ITickAdapter {
 protected:
     uint32_t m_Channels {2};

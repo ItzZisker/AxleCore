@@ -73,10 +73,6 @@ void ALAudioStreamVorbisSource::Tick(float dT) {
     ALint processed = 0;
     alGetSourcei(m_sourceID, AL_BUFFERS_PROCESSED, &processed);
 
-    if (processed > 0) {
-        std::cout << "Tick(), processed=" << processed << std::endl;
-    }
-
     bool reachedEnd = false;
     while (processed--) {
         ALuint buf;
@@ -85,7 +81,6 @@ void ALAudioStreamVorbisSource::Tick(float dT) {
         int16_t pcm[4096];
         size_t samples = m_Stream->PopSamples(pcm, 4096);
 
-        std::cout << "Tick(): samples=" << samples << std::endl;
         if (samples > 0) {
             alBufferData(
                 buf,
@@ -97,7 +92,6 @@ void ALAudioStreamVorbisSource::Tick(float dT) {
 
             alSourceQueueBuffers(m_sourceID, 1, &buf);
         } else {
-            std::cout << "reachedEnd" << std::endl;
             reachedEnd = true;
         }
     }

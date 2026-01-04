@@ -28,7 +28,9 @@ void ALAudioStreamVorbisPlayer::ApplyToSources(std::function<void(ALAudioStreamV
 }
 
 void ALAudioStreamVorbisPlayer::Tick(float dT) {
-    for (auto& m_source : m_sources) m_source->Tick(dT);
+    for (auto& m_source : m_sources) {   
+        m_source->Tick(dT);
+    }
 }
 
 }

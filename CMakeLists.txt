@@ -28,6 +28,9 @@ endif()
 set(PROJECT_SRC
     src/external/AX_stb.c
 
+    src/core/AX_Gameloop.cpp
+
+    src/core/app/AX_IApplication.cpp
     src/core/app/AX_ApplicationWin32.cpp
     src/core/app/AX_ApplicationX11.cpp
 
@@ -40,14 +43,14 @@ set(PROJECT_SRC
     # src/core/concurrency/AX_Future.cpp
     # src/core/concurrency/AX_MainThread.cpp
     # src/core/concurrency/AX_GuardLocks.cpp
-    # src/core/concurrency/AX_TaskQueue.cpp
+    src/core/concurrency/AX_TaskQueue.cpp
     # src/core/concurrency/AX_TaskQueueRunnable.cpp
 
     src/data/AX_DataSerializer.cpp
     src/data/AX_DataDeserializer.cpp
     src/data/AX_DataStreamImplBuffer.cpp
     src/data/AX_DataStreamImplFile.cpp
-    # src/data/AX_DataTemplates.cpp
+    src/data/AX_DataTemplates.cpp
 
     # src/assets/AX_AssetImporter.cpp
     # src/assets/AX_AssetExporter.cpp

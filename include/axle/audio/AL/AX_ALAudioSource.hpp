@@ -5,9 +5,6 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 
-#include <string>
-#include <vector>
-
 namespace axle::audio {
 
 class ALAudioSource
@@ -22,7 +19,7 @@ public:
     ALAudioSource(ALAudioSource&& other) noexcept;
     ALAudioSource& operator=(ALAudioSource&& other) noexcept;
 
-    // Configure for music, bypass HRTF filter
+    // Configure for music, bypass HRTF (3D/Doppler/etc. Audio Effects) filter
     void BypassHRTF();
 
     void Play();

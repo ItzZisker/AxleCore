@@ -3,9 +3,6 @@
 #include "axle/audio/AL/stream/AX_ALIAudioStream.hpp"
 #include "axle/audio/data/AX_AudioOGG.hpp"
 
-#include <iostream>
-#include <ostream>
-
 namespace axle::audio
 {
 
@@ -33,11 +30,6 @@ void ALAudioStreamVorbis::Tick(float dT) {
 
     const size_t samplesPerPeriod = size_t(m_SampleRate * m_Desc.periodSeconds) * m_Channels;
 
-    bool print = false;
-    if (m_FilledSamples < samplesPerPeriod) {
-        std::cout << "prev m_FilledSamples=" << m_FilledSamples << std::endl;
-        print = true;
-    }
     while (m_FilledSamples < samplesPerPeriod) {
         float temp[4096];
 
@@ -66,9 +58,6 @@ void ALAudioStreamVorbis::Tick(float dT) {
         }
 
         m_FilledSamples += samples;
-    }
-    if (print) {
-        std::cout << "next m_FilledSamples=" << m_FilledSamples << std::endl;
     }
 }
 

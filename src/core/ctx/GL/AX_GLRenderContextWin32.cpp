@@ -1,6 +1,9 @@
 #include "axle/core/ctx/GL/AX_GLRenderContextWin32.hpp"
 
 #include "AX_PCH.hpp"
+#include <iostream>
+#include <mutex>
+#include <ostream>
 
 #if defined(__AX_GRAPHICS_GL__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include <windows.h>
@@ -15,6 +18,7 @@ GLRenderContextWin32::~GLRenderContextWin32() {
 
 bool GLRenderContextWin32::Init(IApplication* app) {
     if (m_Initialized) return true;
+    if (!app) return false;
 
     m_hwnd = reinterpret_cast<HWND>(app->GetNativeWindowHandle());
 
