@@ -119,6 +119,9 @@ int main() {
     appThread.AwaitStart();
     glThread.AwaitStart();
 
+    auto* appCtx = appThread.GetContext();
+    auto& appState = appCtx->GetSharedState();
+
 #ifdef __AX_AUDIO_ALSOFT__
     try {
         music.Play(&stream);
@@ -126,9 +129,6 @@ int main() {
         std::cerr << "Audio Exception: " << ex.what() << std::endl;
     }
 #endif
-
-    auto* appCtx = appThread.GetContext();
-    auto& appState = appCtx->GetSharedState();
 
     while (!appState.IsQuitting()) {
         // auto eq = appState.TakeEvents();

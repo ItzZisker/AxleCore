@@ -114,10 +114,11 @@ protected:
     void DoCycle() {
         ContextType* ctx = m_Ctx.get();
         auto& cycleTasks = *m_CycleTasks;
-        while (m_Running.load()) {
-            static thread_local std::deque<VoidJob> localTasks;
-            static thread_local std::unordered_map<std::string, std::function<void()>> localWorks;
 
+        std::deque<VoidJob> localTasks;
+        std::unordered_map<std::string, std::function<void()>> localWorks;
+
+        while (m_Running.load()) {
             {
                 std::lock_guard<std::mutex> lock(m_CycleMutex);
                 localTasks = m_CycleTasks->CopyJobs();
