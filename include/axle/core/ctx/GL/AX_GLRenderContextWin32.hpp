@@ -23,6 +23,9 @@ public:
     void* GetContextHandle() const override;
 
     bool LoadGLFunctions();
+
+    ApplicationType GetAppType() const override { return App_Win32; }
+    GraphicsBackend GetType() const override { return Graphics_GL330; }
 private:
     vHGLRC m_hglrc = nullptr;
     vHDC   m_hdc = nullptr;

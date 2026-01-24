@@ -3,9 +3,6 @@
 
 #include <AL/al.h>
 #include <AL/alext.h>
-#include <iostream>
-#include <ostream>
-#include <string>
 
 namespace axle::audio
 {
@@ -44,8 +41,6 @@ void ALAudioStreamVorbisSource::Attach(ALAudioStreamVorbis* stream) {
     for (ALuint buf : m_Buffers) {
         int16_t pcm[4096];
         size_t samples = m_Stream->PopSamples(pcm, 4096);
-
-        std::cout << "4: " << std::to_string(samples) << std::endl;
 
         alBufferData(
             buf,

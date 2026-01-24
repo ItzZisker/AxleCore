@@ -25,6 +25,15 @@ struct ApplicationSpecification {
     bool resizable = true;
 };
 
+enum ApplicationType {
+    App_Win32,
+    App_Linux,
+    App_LinuxDroid,
+    App_OSX,
+    App_Unix,
+    App_Unknown
+};
+
 enum EventType {
     Void,
     Key,
@@ -120,6 +129,8 @@ public:
 
     virtual void RequestQuit() { m_State.RequestQuit(); }
     virtual SharedState& GetSharedState() { return m_State; }
+
+    virtual ApplicationType GetType() const = 0;
 
     // Backend-specific pointer access (GL/DX/VK surfaces, handles, etc)
     virtual void* GetNativeWindowHandle() = 0;

@@ -10,6 +10,13 @@ std::deque<VoidJob> TaskQueue::CopyJobs() {
     return m_Tasks;
 }
 
+std::deque<VoidJob> TaskQueue::MoveJobs() {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    std::deque<VoidJob> tasks = std::move(m_Tasks);
+    m_Tasks.clear();
+    return tasks;
+}
+
 void TaskQueue::Enqueue(std::function<void()> task) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     m_Tasks.push_back(std::move(task));

@@ -1,9 +1,6 @@
 #include "axle/core/ctx/GL/AX_GLRenderContextWin32.hpp"
 
-#include "AX_PCH.hpp"
 #include <iostream>
-#include <mutex>
-#include <ostream>
 
 #if defined(__AX_GRAPHICS_GL__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include <windows.h>
@@ -23,7 +20,7 @@ bool GLRenderContextWin32::Init(IApplication* app) {
     m_hwnd = reinterpret_cast<HWND>(app->GetNativeWindowHandle());
 
     // 1. Acquire device context
-    // What the hell is DC? why you can't just call it GetDeviceContext?
+    // What the hell is DC? why you can't just call it GetDisplayContext?
     // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdc
     // Oh god, without internet, writing windows specific code is Impossible
     m_hdc = GetDC((HWND)m_hwnd);
@@ -125,7 +122,7 @@ void* GLRenderContextWin32::GetContextHandle() const {
 void* GetGLProcAddressRaw(const char* name) {
     void* p = (void*)wglGetProcAddress(name);
     if (p) return p;
-    HMODULE mod = LoadLibraryA("opengl32.dll");
+    static HMODULE mod = LoadLibraryA("opengl32.dll");
     if (!mod) return nullptr;
     return (void*)GetProcAddress(mod, name);
 }

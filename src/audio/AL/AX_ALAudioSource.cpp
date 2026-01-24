@@ -5,8 +5,6 @@
 #include <AL/alc.h>
 #include <AL/alext.h>
 
-#include <iostream>
-
 namespace axle::audio {
 
 ALAudioSource::ALAudioSource() : m_looping(false), m_pitch(1.0f), m_gain(1.0f) {
@@ -72,7 +70,6 @@ void ALAudioSource::Pause() {
 }
 
 void ALAudioSource::Stop() {
-    std::cout << "Stop()\n";
     if (m_sourceID) alSourceStop(m_sourceID);
 }
 

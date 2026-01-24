@@ -7,6 +7,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <stdexcept>
 #include <unordered_map>
 #include <functional>
 #include <memory>
@@ -27,7 +28,7 @@ public:
         Stop();
     }
 
-    void Start(int64_t msSleep, std::function<std::unique_ptr<ContextType>()> initFunc) {
+    void Start(int64_t msSleep, std::function<std::shared_ptr<ContextType>()> initFunc) {
         if (m_Running.load()) return;
         m_Running.store(true);
         m_msSleep = msSleep;
@@ -57,19 +58,35 @@ public:
             std::lock_guard lock(m_StateMutex);
             if (!m_Running.load()) return;
             m_Running.store(false);
+            if (m_Stopped) return;
         }
         if (join && m_Thread.joinable())
             m_Thread.join();
     }
 
-    ContextType* GetContext() {
+    void ValidateThread() {
+        if (!m_Running.load()) {
+            throw std::runtime_error("AX Exception: ContextThread not running!");
+        }
+        if (std::this_thread::get_id() != m_Thread.get_id()) {
+            throw std::runtime_error("AX Exception: ContextThread Validation Error");
+        }
+    }
+
+    std::shared_ptr<ContextType> GetContext() {
         std::lock_guard<std::mutex> lock(m_CtxMutex);
-        return m_Ctx.get();
+        return m_Ctx;
     }
 
     void EnqueueTask(std::function<void()> func) {
         std::lock_guard<std::mutex> lock(m_CycleMutex);
         m_CycleTasks->Enqueue(std::move(func));
+    }
+
+    template <typename F>
+    auto EnqueueFuture(F&& func) {
+        std::lock_guard<std::mutex> lock(m_CycleMutex);
+        return m_CycleTasks->EnqueueFuture(func);
     }
 
     void PushWork(const std::string& key, std::function<void()> func) {
@@ -97,7 +114,7 @@ protected:
     std::unordered_map<std::string, std::function<void()>> m_Works;
 
     std::unique_ptr<TaskQueue> m_CycleTasks{nullptr};
-    std::unique_ptr<ContextType> m_Ctx{nullptr};
+    std::shared_ptr<ContextType> m_Ctx{nullptr};
 
     std::condition_variable m_StateCV{};
 
@@ -121,7 +138,7 @@ protected:
         while (m_Running.load()) {
             {
                 std::lock_guard<std::mutex> lock(m_CycleMutex);
-                localTasks = m_CycleTasks->CopyJobs();
+                localTasks = m_CycleTasks->MoveJobs();
             }
             {
                 std::lock_guard<std::mutex> lock(m_WorkMutex);
@@ -148,7 +165,7 @@ protected:
 public:
     void StartCycle(
         int64_t mssleep,
-        std::function<std::unique_ptr<AXGEmpty>()> initFunc,
+        std::function<std::shared_ptr<AXGEmpty>()> initFunc,
         std::function<void(GenericThreadContext& gctx)> subCycle
     );
 };
@@ -158,14 +175,14 @@ class ApplicationThreadContext : public ThreadContext<IApplication> {
 protected:
     void SubCycle() override;
 public:
-    void StartApp(std::function<std::unique_ptr<IApplication>()> initFunc);
+    void StartApp(std::function<std::shared_ptr<IApplication>()> initFunc);
 };
 
 class RenderThreadContext : public ThreadContext<IRenderContext> {
 protected:
     void SubCycle() override;
 public:
-    void StartGraphics(std::function<std::unique_ptr<IRenderContext>()> initFunc);
+    void StartGraphics(std::function<std::shared_ptr<IRenderContext>()> initFunc);
 };
 
 }

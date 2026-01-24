@@ -1,19 +1,19 @@
+// Application Context
 #include "axle/core/AX_GameLoop.hpp"
 
 #include "axle/core/app/AX_IApplication.hpp"
 #include "axle/core/app/AX_ApplicationWin32.hpp"
 
+// Render Context
 #include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/core/ctx/GL/AX_GLRenderContextWin32.hpp"
-#include <ostream>
-#include <thread>
+#include "axle/graphics/cmd/GL/AX_GSGLViewCommands.hpp"
 
 // ALSoft Audio
 #ifdef __AX_AUDIO_ALSOFT__
 #include "axle/audio/data/AX_AudioWAV.hpp"
 
 #include "axle/audio/AL/AX_ALAudioContext.hpp"
-#include "axle/audio/AL/AX_ALAudioListener.hpp"
 
 #include "axle/audio/AL/buffer/AX_ALAudioBufferPlayer.hpp"
 #include "axle/audio/AL/buffer/AX_ALAudioBuffer.hpp"
@@ -21,10 +21,15 @@
 #include "axle/audio/AL/stream/AX_ALAudioStreamVorbisPlayer.hpp"
 #endif
 
+// Graphics
+#include "axle/graphics/cmd/AX_GraphicsCommand.hpp"
+
 #include <iostream>
 #include <chrono>
 #include <cmath>
 #include <memory>
+#include <ostream>
+#include <thread>
 
 #include <unistd.h>
 
@@ -49,6 +54,23 @@ float HW_DeltaTime() {
     last = now;
     return diff.count();
 }
+
+/*
+    Official Calls Based off:
+    - GL Core v330
+    - GL ES 3.0 Shaders 
+    + Optional Compute Shaders for further realistic effects like Dynamic HDR Exposure, etc.
+    - (D3D12 / Vulkan) Code Structure
+    TODO:
+    - [ ] Make AudioStream Survive Tough conditions, context access locks & etc. (AKA not running out of queue easily or loops in last queued audio atleast!)
+    - [ ] Gameloop freezes on Stop() at certain conditions (Unknown). added cout for further investigation, deadlock probably.
+    - [ ] GS Commands for Vertex/Index/Stencil-Depth-Attachment/Texture/Texture-Sampler Buffers.
+    - [ ] SLang Shading language Implementation -> Replace Variables -> Compile To SPIR-V -> GLSL/HLSL/VK
+    - [ ] Scene3D Implementation with Classic Forward Renderer then Clustered-Forward Renderer
+    - [ ] Vulkan/DX11 GS Command Implementations.
+    - [ ] Add IRenderContext#HasSupport(An enum or some key/value definition) for verifying if host supports certain graphics properties specific for some tasks.
+        Tip: We could also add CertainMethod#Requirements() or Extensions, etc. any name, just to identify which method requires which extension.
+*/
 
 int main() {
 #if defined(__AX_PLATFORM_WIN32__) && defined(__AX_GRAPHICS_GL__)
@@ -79,23 +101,24 @@ int main() {
         std::cerr << "Audio Exception: " << ex.what() << std::endl;
     }
 #endif
+    using namespace graphics;
 
-    core::RenderThreadContext glThread;
-    core::ApplicationThreadContext appThread;
+    SharedPtr<core::RenderThreadContext> glThread = std::make_shared<core::RenderThreadContext>();
+    SharedPtr<core::ApplicationThreadContext> appThread = std::make_shared<core::ApplicationThreadContext>();
 
-    appThread.EnqueueTask([&appThread, &glThread]() {
-        glThread.StartGraphics([&appThread]() -> std::unique_ptr<core::IRenderContext> {
+    appThread->EnqueueTask([&appThread, &glThread]() {
+        glThread->StartGraphics([&appThread]() -> std::shared_ptr<core::IRenderContext> {
             auto* ctx = new core::GLRenderContextWin32();
-            ctx->Init(appThread.GetContext());
+            ctx->Init(appThread->GetContext().get());
             if (!((core::GLRenderContextWin32*) ctx)->LoadGLFunctions()) {
                 std::cerr << "Couldn't Load GLAD Functions\n";
                 std::exit(1);
             }
             ctx->SetVSync(false);
-            return std::unique_ptr<core::GLRenderContextWin32>(ctx);
+            return std::shared_ptr<core::GLRenderContextWin32>(ctx);
         });
     });
-    appThread.StartApp([&glThread]() -> std::unique_ptr<core::IApplication> {
+    appThread->StartApp([&glThread]() -> std::shared_ptr<core::IApplication> {
         core::ApplicationSpecification spec {
             .title = "Hello Window",
             .width = HW_WIDTH,
@@ -104,22 +127,13 @@ int main() {
         };
         auto* app = new core::ApplicationWin32(spec);
         app->Launch();
-        return std::unique_ptr<core::ApplicationWin32>(app);
-    });
-    
-    std::atomic<float> tT{0.0f};
-    glThread.PushWork("Rainbow", [&tT](){
-        tT.store(tT.load() + HW_DeltaTime());
-        float r, g, b;
-        HW_RGBScroll(tT.load(), r, g, b);
-        glClearColor(r, g, b, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        return std::shared_ptr<core::ApplicationWin32>(app);
     });
 
-    appThread.AwaitStart();
-    glThread.AwaitStart();
+    appThread->AwaitStart();
+    glThread->AwaitStart();
 
-    auto* appCtx = appThread.GetContext();
+    auto appCtx = appThread->GetContext();
     auto& appState = appCtx->GetSharedState();
 
 #ifdef __AX_AUDIO_ALSOFT__
@@ -130,29 +144,40 @@ int main() {
     }
 #endif
 
+    std::atomic<float> tT{0.0f};
+    glThread->PushWork("Rainbow", [&tT, glThread](){
+        tT.store(tT.load() + HW_DeltaTime());
+        float r, g, b;
+        HW_RGBScroll(tT.load(), r, g, b);
+        GS_GLCmdSetColor(r, g, b, 1.0f).Dispatch(glThread);
+        GS_GLCmdClear(GSB_Color | GSB_Depth).Dispatch(glThread);
+    });
+
     while (!appState.IsQuitting()) {
-        // auto eq = appState.TakeEvents();
-        // for (auto& e : eq) {
-        //     if (e.type == core::EventType::WindowResize) {
-        //         auto& ev = e.value.windowResize;
-        //         // glThread.EnqueueTask([&]() {
-        //         //     std::cout << "Resized to width=" << ev.width << ", height=" << ev.height << std::endl;
-        //         //     glViewport(0, 0, ev.width, ev.height);
-        //         // });
-        //         break;
-        //     }
-        // }
+        auto eq = appState.TakeEvents();
+        for (auto& e : eq) {
+            if (e.type == core::EventType::WindowResize) {
+                auto& ev = e.value.windowResize;
+                GS_PushTNR(glThread, GS_GLCmdSetView(0, 0, ev.width, ev.height));
+                break;
+            }
+        }
 #ifdef __AX_AUDIO_ALSOFT__
         music.Tick(1);
 #endif
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    glThread.Stop();
-    glThread.GetContext()->Shutdown();
+    std::cout << "1\n";
+    glThread->Stop();
+    std::cout << "2\n";
+    glThread->GetContext()->Shutdown();
+    std::cout << "3\n";
 
-    appThread.Stop();
-    appThread.GetContext()->Shutdown();
+    appThread->Stop();
+    std::cout << "4\n";
+    appThread->GetContext()->Shutdown();
+    std::cout << "5\n";
 
     return 0;
 #else

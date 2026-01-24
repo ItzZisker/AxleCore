@@ -8,6 +8,12 @@
 
 namespace axle::core {
 
+enum GraphicsBackend {
+    Graphics_GL330,
+    Graphics_DX11,
+    Graphics_VK
+};
+
 class IRenderContext {
 public:
     virtual ~IRenderContext() = default;
@@ -28,6 +34,9 @@ public:
     // Some implementations may expose raw handles (GLXContext, HGLRC, VkSurface, etc.)
     virtual void* GetContextHandle() const = 0;
 
+    virtual ApplicationType GetAppType() const = 0;
+
+    virtual GraphicsBackend GetType() const = 0;
 #ifdef __AX_GRAPHICS_GL__
     // Load GLAD 3.3 Functions Directly by some wrapper/custom/platform context loader
     inline bool LoadGLFunctionsDirect(void *contextLoader) {

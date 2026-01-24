@@ -54,11 +54,11 @@ void AL_ShutdownContext() {
     }
 }
 
-void *getALCdevice() {
+void *GetALCdevice() {
     return gDevice;
 }
 
-void *getALCcontext() {
+void *GetALCcontext() {
     return gContext;
 }
 

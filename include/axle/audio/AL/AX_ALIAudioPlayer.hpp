@@ -3,10 +3,8 @@
 #include "AX_ALAudioSource.hpp"
 #include "buffer/AX_ALAudioBuffer.hpp"
 
-#include <iostream>
 #include <memory>
 #include <optional>
-#include <ostream>
 #include <type_traits>
 #include <vector>
 #include <mutex>

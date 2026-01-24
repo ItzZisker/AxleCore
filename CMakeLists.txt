@@ -73,6 +73,9 @@ set(PROJECT_SRC
 	src/audio/data/AX_AudioOGG.cpp
 
 	src/audio/AX_AudioUtils.cpp
+
+    src/graphics/cmd/AX_GraphicsCommand.cpp
+    src/graphics/cmd/GL/AX_GSGLViewCommands.cpp
     
 	# src/graphics/material/AX_Material.cpp
     # src/graphics/material/AX_MaterialMetadata.cpp

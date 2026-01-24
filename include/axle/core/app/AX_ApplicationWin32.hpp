@@ -40,6 +40,8 @@ public:
         std::lock_guard<std::mutex> lock(m_HandleMutex);
         return m_Hwnd;
     };
+
+    ApplicationType GetType() const override { return ApplicationType::App_Win32; }
 private:
     static vLRESULT CALLBACK WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam);
 private:
