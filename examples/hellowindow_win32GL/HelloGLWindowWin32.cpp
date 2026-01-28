@@ -106,18 +106,6 @@ int main() {
     SharedPtr<core::RenderThreadContext> glThread = std::make_shared<core::RenderThreadContext>();
     SharedPtr<core::ApplicationThreadContext> appThread = std::make_shared<core::ApplicationThreadContext>();
 
-    appThread->EnqueueTask([&appThread, &glThread]() {
-        glThread->StartGraphics([&appThread]() -> std::shared_ptr<core::IRenderContext> {
-            auto* ctx = new core::GLRenderContextWin32();
-            ctx->Init(appThread->GetContext().get());
-            if (!((core::GLRenderContextWin32*) ctx)->LoadGLFunctions()) {
-                std::cerr << "Couldn't Load GLAD Functions\n";
-                std::exit(1);
-            }
-            ctx->SetVSync(false);
-            return std::shared_ptr<core::GLRenderContextWin32>(ctx);
-        });
-    });
     appThread->StartApp([&glThread]() -> std::shared_ptr<core::IApplication> {
         core::ApplicationSpecification spec {
             .title = "Hello Window",
@@ -129,12 +117,21 @@ int main() {
         app->Launch();
         return std::shared_ptr<core::ApplicationWin32>(app);
     });
-
     appThread->AwaitStart();
+
+    glThread->StartGraphics([&appThread]() -> std::shared_ptr<core::IRenderContext> {
+        auto* ctx = new core::GLRenderContextWin32();
+        ctx->Init(appThread->GetContext().get());
+        if (!((core::GLRenderContextWin32*) ctx)->LoadGLFunctions()) {
+            std::cerr << "Couldn't Load GLAD Functions\n";
+            std::exit(1);
+        }
+        ctx->SetVSync(false);
+        return std::shared_ptr<core::GLRenderContextWin32>(ctx);
+    });
     glThread->AwaitStart();
 
-    auto appCtx = appThread->GetContext();
-    auto& appState = appCtx->GetSharedState();
+    auto& appState = appThread->GetContext()->GetSharedState();
 
 #ifdef __AX_AUDIO_ALSOFT__
     try {

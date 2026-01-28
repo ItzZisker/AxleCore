@@ -57,8 +57,8 @@ void SharedState::PushEvent(const Event& event) {
 
 std::deque<Event> SharedState::TakeEvents() {
     std::lock_guard<std::mutex> lock(m_Mutex);
-    std::deque<Event> events = std::move(m_SharedEventsQ);
-    m_SharedEventsQ.clear();
+    std::deque<Event> events;
+    events.swap(m_SharedEventsQ);
     return events;
 }
 

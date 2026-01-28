@@ -8,7 +8,7 @@
 namespace axle::utils
 {
 
-#define AX_EXRR_FUNC(ReturnType, Name, ...) \
+#define AX_DECLR_EXRR_FUNC(ReturnType, Name, ...) \
     utils::ExResult<ReturnType> Name(__VA_ARGS__)
 
 class ExException : public std::runtime_error {

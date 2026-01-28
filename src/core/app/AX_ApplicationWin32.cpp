@@ -1,7 +1,5 @@
 #include "axle/core/app/AX_ApplicationWin32.hpp"
 #include "axle/core/app/AX_IApplication.hpp"
-#include <iostream>
-#include <ostream>
 
 #ifdef __AX_PLATFORM_WIN32__
 

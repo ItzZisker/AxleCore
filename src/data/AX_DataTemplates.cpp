@@ -6,12 +6,12 @@ using namespace axle::utils;
 namespace axle::data
 {
 
-AX_EXRR_FUNC(bool, ReadBool, DataDeserializer *buffer) {
+AX_DECLR_EXRR_FUNC(bool, ReadBool, DataDeserializer *buffer) {
     if (!buffer) return RExError<bool>("null buffer");
     return buffer->ReadByte();
 }
 
-AX_EXRR_FUNC(uint64_t, ReadVarUInt64, DataDeserializer* buffer) {
+AX_DECLR_EXRR_FUNC(uint64_t, ReadVarUInt64, DataDeserializer* buffer) {
     if (!buffer)
         return RExError<uint64_t>("null buffer");
 
@@ -33,7 +33,7 @@ AX_EXRR_FUNC(uint64_t, ReadVarUInt64, DataDeserializer* buffer) {
     return RExError<uint64_t>("VarUInt64 overflow");
 }
 
-AX_EXRR_FUNC(int64_t, ReadVarInt64, DataDeserializer* buffer) {
+AX_DECLR_EXRR_FUNC(int64_t, ReadVarInt64, DataDeserializer* buffer) {
     if (!buffer)
         return RExError<int64_t>("null buffer");
 
@@ -46,7 +46,7 @@ AX_EXRR_FUNC(int64_t, ReadVarInt64, DataDeserializer* buffer) {
     return value;
 }
 
-AX_EXRR_FUNC(std::string, ReadString, DataDeserializer* buffer, int maximumLength) {
+AX_DECLR_EXRR_FUNC(std::string, ReadString, DataDeserializer* buffer, int maximumLength) {
     if (!buffer)
         return RExError<std::string>("null buffer");
 
@@ -74,7 +74,7 @@ AX_EXRR_FUNC(std::string, ReadString, DataDeserializer* buffer, int maximumLengt
     return result;
 }
 
-AX_EXRR_FUNC(void, WriteBool, DataSerializer* buffer, bool value) {
+AX_DECLR_EXRR_FUNC(void, WriteBool, DataSerializer* buffer, bool value) {
     if (!buffer)
         return RExError<void>("null buffer");
 
@@ -84,7 +84,7 @@ AX_EXRR_FUNC(void, WriteBool, DataSerializer* buffer, bool value) {
     return {};
 }
 
-AX_EXRR_FUNC(void, WriteVarUInt64, DataSerializer* buffer, uint64_t value) {
+AX_DECLR_EXRR_FUNC(void, WriteVarUInt64, DataSerializer* buffer, uint64_t value) {
     if (!buffer)
         return RExError<void>("null buffer");
 
@@ -101,7 +101,7 @@ AX_EXRR_FUNC(void, WriteVarUInt64, DataSerializer* buffer, uint64_t value) {
     return {};
 }
 
-AX_EXRR_FUNC(void, WriteVarInt64, DataSerializer* buffer, int64_t value) {
+AX_DECLR_EXRR_FUNC(void, WriteVarInt64, DataSerializer* buffer, int64_t value) {
     if (!buffer)
         return RExError<void>("null buffer");
 
@@ -112,7 +112,7 @@ AX_EXRR_FUNC(void, WriteVarInt64, DataSerializer* buffer, int64_t value) {
     return WriteVarUInt64(buffer, zigzag);
 }
 
-AX_EXRR_FUNC(void, WriteString, DataSerializer* buffer, const std::string& value) {
+AX_DECLR_EXRR_FUNC(void, WriteString, DataSerializer* buffer, const std::string& value) {
     if (!buffer)
         return RExError<void>("null buffer");
 

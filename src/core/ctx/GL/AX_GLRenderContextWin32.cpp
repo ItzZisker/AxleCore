@@ -1,10 +1,11 @@
 #include "axle/core/ctx/GL/AX_GLRenderContextWin32.hpp"
-
-#include <iostream>
+#include <mutex>
 
 #if defined(__AX_GRAPHICS_GL__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include <windows.h>
 #include <gl/GL.h>
+
+#include <iostream>
 
 namespace axle::core {
 
@@ -16,6 +17,8 @@ GLRenderContextWin32::~GLRenderContextWin32() {
 bool GLRenderContextWin32::Init(IApplication* app) {
     if (m_Initialized) return true;
     if (!app) return false;
+
+    std::lock_guard<std::mutex> lock(app->m_HandleMutex);
 
     m_hwnd = reinterpret_cast<HWND>(app->GetNativeWindowHandle());
 

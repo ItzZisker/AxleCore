@@ -36,14 +36,9 @@ public:
     void SetResizable(bool enabled) override;
     void SetCursorMode(CursorMode mode) override;
 
-    void* GetNativeWindowHandle() override { 
-        std::lock_guard<std::mutex> lock(m_HandleMutex);
-        return m_Hwnd;
-    };
+    void* GetNativeWindowHandle() override {  return m_Hwnd; };
 
     ApplicationType GetType() const override { return ApplicationType::App_Win32; }
-private:
-    static vLRESULT CALLBACK WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam);
 private:
     std::mutex m_HandleMutex;
 
@@ -53,6 +48,8 @@ private:
 
     vHWND m_Hwnd = nullptr;
     vHINSTANCE m_Instance = nullptr;
+
+    static vLRESULT CALLBACK WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam);
 };
 
 }

@@ -11,7 +11,7 @@
 
 #include <cmath>
 
-namespace axle::graphics {
+namespace axle::gs {
 
 void GL_ValidateCmdPool(const GS_CommandPool& pool);
 void GL_ValidateContext(SharedPtr<core::RenderThreadContext> ctx);

@@ -29,6 +29,7 @@ public:
     }
 
     void Start(int64_t msSleep, std::function<std::shared_ptr<ContextType>()> initFunc) {
+        std::lock_guard lock(m_LifeCycleMutex);
         if (m_Running.load()) return;
         m_Running.store(true);
         m_msSleep = msSleep;
@@ -54,6 +55,7 @@ public:
     }
 
     void Stop(bool join = true) {
+        std::lock_guard lock(m_LifeCycleMutex);
         {
             std::lock_guard lock(m_StateMutex);
             if (!m_Running.load()) return;
@@ -109,7 +111,7 @@ protected:
 
     std::atomic_bool m_Running{false};
 
-    std::thread m_Thread;
+    std::thread m_Thread{};
 
     std::unordered_map<std::string, std::function<void()>> m_Works;
 
@@ -123,13 +125,13 @@ protected:
     std::mutex m_WorkMutex{};
     std::mutex m_CycleMutex{};
     std::mutex m_CtxMutex{};
+    std::mutex m_LifeCycleMutex{};
 
     int64_t m_msSleep{1};
 
     virtual void SubCycle() = 0;
 
     void DoCycle() {
-        ContextType* ctx = m_Ctx.get();
         auto& cycleTasks = *m_CycleTasks;
 
         std::deque<VoidJob> localTasks;

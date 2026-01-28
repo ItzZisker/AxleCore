@@ -137,6 +137,15 @@ public:
 public:
     static IApplication* Create(const ApplicationSpecification& spec, uint32_t maxSharedEvents);
 protected:
+    friend class IRenderContext;
+
+    friend class GLRenderContextWin32;
+    friend class GLRenderContextX11;
+
+    friend class DX11RenderContextWin32;
+
+    std::mutex m_HandleMutex;
+
     mutable SharedState m_State;
 };
 

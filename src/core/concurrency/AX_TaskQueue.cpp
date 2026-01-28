@@ -12,8 +12,8 @@ std::deque<VoidJob> TaskQueue::CopyJobs() {
 
 std::deque<VoidJob> TaskQueue::MoveJobs() {
     std::lock_guard<std::mutex> lock(m_Mutex);
-    std::deque<VoidJob> tasks = std::move(m_Tasks);
-    m_Tasks.clear();
+    std::deque<VoidJob> tasks;
+    tasks.swap(m_Tasks);
     return tasks;
 }
 
