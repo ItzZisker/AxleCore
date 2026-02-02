@@ -1,6 +1,6 @@
 #pragma once
 
-#include "axle/core/app/AX_IApplication.hpp"
+#include "axle/core/window/AX_IWindow.hpp"
 #if defined(__AX_PLATFORM_X11__) && defined(__AX_GRAPHICS_GL__)
 #include "../AX_IRenderContext.hpp"
 
@@ -11,12 +11,12 @@ using GLXContext = struct __GLXcontextRec*;
 
 namespace axle::core {
 
-class GLRenderContextX11 : public IRenderContext {
+class RenderContextGLX11 : public IRenderContext {
 public:
-    GLRenderContextX11();
+    RenderContextGLX11();
     virtual ~GLRenderContextX11();
 
-    bool Init(IApplication* app) override;
+    bool Init(IWindow* app) override;
     void MakeCurrent();
     void SwapBuffers() override;
     void SetVSync(bool enabled) override;

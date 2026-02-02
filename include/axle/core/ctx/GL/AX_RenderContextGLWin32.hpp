@@ -9,12 +9,12 @@ typedef void* vHWND;
 
 namespace axle::core {
 
-class GLRenderContextWin32 : public IRenderContext {
+class RenderContextGLWin32 : public IRenderContext {
 public:
-    GLRenderContextWin32();
-    virtual ~GLRenderContextWin32();
+    RenderContextGLWin32();
+    virtual ~RenderContextGLWin32();
 
-    bool Init(IApplication* app) override;
+    bool Init(IWindow* app) override;
     void MakeCurrent();
     void SwapBuffers() override;
     void SetVSync(bool enabled) override;
@@ -24,8 +24,8 @@ public:
 
     bool LoadGLFunctions();
 
-    ApplicationType GetAppType() const override { return App_Win32; }
-    GraphicsBackend GetType() const override { return Graphics_GL330; }
+    WindowType GetAppType() const override { return WndWin32; }
+    GfxType GetType() const override { return GfxGL330; }
 private:
     vHGLRC m_hglrc = nullptr;
     vHDC   m_hdc = nullptr;

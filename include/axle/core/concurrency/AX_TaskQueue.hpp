@@ -1,12 +1,12 @@
 #pragma once
 
+#include "axle/utils/AX_Types.hpp"
+
 #include <functional>
 #include <future>
 #include <deque>
 
 namespace axle::core {
-
-using VoidJob = std::function<void()>;
 
 class TaskQueue {
 public:

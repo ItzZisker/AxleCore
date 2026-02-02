@@ -1,5 +1,5 @@
-#include "axle/core/app/AX_ApplicationWin32.hpp"
-#include "axle/core/app/AX_IApplication.hpp"
+#include "axle/core/window/AX_WindowWin32.hpp"
+#include "axle/core/window/AX_IWindow.hpp"
 
 #ifdef __AX_PLATFORM_WIN32__
 
@@ -12,26 +12,25 @@
 
 namespace axle::core {
 
-static ApplicationWin32* g_App = nullptr; // global pointers for static WndProc (Window procedure)
+static WindowWin32* g_App = nullptr; // global pointers for static WndProc (Window procedure)
 
-ApplicationWin32::ApplicationWin32(const ApplicationSpecification& spec, uint32_t maxSharedEvents)
-    : IApplication(spec, maxSharedEvents) {
+WindowWin32::WindowWin32(const WindowSpec& spec, uint32_t maxSharedEvents) : IWindow(spec, maxSharedEvents) {
     if (g_App) throw std::runtime_error("Cannot have more than one application, maybe try asking microsoft to not call window events on window object construction, but just on intialization just like other opearting systems. I am lazy and not going to somehow magically overcome this");
     g_App = this;
 }
 
-ApplicationWin32::~ApplicationWin32() {
+WindowWin32::~WindowWin32() {
     Shutdown();
     g_App = nullptr;
 }
 
-void ApplicationWin32::Launch() {
+void WindowWin32::Launch() {
     if (m_Instance) return;
     m_Instance = GetModuleHandle(nullptr);
 
     // Register window class
     WNDCLASS wc = {};
-    wc.lpfnWndProc = (WNDPROC)ApplicationWin32::WndProc;
+    wc.lpfnWndProc = (WNDPROC)WindowWin32::WndProc;
     wc.hInstance = (HINSTANCE)m_Instance;
     wc.lpszClassName = "Application WIN32";
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
@@ -63,16 +62,18 @@ void ApplicationWin32::Launch() {
     }
 
     ShowWindow((HWND)m_Hwnd, SW_SHOW);
+    m_State.SetRunning(true);
 }
 
-void ApplicationWin32::Shutdown() {
+void WindowWin32::Shutdown() {
     if (m_Hwnd) {
         DestroyWindow((HWND)m_Hwnd);
         m_Hwnd = nullptr;
     }
+    m_State.SetRunning(false);
 }
 
-void ApplicationWin32::PollEvents() {
+void WindowWin32::PollEvents() {
     MSG msg;
     while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
@@ -84,12 +85,12 @@ void ApplicationWin32::PollEvents() {
     }
 }
 
-void ApplicationWin32::SetTitle(const std::string& title) {
+void WindowWin32::SetTitle(const std::string& title) {
     SetWindowText((HWND)m_Hwnd, title.c_str());
     m_State.SetTitle(title);
 }
 
-void ApplicationWin32::SetResizable(bool enabled) {
+void WindowWin32::SetResizable(bool enabled) {
     LONG style = GetWindowLong((HWND)m_Hwnd, GWL_STYLE);
 
     if (enabled) {
@@ -104,16 +105,16 @@ void ApplicationWin32::SetResizable(bool enabled) {
     m_State.SetResizable(enabled);
 }
 
-void ApplicationWin32::SetCursorMode(CursorMode mode) {
-    if (mode == CursorMode::Normal) {
+void WindowWin32::SetCursorMode(WndCursorMode mode) {
+    if (mode == WndCursorMode::CmNormal) {
         ShowCursor(TRUE);
         ClipCursor(nullptr);
     }
-    else if (mode == CursorMode::Hidden) {
+    else if (mode == WndCursorMode::CmHidden) {
         ShowCursor(FALSE);
         ClipCursor(nullptr);
     }
-    else if (mode == CursorMode::Locked) {
+    else if (mode == WndCursorMode::CmLocked) {
         ShowCursor(FALSE);
 
         RECT rect;
@@ -129,11 +130,11 @@ void ApplicationWin32::SetCursorMode(CursorMode mode) {
     m_State.SetCursorMode(mode);
 }
 
-vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam)
+vLRESULT CALLBACK WindowWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam)
 {
-    ApplicationWin32* app = g_App;
+    WindowWin32* app = g_App;
 
-    Event event;
+    WndEvent event;
     switch (msg)
     {
     case WM_CLOSE:
@@ -152,14 +153,14 @@ vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wPara
         uint32_t h = HIWORD(lParam);
         app->m_State.SetSize(w, h);
 
-        event.type = EventType::WindowResize;
+        event.type = WndEventType::EvWindowResize;
         event.value.windowResize = { w, h };
         break;
     }
     case WM_KEYDOWN:
     case WM_KEYUP:
     {
-        event.type = EventType::Key;
+        event.type = WndEventType::EvKey;
         event.value.key = { (uint64_t)wParam, (msg == WM_KEYDOWN) };
         break;
     }
@@ -168,7 +169,7 @@ vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wPara
         float x = (float)GET_X_LPARAM(lParam);
         float y = (float)GET_Y_LPARAM(lParam);
 
-        event.type = EventType::MouseMove;
+        event.type = WndEventType::EvMouseMove;
         event.value.mouseMove = { x, y };
         break;
     }
@@ -181,28 +182,28 @@ vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wPara
         } else {
             app->m_Grabbed = false;
         }
-        event.type = EventType::MouseButton;
+        event.type = WndEventType::EvMouseButton;
         event.value.mouseButton = { 0, pressed };
         break;
     }
     case WM_RBUTTONDOWN:
     case WM_RBUTTONUP:
     {
-        event.type = EventType::MouseButton;
+        event.type = WndEventType::EvMouseButton;
         event.value.mouseButton = { 1, (msg == WM_RBUTTONDOWN) };
         break;
     }
     case WM_MBUTTONDOWN:
     case WM_MBUTTONUP:
     {
-        event.type = EventType::MouseButton;
+        event.type = WndEventType::EvMouseButton;
         event.value.mouseButton = { 2, (msg == WM_MBUTTONDOWN) };
         break;
     }
     case WM_ACTIVATE:
     {
         app->m_Focused = (LOWORD(wParam) == WA_ACTIVE);
-        event.type = EventType::WindowFocus;
+        event.type = WndEventType::EvWindowFocus;
         event.value.windowFocus = { app->m_Focused };
         break;
     }
@@ -227,7 +228,7 @@ vLRESULT CALLBACK ApplicationWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wPara
     }
     }
 
-    if (event.type != EventType::Void) {
+    if (event.type != WndEventType::EvVoid) {
         app->m_State.PushEvent(event);
         return 0;
     }

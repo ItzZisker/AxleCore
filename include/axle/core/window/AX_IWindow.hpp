@@ -12,39 +12,39 @@
 
 namespace axle::core {
 
-enum class CursorMode {
-    Normal,
-    Hidden,
-    Locked // centered & raw mouse movement
+enum class WndCursorMode {
+    CmNormal,
+    CmHidden,
+    CmLocked // centered & raw mouse movement
 };
 
-struct ApplicationSpecification {
+struct WindowSpec {
     std::string title = "AX App";
     uint32_t width = 1024;
     uint32_t height = 768;
     bool resizable = true;
 };
 
-enum ApplicationType {
-    App_Win32,
-    App_Linux,
-    App_LinuxDroid,
-    App_OSX,
-    App_Unix,
-    App_Unknown
+enum WindowType {
+    WndWin32,
+    WndLinux,
+    WndAndroid,
+    WndOSX,
+    WndUnix,
+    WndUnknown
 };
 
-enum EventType {
-    Void,
-    Key,
-    WindowResize,
-    WindowFocus,
-    MouseMove,
-    MouseButton,
-    Quit
+enum WndEventType {
+    EvVoid,
+    EvKey,
+    EvWindowResize,
+    EvWindowFocus,
+    EvMouseMove,
+    EvMouseButton,
+    EvQuit
 };
 
-union EventValue {
+union WndEventValue {
     struct { uint64_t key; bool pressed; } key;
     struct { uint32_t width, height; } windowResize;
     struct { bool focused; } windowFocus;
@@ -52,20 +52,20 @@ union EventValue {
     struct { int button; bool pressed; } mouseButton;
 };
 
-struct Event {
-    EventType type = EventType::Void;
-    EventValue value;
+struct WndEvent {
+    WndEventType type{WndEventType::EvVoid};
+    WndEventValue value;
 };
 
 class SharedState {
 public:
-    explicit SharedState(ApplicationSpecification spec = {}, uint32_t maxEventsQueue = 32);
+    explicit SharedState(WindowSpec spec = {}, uint32_t maxEventsQueue = 32);
     
     bool IsRunning() const;
     bool IsResizable() const;
     bool IsQuitting() const;
 
-    CursorMode GetCursorMode() const;
+    WndCursorMode GetCursorMode() const;
 
     uint32_t GetWidth() const;
     uint32_t GetHeight() const;
@@ -73,28 +73,28 @@ public:
 
     std::string GetTitle() const;
 
-    void PushEvent(const Event& event);
+    void PushEvent(const WndEvent& event);
 
-    std::deque<Event> TakeEvents();
+    std::deque<WndEvent> TakeEvents();
 protected:
     void SetRunning(bool running);
     void SetResizable(bool resizable);
     void SetTitle(const std::string& title);
     void SetSize(uint32_t width, uint32_t height);
-    void SetCursorMode(CursorMode mode);
+    void SetCursorMode(WndCursorMode mode);
 
     void RequestQuit();
 private:
-    friend class IApplication;
+    friend class IWindow;
 
-    friend class ApplicationWin32;
-    friend class ApplicationX11;
+    friend class WindowWin32;
+    friend class WindowX11;
 
-    CursorMode m_CursorMode{CursorMode::Normal};
+    WndCursorMode m_CursorMode{WndCursorMode::CmNormal};
     uint32_t m_Width{1024}, m_Height{768};
 
     uint32_t m_MaxEventQueueCapacity{32};
-    std::deque<Event> m_SharedEventsQ;
+    std::deque<WndEvent> m_SharedEventsQ;
 
     bool m_IsRunning{false};
     bool m_IsResizable{false};
@@ -105,18 +105,18 @@ private:
     mutable std::mutex m_Mutex;
 };
 
-class IApplication {
+class IWindow {
 public:
-    IApplication(const ApplicationSpecification& spec, uint32_t maxSharedEvents) 
+    IWindow(const WindowSpec& spec, uint32_t maxSharedEvents) 
         : m_State(spec, maxSharedEvents) {}
 
-    IApplication(const IApplication&) = delete;
-    IApplication& operator=(const IApplication&) = delete;
+    IWindow(const IWindow&) = delete;
+    IWindow& operator=(const IWindow&) = delete;
 
-    IApplication(IApplication&&) = delete;
-    IApplication& operator=(const IApplication&&) = delete;
+    IWindow(IWindow&&) = delete;
+    IWindow& operator=(const IWindow&&) = delete;
     
-    virtual ~IApplication() = default;
+    virtual ~IWindow() = default;
 
     virtual void Launch() = 0;
     virtual void Shutdown() = 0;
@@ -125,24 +125,23 @@ public:
 
     virtual void SetTitle(const std::string& title) = 0;
     virtual void SetResizable(bool enabled) = 0;
-    virtual void SetCursorMode(CursorMode mode) = 0;
+    virtual void SetCursorMode(WndCursorMode mode) = 0;
 
     virtual void RequestQuit() { m_State.RequestQuit(); }
     virtual SharedState& GetSharedState() { return m_State; }
 
-    virtual ApplicationType GetType() const = 0;
+    virtual WindowType GetType() const = 0;
 
     // Backend-specific pointer access (GL/DX/VK surfaces, handles, etc)
     virtual void* GetNativeWindowHandle() = 0;
 public:
-    static IApplication* Create(const ApplicationSpecification& spec, uint32_t maxSharedEvents);
+    static IWindow* Create(const WindowSpec& spec, uint32_t maxSharedEvents);
 protected:
     friend class IRenderContext;
 
-    friend class GLRenderContextWin32;
-    friend class GLRenderContextX11;
-
-    friend class DX11RenderContextWin32;
+    friend class RenderContextGLWin32;
+    friend class RenderContextGLX11;
+    friend class RenderContextD3D11Win32;
 
     std::mutex m_HandleMutex;
 

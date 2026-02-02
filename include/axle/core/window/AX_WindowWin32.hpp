@@ -1,7 +1,7 @@
 #pragma once
 
 #if defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
-#include "AX_IApplication.hpp"
+#include "AX_IWindow.hpp"
 
 #ifndef CALLBACK
 #if defined(_ARM_)
@@ -21,10 +21,10 @@ using vLPARAM = intptr_t;
 
 namespace axle::core {
 
-class ApplicationWin32 : public IApplication {
+class WindowWin32 : public IWindow {
 public:
-    ApplicationWin32(const ApplicationSpecification& spec, uint32_t maxSharedEvents = 32);
-    ~ApplicationWin32() override;
+    WindowWin32(const WindowSpec& spec, uint32_t maxSharedEvents = 32);
+    ~WindowWin32() override;
 
     void Launch() override;
     void Shutdown() override;
@@ -34,11 +34,11 @@ public:
     void SetTitle(const std::string& title) override;
 
     void SetResizable(bool enabled) override;
-    void SetCursorMode(CursorMode mode) override;
+    void SetCursorMode(WndCursorMode mode) override;
 
     void* GetNativeWindowHandle() override {  return m_Hwnd; };
 
-    ApplicationType GetType() const override { return ApplicationType::App_Win32; }
+    WindowType GetType() const override { return WndWin32; }
 private:
     std::mutex m_HandleMutex;
 

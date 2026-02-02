@@ -1,190 +1,114 @@
 #pragma once
 
-#include "axle/core/app/AX_IApplication.hpp"
+#include "axle/core/window/AX_IWindow.hpp"
 #include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/core/concurrency/AX_TaskQueue.hpp"
+#include "axle/utils/AX_Types.hpp"
 
-#include <chrono>
 #include <condition_variable>
-#include <deque>
-#include <stdexcept>
-#include <unordered_map>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <thread>
+#include <mutex>
+#include <map>
+
+#define AX_WKKEY_CONSTANT "__ConstantWork__"
 
 namespace axle::core {
 
-template <typename ContextType>
-class ThreadContext {
+class WorkOrder {
+    OrderPredicate m_Order;
 public:
-    ThreadContext() {        
-        std::lock_guard<std::mutex> lock(m_CycleMutex);
-        m_CycleTasks = std::make_unique<TaskQueue>();
+    WorkOrder(OrderPredicate pred = std::less<>{}) : m_Order(std::move(pred)) {}
+
+    bool operator()(const std::string& a, const std::string& b) const {
+        if (a == AX_WKKEY_CONSTANT) return false;
+        if (b == AX_WKKEY_CONSTANT) return true;
+        return m_Order(a, b);
     }
+};
 
-    virtual ~ThreadContext() {
-        Stop();
-    }
+class ThreadCycler {
+public:
+    ThreadCycler(WorkOrder order = {});
+    virtual ~ThreadCycler();
 
-    void Start(int64_t msSleep, std::function<std::shared_ptr<ContextType>()> initFunc) {
-        std::lock_guard lock(m_LifeCycleMutex);
-        if (m_Running.load()) return;
-        m_Running.store(true);
-        m_msSleep = msSleep;
-        m_Thread = std::thread([this, initFunc = std::move(initFunc)]() {
-            {
-                std::lock_guard lock(m_CtxMutex);
-                m_Ctx = initFunc();
-            }
-            {
-                std::lock_guard lock(m_StateMutex);
-                m_Started = true;
-            }
-            m_StateCV.notify_all();
+    void ValidateThread();
 
-            DoCycle();
+    void Start(int64_t msSleep, std::function<void()> initFunc);
+    void Stop(bool join = true);
 
-            {
-                std::lock_guard lock(m_StateMutex);
-                m_Stopped = true;
-            }
-            m_StateCV.notify_all();
-        });
-    }
-
-    void Stop(bool join = true) {
-        std::lock_guard lock(m_LifeCycleMutex);
-        {
-            std::lock_guard lock(m_StateMutex);
-            if (!m_Running.load()) return;
-            m_Running.store(false);
-            if (m_Stopped) return;
-        }
-        if (join && m_Thread.joinable())
-            m_Thread.join();
-    }
-
-    void ValidateThread() {
-        if (!m_Running.load()) {
-            throw std::runtime_error("AX Exception: ContextThread not running!");
-        }
-        if (std::this_thread::get_id() != m_Thread.get_id()) {
-            throw std::runtime_error("AX Exception: ContextThread Validation Error");
-        }
-    }
-
-    std::shared_ptr<ContextType> GetContext() {
-        std::lock_guard<std::mutex> lock(m_CtxMutex);
-        return m_Ctx;
-    }
-
-    void EnqueueTask(std::function<void()> func) {
-        std::lock_guard<std::mutex> lock(m_CycleMutex);
-        m_CycleTasks->Enqueue(std::move(func));
-    }
-
+    void EnqueueTask(std::function<void()> func);
     template <typename F>
     auto EnqueueFuture(F&& func) {
         std::lock_guard<std::mutex> lock(m_CycleMutex);
         return m_CycleTasks->EnqueueFuture(func);
     }
 
-    void PushWork(const std::string& key, std::function<void()> func) {
-        std::lock_guard<std::mutex> lock(m_WorkMutex);
-        m_Works[key] = std::move(func);
-    }
+    void PushWork(const std::string& key, std::function<void()> func);
+    void PopWork(const std::string& key);
 
-    void PopWork(const std::string& key) {
-        std::lock_guard<std::mutex> lock(m_WorkMutex);
-        m_Works.erase(key);
-    }
+    void SetWorkOrder(WorkOrder order = {});
 
-    void AwaitStart() {
-        std::unique_lock lock(m_StateMutex);
-        m_StateCV.wait(lock, [&] { return m_Started; });
-    }
+    void AwaitStart();
 protected:
+    std::atomic_bool m_Running{false};
     bool m_Stopped{false};
     bool m_Started{false};
 
-    std::atomic_bool m_Running{false};
+    UniquePtr<TaskQueue> m_CycleTasks{nullptr};
 
     std::thread m_Thread{};
 
-    std::unordered_map<std::string, std::function<void()>> m_Works;
-
-    std::unique_ptr<TaskQueue> m_CycleTasks{nullptr};
-    std::shared_ptr<ContextType> m_Ctx{nullptr};
+    std::map<std::string, VoidJob, WorkOrder> m_Works;
 
     std::condition_variable m_StateCV{};
 
-    std::mutex m_StateMutex{};
-
-    std::mutex m_WorkMutex{};
-    std::mutex m_CycleMutex{};
-    std::mutex m_CtxMutex{};
-    std::mutex m_LifeCycleMutex{};
+    std::mutex m_StateMutex{}, m_InitMutex{}, m_LifeCycleMutex{};
+    std::mutex m_WorkMutex{}, m_CycleMutex{};
 
     int64_t m_msSleep{1};
 
-    virtual void SubCycle() = 0;
+    void DoCycle();
+};
 
-    void DoCycle() {
-        auto& cycleTasks = *m_CycleTasks;
+template <typename T>
+class ThreadContext : public ThreadCycler {
+protected:
+    SharedPtr<T> m_Ctx{nullptr};
+public:
+    void Start(int64_t msSleep, std::function<SharedPtr<T>()> creatorFunc) {
+        Start(msSleep, [this, crtFunc = std::move(creatorFunc)](){
+            m_Ctx = crtFunc();
+        });
+    }
 
-        std::deque<VoidJob> localTasks;
-        std::unordered_map<std::string, std::function<void()>> localWorks;
-
-        while (m_Running.load()) {
-            {
-                std::lock_guard<std::mutex> lock(m_CycleMutex);
-                localTasks = m_CycleTasks->MoveJobs();
-            }
-            {
-                std::lock_guard<std::mutex> lock(m_WorkMutex);
-                localWorks = m_Works;
-            }
-
-            for (auto& job : localTasks) job();
-            for (auto& [_, work] : localWorks) work();
-            SubCycle();
-            localTasks.clear();
-            localWorks.clear();
-
-            if (m_msSleep > 0) std::this_thread::sleep_for(std::chrono::milliseconds(m_msSleep));
-        }
+    std::shared_ptr<T> GetContext() {
+        std::lock_guard<std::mutex> lock(m_InitMutex);
+        return m_Ctx;
     }
 };
 
-struct AXGEmpty {};
-class GenericThreadContext : public ThreadContext<AXGEmpty> {
+class ThreadContextGeneric : public ThreadContext<EmptyStruct> {
 protected:
-    std::function<void(GenericThreadContext& gctx)> m_SubCycle;
-
-    void SubCycle() override;
+    std::function<void(ThreadContextGeneric& gctx)> m_SubCycle;
 public:
     void StartCycle(
         int64_t mssleep,
-        std::function<std::shared_ptr<AXGEmpty>()> initFunc,
-        std::function<void(GenericThreadContext& gctx)> subCycle
+        std::function<SharedPtr<EmptyStruct>()> initFunc,
+        std::function<void(ThreadContextGeneric& gctx)> subCycle
     );
 };
 // TODO: Create an "ALAudioContext" Class which holds streams, music, sources by respect to audio thread ownership
 
-class ApplicationThreadContext : public ThreadContext<IApplication> {
-protected:
-    void SubCycle() override;
+class ThreadContextWnd : public ThreadContext<IWindow> {
 public:
-    void StartApp(std::function<std::shared_ptr<IApplication>()> initFunc);
+    void StartApp(std::function<SharedPtr<IWindow>()> initFunc);
 };
 
-class RenderThreadContext : public ThreadContext<IRenderContext> {
-protected:
-    void SubCycle() override;
+class ThreadContextGfx : public ThreadContext<IRenderContext> {
 public:
-    void StartGraphics(std::function<std::shared_ptr<IRenderContext>()> initFunc);
+    void StartGfx(std::function<SharedPtr<IRenderContext>()> initFunc);
 };
 
 }
