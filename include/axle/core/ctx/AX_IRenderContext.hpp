@@ -9,9 +9,9 @@
 namespace axle::core {
 
 enum GfxType {
-    GfxGL330,
-    GfxDX11,
-    GfxVK
+    GfxGL330 = (1 << 1),
+    GfxDX11 = (1 << 2),
+    GfxVK = (1 << 3)
 };
 
 class IRenderContext {
@@ -42,6 +42,20 @@ public:
         else return false;
     }
 #endif
+
+    static int32_t CombinedTypes() {
+        int32_t supported{0};
+#ifdef __AX_GRAPHICS_GL__
+        supported |= GfxGL330;
+#endif
+#ifdef __AX_GRAPHICS_DX11__
+        supported |= GfxDX11;
+#endif
+#ifdef __AX_GRAPHICS_VK__
+        supported |= GfxVK;
+#endif
+        return supported;
+    }
 };
 
 }
