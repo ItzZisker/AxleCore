@@ -9,9 +9,27 @@
 ALCdevice* gDevice = nullptr;
 ALCcontext* gContext = nullptr;
 
-namespace axle::audio {
+namespace axle::audio::alc {
 
-bool AL_CreateContext(const ALCchar *devicename) {
+std::vector<std::string> ListDeviceNames() {
+    std::vector<std::string> devices;
+
+    if (!alcIsExtensionPresent(nullptr, "ALC_ENUMERATION_EXT")) {
+        return devices;
+    }
+    const ALCchar* deviceList = alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
+
+    if (!deviceList) return devices;
+
+    const char* ptr = deviceList;
+    while (*ptr) {
+        devices.emplace_back(ptr);
+        ptr += devices.back().size() + 1;
+    }
+    return devices;
+}
+
+bool CreateContext(const ALCchar *devicename) {
     if (gDevice) {
         std::cerr << "OpenAL device held onto a device context already!\n";
         return false;
@@ -42,7 +60,7 @@ bool AL_CreateContext(const ALCchar *devicename) {
     return true;
 }
 
-void AL_ShutdownContext() {
+void ShutdownContext() {
     if (gContext) {
         alcMakeContextCurrent(nullptr);
         alcDestroyContext(gContext);
@@ -54,11 +72,11 @@ void AL_ShutdownContext() {
     }
 }
 
-void *GetALCdevice() {
+void *GetDevice() {
     return gDevice;
 }
 
-void *GetALCcontext() {
+void *GetContextHandle() {
     return gContext;
 }
 

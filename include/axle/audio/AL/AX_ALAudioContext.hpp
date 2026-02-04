@@ -2,10 +2,15 @@
 
 #include <AL/alc.h>
 
-namespace axle::audio {
-    bool AL_CreateContext(const ALCchar *devicename);
-    void AL_ShutdownContext();
+#include <string>
+#include <vector>
 
-    void *GetALCdevice();
-    void *GetALCcontext();
+namespace axle::audio::alc {
+    std::vector<std::string> ListDeviceNames();
+
+    bool CreateContext(const ALCchar *devicename);
+    void ShutdownContext();
+
+    void *GetDevice();
+    void *GetContextHandle();
 }

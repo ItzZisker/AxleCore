@@ -1,5 +1,7 @@
 #pragma once
 
+#include "AX_GraphicsTypes.hpp"
+
 #include "axle/core/AX_GameLoop.hpp"
 #include "axle/utils/AX_Types.hpp"
 
@@ -28,13 +30,15 @@ namespace axle::gfx {
 class CommandBuffer;
 class CommandList {
 public:
+    CommandList();
+
     void BeginRenderPass(RenderPassHandle);
     void BindPipeline(PipelineHandle);
     void BindVertexBuffer(BufferHandle, uint32_t slot);
     void Draw(uint32_t vertexCount);
     void EndRenderPass();
 private:
-    CommandBuffer m_Buffer; // POD command stream
+    UniquePtr<CommandBuffer> m_Buffer{nullptr}; // POD command stream
 };
 
 class Graphics {
@@ -60,7 +64,7 @@ public:
 
     // Command recording
     CommandList BeginCommandList();
-    void Submit(CommandList&&);
+    void Submit(CommandList&& cmdList);
 
     // Capabilities
     const GraphicsCaps& Capabilities() const;

@@ -32,10 +32,10 @@ struct WAVAudio {
 };
 
 WAVAudio WAV_LoadFile(const std::filesystem::path& path);
-WAVAudio WAV_LoadFileBytes(data::DataDeserializer *buffer);
+WAVAudio WAV_LoadFileBytes(data::DataDeserializer& buffer);
 WAVAudio WAV_LoadFileBytes(const uint8_t* bytes, int length);
 
-bool WAV_isValidFileBytes(data::DataDeserializer *buffer);
+bool WAV_isValidFileBytes(data::DataDeserializer& buffer);
 bool WAV_isValidFileBytes(const uint8_t* bytes, int length);
 bool WAV_isValidFile(const std::filesystem::path& path);
 

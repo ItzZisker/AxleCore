@@ -12,16 +12,16 @@
 
 namespace axle::audio {
 
-OGGAudio OGG_LoadFileBytes(data::DataDeserializer* buffer) {
+OGGAudio OGG_LoadFileBytes(data::DataDeserializer& buffer) {
     int channels, sampleRate;
     
-    size_t len = buffer->GetLength();
+    size_t len = buffer.GetLength();
     std::vector<uint8_t> fileData(len);
     
-    size_t originalPos = buffer->GetReadPos();
-    buffer->Rewind(originalPos);
-    buffer->Read(fileData.data(), len);
-    buffer->Rewind(len); // Restore pos
+    size_t originalPos = buffer.GetReadPos();
+    buffer.Rewind(originalPos);
+    buffer.Read(fileData.data(), len);
+    buffer.Rewind(len); // Restore pos
 
     int error;
     stb_vorbis_info* vor = (stb_vorbis_info*) stb_vorbis_open_memory(fileData.data(), (int)fileData.size(), &error, nullptr);
@@ -38,23 +38,23 @@ OGGAudio OGG_LoadFileBytes(data::DataDeserializer* buffer) {
 OGGAudio OGG_LoadFileBytes(const uint8_t* bytes, int length) {
     auto stream = std::make_shared<data::BufferDataStream>(bytes, length);
     data::DataDeserializer buffer(stream);
-    return OGG_LoadFileBytes(&buffer);
+    return OGG_LoadFileBytes(buffer);
 }
 
 OGGAudio OGG_LoadFile(const std::filesystem::path& path) {
     auto stream = std::make_shared<data::FileDataStream>(path, true, false);
     data::DataDeserializer buffer(stream);
-    return OGG_LoadFileBytes(&buffer);
+    return OGG_LoadFileBytes(buffer);
 }
 
-bool OGG_isValidFileBytes(data::DataDeserializer* buffer) {
-    if (buffer->GetLength() < 4) return false;
+bool OGG_isValidFileBytes(data::DataDeserializer& buffer) {
+    if (buffer.GetLength() < 4) return false;
     
     char capture[4];
-    buffer->Read(capture, 4);
+    buffer.Read(capture, 4);
     bool valid = (std::strncmp(capture, "OggS", 4) == 0);
     
-    buffer->Rewind(4);
+    buffer.Rewind(4);
     return valid;
 }
 
@@ -66,7 +66,7 @@ bool OGG_isValidFileBytes(const uint8_t* bytes, int length) {
 bool OGG_isValidFile(const std::filesystem::path& path) {
     auto stream = std::make_shared<data::FileDataStream>(path, true, false);
     data::DataDeserializer buffer(stream);
-    return OGG_isValidFileBytes(&buffer);
+    return OGG_isValidFileBytes(buffer);
 }
 
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "axle/utils/AX_Types.hpp"
+
 #include <vector>
 #include <type_traits>
 #include <cstdint>
@@ -58,9 +60,6 @@ public:
         return shouldClear;
     }
 };
-
-using PipelineHandle = uint32_t;
-using BufferHandle   = uint32_t;
 
 struct CmdClear : public ICmd {
     uint32_t clearMask;
