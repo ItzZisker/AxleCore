@@ -16,7 +16,7 @@ namespace axle::core
 {
 
 int Application::InitCurrent(ApplicationSpec spec, TickJob updateFunc) {
-    m_WndThread->StartApp([wndspec = std::move(spec.wndspec)]() -> utils::ExResult<SharedPtr<IWindow>> {
+    bool wndRes = m_WndThread->StartApp([wndspec = std::move(spec.wndspec)]() -> utils::ExResult<SharedPtr<IWindow>> {
         IWindow* wndPtr{nullptr};
 #if defined(__AX_PLATFORM_WIN32__)
         wndPtr = new WindowWin32(wndspec);
@@ -28,6 +28,8 @@ int Application::InitCurrent(ApplicationSpec spec, TickJob updateFunc) {
         wndPtr->Launch();
         return SharedPtr<IWindow>(wndPtr);
     });
+    if (!wndRes) return false;
+
     m_WndThread->AwaitStart();
 
     auto wndCtx = m_WndThread->GetContext();
@@ -64,6 +66,8 @@ int Application::InitCurrent(ApplicationSpec spec, TickJob updateFunc) {
         // ctx->SetVSync(false); // Remove this.
         return SharedPtr<IRenderContext>(ctxPtr);
     });
+    if (!gfxRes) return false;
+
     m_GfxThread->AwaitStart();
 
     auto& state = wndCtx->GetSharedState();
