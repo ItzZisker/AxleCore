@@ -25,10 +25,8 @@ private:
     core::SharedState m_State{};
     std::atomic_bool m_FirstInit{true};
 public:
-
     int InitCurrent(ApplicationSpec spec, TickJob updateFunc);
-
-    void Shutdown();
+    void RequestQuit();
 
     SharedPtr<ThreadContextWnd> GetWindowThread() const { return m_WndThread; }
     SharedPtr<ThreadContextGfx> GetGraphicsThread() const { return m_GfxThread; };

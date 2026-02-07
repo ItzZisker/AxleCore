@@ -135,16 +135,6 @@ public:
     virtual void* GetNativeWindowHandle() = 0;
 public:
     static IWindow* Create(const WindowSpec& spec, uint32_t maxSharedEvents);
-    
-    static inline WindowType ChooseType() {
-#if defined(__AX_PLATFORM_WIN32__)
-        return WindowType::WndWin32;
-#elif defined(__AX_PLATFORM_X11__)
-        return WindowType::WndX11
-#else
-        throw std::runtime_error("AX Exception: IWindow::ChooseType() Failed -> Platform Unsupported!");
-#endif
-    }
 protected:
     friend class IRenderContext;
 

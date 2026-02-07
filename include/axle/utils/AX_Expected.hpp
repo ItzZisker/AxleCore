@@ -32,6 +32,9 @@ public:
     Expected(const T& value) : m_Data(value) {}
     Expected(T&& value) : m_Data(std::move(value)) {}
 
+    Expected(const E& e) : m_Data(e) {}
+    Expected(E&& e) : m_Data(std::move(e)) {}
+
     static Expected<T, E> error(const E& e) { return Expected(e); }
     static Expected<T, E> error(E&& e) { return Expected(std::move(e)); }
 
@@ -57,9 +60,6 @@ public:
         return std::get<E>(m_Data);
     }
 private:
-    Expected(const E& e) : m_Data(e) {}
-    Expected(E&& e) : m_Data(std::move(e)) {}
-
     std::variant<T, E> m_Data;
 };
 

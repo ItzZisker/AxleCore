@@ -30,4 +30,6 @@ using UniquePtr = std::unique_ptr<T>;
 template <typename T>
 using WeakPtr = std::weak_ptr<T>;
 
+using WorkHandle = uint32_t;
+
 }
