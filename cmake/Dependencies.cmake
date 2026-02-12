@@ -14,18 +14,17 @@ set(CMAKE_POLICY_VERSION_MINIMUM ${CMAKE_POLICY_VERSION_MINIMUM_PREV})
 unset(CMAKE_POLICY_VERSION_MINIMUM_PREV)
 
 # === GLM ===
-message(STATUS "Downloading GLM...")
+message(STATUS "Downloading GLM 1.0.2 ...")
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
     GIT_TAG 1.0.2
 )
 FetchContent_MakeAvailable(glm)
-message("glm_SOURCE_DIR = ${glm_SOURCE_DIR}")
 include_directories(${glm_SOURCE_DIR})
 
 # === ImGui ===
-message(STATUS "Downloading ImGui...")
+message(STATUS "Downloading ImGui v1.92.5 ...")
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -52,3 +51,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 include_directories(${stb_SOURCE_DIR})
+
+# === Slang ===
+message(STATUS "Downloading Slang v2026.1.2 ...")
+
+set(SLANG_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(SLANG_ENABLE_PYTHON OFF CACHE BOOL "" FORCE)
+set(SLANG_ENABLE_OPTIX OFF CACHE BOOL "" FORCE)
+set(SLANG_ENABLE_NVIDIA_EXTENSIONS OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    slang
+    GIT_REPOSITORY https://github.com/shader-slang/slang
+    GIT_TAG v2026.1.2
+)
+FetchContent_MakeAvailable(slang)
+include_directories(${slang_SOURCE_DIR}/include)

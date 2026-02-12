@@ -1,8 +1,7 @@
 #pragma once
 
-#include "axle/core/window/AX_IWindow.hpp"
 #if defined(__AX_PLATFORM_X11__) && defined(__AX_GRAPHICS_GL__)
-#include "../AX_IRenderContext.hpp"
+#include "../AX_IRenderContextGL.hpp"
 
 #include <X11/Xlib.h>
 
@@ -11,7 +10,7 @@ using GLXContext = struct __GLXcontextRec*;
 
 namespace axle::core {
 
-class RenderContextGLX11 : public IRenderContext {
+class RenderContextGLX11 : public IRenderContextGL {
 public:
     RenderContextGLX11();
     virtual ~GLRenderContextX11();
@@ -27,7 +26,7 @@ public:
     // Define GLAD/glx 3.3 Functions, must be called post Context Creation.
     // Returns true if success, false if none or atleast one of functions failed to load.
     // Xlib GLAD Functions based on unix, Xorg-based/X-To-Wayland-based host
-    bool LoadGLFunctions();
+    bool LoadGLFunctions() override;
 private:
     Display* m_Display = nullptr;
     Window   m_Window  = 0;

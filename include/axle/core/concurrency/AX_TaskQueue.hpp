@@ -2,7 +2,6 @@
 
 #include "axle/utils/AX_Types.hpp"
 
-#include <functional>
 #include <future>
 #include <deque>
 
@@ -15,11 +14,11 @@ public:
 
     std::deque<VoidJob> CopyJobs();
     std::deque<VoidJob> MoveJobs();
-    
+
     template<typename F>
     auto EnqueueFuture(F&& f) {
         using Ret = decltype(f());
-    
+
         auto task = std::make_shared<std::packaged_task<Ret()>>(std::forward<F>(f));
         auto future = task->get_future();
  

@@ -1,11 +1,11 @@
-#include "axle/graphics/base/texture/AX_Texture.hpp"
+#include "axle/graphics/base/image/AX_Image.hpp"
 
 #include <array>
 #include <stdexcept>
 
-namespace axle::graphics {
+namespace axle::gfx {
 
-ImageFormatInfo Tx_GetFormatInfo(ImageFormat fmt) {
+ImageFormatInfo Img_GetFormatInfo(ImageFormat fmt) {
     static std::array<ImageFormatInfo, 18> ImageFormatInfoMap = {{
         {ImageFormat::R8,    ImageFormatInternal::Base_R,    ImagePixelType::UByte, 1},
         {ImageFormat::RG8,   ImageFormatInternal::Base_RG,   ImagePixelType::UByte, 2},
@@ -33,7 +33,7 @@ ImageFormatInfo Tx_GetFormatInfo(ImageFormat fmt) {
     return ImageFormatInfoMap[static_cast<int>(fmt)];
 }
 
-ImageFormat Tx_GetImageFormat(int nrChannels, int bits, bool isHDR) {
+ImageFormat Img_GetImageFormat(int nrChannels, int bits, bool isHDR) {
     if (isHDR && bits == 32) {
         switch (nrChannels) {
             case 1: return ImageFormat::R32F;

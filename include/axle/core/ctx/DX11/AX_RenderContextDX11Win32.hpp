@@ -14,10 +14,10 @@ typedef void* vHWND;
 
 namespace axle::core {
 
-class DX11RenderContextWin32 : public IRenderContext {
+class RenderContextDX11Win32 : public IRenderContext {
 public:
-    DX11RenderContextWin32();
-    virtual ~DX11RenderContextWin32();
+    RenderContextDX11Win32();
+    virtual ~RenderContextDX11Win32();
 
     bool Init(IApplication* app) override;
     void SwapBuffers() override;

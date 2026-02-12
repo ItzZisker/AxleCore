@@ -1,7 +1,10 @@
 #pragma once
 
+#include "axle/core/ctx/AX_IRenderContext.hpp"
 #if defined(__AX_PLATFORM_WIN32__) && defined(__AX_GRAPHICS_GL__)
 #include "../AX_IRenderContext.hpp"
+
+#include <glad/glad.h>
 
 typedef void* vHGLRC;
 typedef void* vHDC;
@@ -21,8 +24,6 @@ public:
     void Shutdown() override;
 
     void* GetContextHandle() const override;
-
-    bool LoadGLFunctions();
 
     WindowType GetAppType() const override { return WndWin32; }
     GfxType GetType() const override { return GfxGL330; }

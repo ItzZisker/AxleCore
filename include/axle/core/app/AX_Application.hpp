@@ -1,6 +1,6 @@
 #pragma once
 
-#include "axle/core/AX_GameLoop.hpp"
+#include "axle/core/concurrency/AX_ThreadCycler.hpp"
 #include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/core/window/AX_IWindow.hpp"
 #include "axle/utils/AX_Types.hpp"
@@ -14,7 +14,7 @@ struct ApplicationSpec {
     WindowSpec wndspec{};
     ChMillis fixedTickRate = ChMillis(50);
     bool enforceGfxType{false};
-    GfxType gfxType{GfxVK};
+    GfxType enforcedGfxType{GfxVK};
 };
 
 class Application {

@@ -3,8 +3,6 @@
 
 #ifdef __AX_PLATFORM_WIN32__
 
-#include <AX_PCH.hpp>
-
 #include <Windows.h>
 #include <windowsx.h>
 

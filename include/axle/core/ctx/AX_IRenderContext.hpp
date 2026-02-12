@@ -1,10 +1,7 @@
 #pragma once
 
 #include "axle/core/window/AX_IWindow.hpp"
-
-#ifdef __AX_GRAPHICS_GL__
-#include <glad/glad.h>
-#endif
+#include <vector>
 
 namespace axle::core {
 
@@ -35,15 +32,8 @@ public:
 
     virtual WindowType GetAppType() const = 0;
     virtual GfxType GetType() const = 0;
-#ifdef __AX_GRAPHICS_GL__
-    // Load GLAD 3.3 Functions Directly by some wrapper/custom/platform context loader
-    inline bool LoadGLFunctionsDirect(void *contextLoader) {
-        if (contextLoader) return gladLoadGLLoader((GLADloadproc)contextLoader);
-        else return false;
-    }
-#endif
 
-    static int32_t CombinedTypes() {
+    static inline int32_t CombinedTypes() {
         int32_t supported{0};
 #ifdef __AX_GRAPHICS_GL__
         supported |= GfxGL330;
@@ -55,6 +45,16 @@ public:
         supported |= GfxVK;
 #endif
         return supported;
+    }
+
+    static inline const std::vector<GfxType>& SortedTypesByPlatform() {
+#if defined(__AX_PLATFORM_WIN32__)
+        static std::vector<GfxType> types{GfxVK, GfxDX11, GfxGL330};
+        return types;
+#elif defined(__AX_PLATFORM_X11__)
+        static std::vector<GfxType> types{GfxVK, GfxGL330};
+        return types;
+#endif
     }
 };
 

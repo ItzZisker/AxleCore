@@ -1,9 +1,9 @@
-#include "axle/graphics/base/texture/AX_TextureASTC.hpp"
+#include "axle/graphics/base/image/AX_ImageASTC.hpp"
 
 #include "axle/data/AX_DataStreamImplBuffer.hpp"
 #include "axle/data/AX_DataStreamImplFile.hpp"
 
-namespace axle::graphics {
+namespace axle::gfx {
 
 ASTCImage ASTC_LoadFileBytes(data::DataDeserializer *buffer) {
     ASTCImage img{};

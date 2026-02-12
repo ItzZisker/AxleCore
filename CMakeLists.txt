@@ -24,39 +24,8 @@ if (AX_IMPL_AUDIO_SOFTOPENAL)
     include(external/openalsoft.cmake)
 endif()
 
-# === Source files ===
-set(PROJECT_SRC
-    src/external/AX_stb.c
-
-    src/core/AX_Gameloop.cpp
-
-    src/core/app/AX_IApplication.cpp
-    src/core/app/AX_ApplicationWin32.cpp
-    src/core/app/AX_ApplicationX11.cpp
-
-    src/core/ctx/DX11/AX_DX11RenderContextWin32.cpp
-
-    src/core/ctx/GL/AX_GLRenderContextWin32.cpp
-    src/core/ctx/GL/AX_GLRenderContextX11.cpp
-
-    # src/core/utils/AX_Pipeline.cpp
-    # src/core/concurrency/AX_Future.cpp
-    # src/core/concurrency/AX_MainThread.cpp
-    # src/core/concurrency/AX_GuardLocks.cpp
-    src/core/concurrency/AX_TaskQueue.cpp
-    # src/core/concurrency/AX_TaskQueueRunnable.cpp
-
-    src/data/AX_DataSerializer.cpp
-    src/data/AX_DataDeserializer.cpp
-    src/data/AX_DataStreamImplBuffer.cpp
-    src/data/AX_DataStreamImplFile.cpp
-    src/data/AX_DataTemplates.cpp
-
-    # src/assets/AX_AssetImporter.cpp
-    # src/assets/AX_AssetExporter.cpp
-    # src/assets/AX_AssetManager.cpp
-    # src/assets/AX_AssetPacker.cpp
-	
+# === Audio Source Files ===
+set(AUDIO_SRC
 	src/audio/AL/AX_ALAudioContext.cpp
 	src/audio/AL/AX_ALAudioListener.cpp
 	src/audio/AL/AX_ALAudioSource.cpp
@@ -73,78 +42,53 @@ set(PROJECT_SRC
 	src/audio/data/AX_AudioOGG.cpp
 
 	src/audio/AX_AudioUtils.cpp
+)
 
-    src/graphics/cmd/AX_GraphicsCommand.cpp
-    src/graphics/cmd/GL/AX_GSGLViewCommands.cpp
-    
-	# src/graphics/material/AX_Material.cpp
-    # src/graphics/material/AX_MaterialMetadata.cpp
+# === Source files ===
+set(PROJECT_SRC
+    src/external/AX_stb.c
 
-    # src/graphics/vertex/AX_VertexRawInterface.cpp
-    # src/graphics/vertex/AX_VertexIndicedInterface.cpp
-	# src/graphics/vertex/AX_VertexPrimitives.cpp
+    src/core/app/AX_Application.cpp
+
+    src/core/concurrency/AX_ThreadCycler.cpp
+    src/core/concurrency/AX_TaskQueue.cpp
+    # src/core/concurrency/AX_Future.cpp
+    # src/core/concurrency/AX_MainThread.cpp
+    # src/core/concurrency/AX_TaskQueueRunnable.cpp
+
+    src/core/ctx/DX11/AX_RenderContextDX11Win32.cpp
+
+    src/core/ctx/GL/AX_RenderContextGLWin32.cpp
+    src/core/ctx/GL/AX_RenderContextGLX11.cpp
+
+    src/core/window/AX_IWindow.cpp
+    src/core/window/AX_WindowWin32.cpp
+    src/core/window/AX_WindowX11.cpp
+
+    src/data/AX_DataSerializer.cpp
+    src/data/AX_DataDeserializer.cpp
+    src/data/AX_DataStreamImplBuffer.cpp
+    src/data/AX_DataStreamImplFile.cpp
+    src/data/AX_DataTemplates.cpp
+
+    # src/assets/AX_AssetImporter.cpp
+    # src/assets/AX_AssetExporter.cpp
+    # src/assets/AX_AssetManager.cpp
+    # src/assets/AX_AssetPacker.cpp
 	
-    # src/graphics/model/AX_Model.cpp
-    # src/graphics/model/AX_ModelLoader.cpp
-    # src/graphics/model/AX_ModelInstance.cpp
-    # src/graphics/model/AX_ModelSerializer.cpp
-    # src/graphics/model/AX_Mesh.cpp
-    # src/graphics/model/AX_MeshInstance.cpp
+    ${AUDIO_SRC}
+
+    src/graphics/cmd/GL/AX_GLCommandList.cpp
+    src/graphics/cmd/GL/AX_GLGraphicsBackend.cpp
+    
+	src/graphics/base/material/AX_Material.cpp
+    src/graphics/base/material/AX_MaterialMetadata.cpp
 	
     src/graphics/base/texture/AX_Texture.cpp
     src/graphics/base/texture/AX_TextureSTB.cpp
     src/graphics/base/texture/AX_TextureBRDFLUT.cpp
     src/graphics/base/texture/AX_TextureDXT.cpp
     src/graphics/base/texture/AX_TextureASTC.cpp
-	
-    # src/graphics/GL/platform/AX_GL_GPUSupport.cpp
-	
-    # src/graphics/GL/renderer/model/AX_GL_ModelMinimalStateChangeRenderer.cpp
-    # src/graphics/GL/renderer/model/AX_GL_ModelStaticArrayBatchRenderer.cpp
-	
-    # src/graphics/GL/renderer/pipeline/AX_GL_PipelineForwardRenderer.cpp
-    # src/graphics/GL/renderer/pipeline/AX_GL_PipelineDeferredRenderer.cpp
-    # src/graphics/GL/renderer/pipeline/AX_GL_PipelineClusteredForwardRenderer.cpp
-    # src/graphics/GL/renderer/pipeline/AX_GL_PipelineClusteredDeferredRenderer.cpp
-	
-    # src/graphics/GL/uploader/AX_GL_TextureUploader.cpp
-    # src/graphics/GL/uploader/AX_GL_VertexUploader.cpp
-
-	# src/graphics/GL/vertex/AX_GL_ArrayObject.cpp
-	
-    # src/graphics/GL/method/AX_GL_CascadedShadowMapper.cpp
-    # src/graphics/GL/method/AX_GL_StaticShadowMapper.cpp
-    # src/graphics/GL/method/AX_GL_EnvironmentMap.cpp
-    # src/graphics/GL/method/AX_GL_StaticArrayBatch.cpp
-
-    # src/graphics/GL/frame/AX_GL_Screen.cpp
-    # src/graphics/GL/frame/AX_GL_Screenbuffer.cpp
-    # src/graphics/GL/frame/AX_GL_Framebuffer.cpp
-    
-	# src/graphics/GL/scene/AX_GL_Skybox.cpp
-	# src/graphics/GL/scene/AX_GL_SkyboxPanaroma.cpp
-    # src/graphics/GL/scene/AX_GL_Scene.cpp
-    # src/graphics/GL/scene/AX_GL_Camera.cpp
-	
-    # src/graphics/GL/utils/AX_GL_Shader.cpp
-    # src/graphics/GL/utils/AX_GL_Utils.cpp
-
-    # src/math/AX_MathUtils.cpp
-    # src/math/AX_FastMath.cpp
-    # src/math/AX_Coordination.cpp
-    # src/math/AX_Coordination2D.cpp
-    # src/math/AX_FrustumCulling.cpp
-	
-    # src/physics/bullet/world/AX_BT_WorldWrapper.cpp
-    # src/physics/bullet/world/AX_BT_WorldTimeStep.cpp
-    # src/physics/bullet/entity/BT_EntityConvexHull.cpp
-    # src/physics/bullet/entity/BT_EntityTriangleMesh.cpp
-    # src/physics/bullet/entity/BT_EntitySoftBodyMesh.cpp
-
-    # src/platform/AX_DesktopSupport.cpp
-
-    # src/utils/AX_HashUtils.cpp
-    # src/utils/AX_STDUtils.cpp
 
     external/glad/glad.c
 )

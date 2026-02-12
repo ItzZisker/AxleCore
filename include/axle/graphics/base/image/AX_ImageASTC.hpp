@@ -6,7 +6,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace axle::graphics {
+namespace axle::gfx {
 
 struct ASTCHeader {
     uint8_t magic[4];    // 0x13, 0xAB, 0xA1, 0x5C -> More: https://github.com/ARM-software/astc-encoder/blob/main/Docs/FileFormat.md

@@ -19,11 +19,13 @@ public:
 };
 
 struct AXError {
-    int code = 0;
-    std::string msg = "Unknown error";
+    int code{-1};
+    std::string msg{"Unknown error"};
 
     AXError(std::string msg) : msg(msg) {}
     AXError(int code, std::string msg) : code(code), msg(msg) {}
+
+    static AXError NoError() { return {0, "No error"}; }
 };
 
 template<typename T, typename E>

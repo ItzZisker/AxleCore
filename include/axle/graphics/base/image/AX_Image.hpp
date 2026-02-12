@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace axle::graphics {
+namespace axle::gfx {
 
 enum ImageFormat {
     R8 = 0,       // 1 channel, 8-bit
@@ -58,16 +58,16 @@ struct ImageFormatInfo {
     }
 };
 
-ImageFormatInfo Tx_GetFormatInfo(ImageFormat fmt);
-ImageFormat Tx_GetImageFormat(int nrChannels, int bits, bool isHDR);
+ImageFormatInfo Img_GetFormatInfo(ImageFormat fmt);
+ImageFormat Img_GetImageFormat(int nrChannels, int bits, bool isHDR);
 
-struct TextureImage {
+struct Image {
     ImageFormat format = ImageFormat::RGB8;
     std::vector<uint8_t> bytes;
     int width, height;
 
     ImageFormatInfo GetInfo() const {
-        return Tx_GetFormatInfo(format);
+        return Img_GetFormatInfo(format);
     }
     size_t GetSize() const {
         const ImageFormatInfo& info = GetInfo();
