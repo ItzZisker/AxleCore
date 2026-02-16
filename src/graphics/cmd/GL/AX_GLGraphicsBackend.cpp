@@ -23,6 +23,7 @@ using namespace axle::utils;
     - Move BindResources() to GLCommand action enum(s)
     - Learn More about Packed Textures
     - Add Multisample Resolve in BindPipeline? or maybe POST-draw? idk
+    - Compute Pipeline (Including the ShaderProgram load part, which should have multiple compute entries)
 */
 
 namespace axle::gfx {
