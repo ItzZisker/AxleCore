@@ -1,6 +1,7 @@
 #pragma once
 
 #include "axle/graphics/AX_Graphics.hpp"
+
 #include <vector>
 
 namespace axle::gfx {
@@ -9,16 +10,16 @@ enum class GLCommandType {
     BeginRenderPass,
     EndRenderPass,
     BindPipeline,
-    BindVertexBuffer,
-    BindIndexBuffer,
+    BindBuffer,
     Draw,
     DrawIndexed,
-    DrawIndirect
+    DrawIndirect,
+    DrawIndirectIndexed,
 };
 
 struct GLCommand {
     GLCommandType type;
-    size_t args[4]; // generic payload
+    std::vector<size_t> args; // generic payload
 };
 
 class GLCommandList final : public ICommandList {
@@ -28,18 +29,25 @@ public:
     void Begin() override;
     void End() override;
 
-    void BeginRenderPass(RenderPassHandle pass) override;
+    void BeginRenderPass(
+        const RenderPassHandle& pass,
+        const FramebufferHandle& framebuffer,
+        const RenderPassClear& clear = {}
+    ) override;
     void EndRenderPass() override;
 
-    void BindPipeline(PipelineHandle pipeline) override;
-    void BindVertexBuffer(BufferHandle buffer) override;
-    void BindIndexBuffer(BufferHandle buffer) override;
+    void BindRenderPipeline(const RenderPipelineHandle& pipeline) override;
+    void BindComputePipeline(const ComputePipelineHandle& pipeline) override;
+    void BindVertexBuffer(const BufferHandle& buffer) override;
+    void BindIndexBuffer(const BufferHandle& buffer) override;
 
     void Draw(uint32_t vertexCount, uint32_t firstVertex) override;
     void DrawIndexed(uint32_t indexCount, uint32_t firstIndex) override;
-    void DrawIndirect(BufferHandle indirect, uint32_t offset) override;
+    void DrawIndirect(const BufferHandle& indirectBuff, uint32_t offset) override;
 
-    const std::vector<GLCommand>& Commands() const { return m_Commands; }
+    const std::vector<GLCommand>& Commands() const {
+        return m_Commands;
+    }
 private:
     std::vector<GLCommand> m_Commands;
 };

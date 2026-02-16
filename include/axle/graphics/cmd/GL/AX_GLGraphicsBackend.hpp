@@ -17,13 +17,15 @@
 #include <vector>
 
 #ifdef AX_DEBUG
+#include <iostream>
     #define GL_CALL(x) \
         do { \
             while (glGetError() != GL_NO_ERROR); \
             x; \
             GLenum err = glGetError(); \
             if (err != GL_NO_ERROR) { \
-                ReportGLError(err, #x, __FILE__, __LINE__); \
+                std::cerr << "GL Error: " << err << std::endl;
+                /*ReportGLError(err, #x, __FILE__, __LINE__);*/ \
             } \
         } while (0)
 #else
@@ -88,52 +90,82 @@
 
 namespace axle::gfx {
 
-GLenum TTypeGLTarget(TextureType type);
+GLenum ToGLTarget(TextureType type);
+GLenum ToGLInternalFormat(TextureFormat fmt);
+GLenum ToGLFormat(TextureFormat fmt);
+GLenum ToGLType(TextureFormat fmt);
+GLenum ToGLWrap(TextureWrap wrap);
+GLenum ToGLFilter(TextureFilter filter);
+GLenum ToGLStage(ShaderStage stg);
+GLenum ToGLType(VertexAttributeType type);
+GLenum ToGLCompare(CompareOp cmpop);
+GLenum ToGLBlendFactor(BlendFactor bFactor);
+GLenum ToGLBlendOp(BlendOp bOp);
+GLenum ToGLStencilOp(StencilOp sOp);
+GLenum ToGLBarrierBit(ResourceState state);
 
-GLenum TFmtGLInternalFormat(TextureFormat fmt);
-GLenum TFmtGLFormat(TextureFormat fmt);
-GLenum TFmtGLType(TextureFormat fmt);
+template <typename T>
+struct GLCommandBinding {
+    T handle;
+    bool bound{false};
 
-GLenum TwGLWrap(TextureWrap wrap);
-GLenum TfGLFilter(TextureFilter filter);
-
-GLenum StgGLStage(ShaderStage stg);
-
-GLenum AttrTGLType(VertexAttributeType type);
+    void Bind(const T& h) {
+        handle = h;
+        bound = true;
+    }
+    void UnBind() {
+        handle = {};
+        bound = false;
+    }
+};
 
 struct GLInternal {
     uint32_t generation{1};
     bool alive{false};
 };
 
-struct GLVertexInput : public GLInternal {
-    GLuint id;
-    VertexInputDesc desc;
-};
-
 struct GLBuffer : public GLInternal {
-    GLuint id;
-    GLenum target;
+    GLuint id{0};
+    BufferUsage usage;
+    size_t size{0};
 };
 
 struct GLProgram : public GLInternal {
-    GLuint id;
+    GLuint id{0};
 };
 
-struct GLPipeline : public GLInternal {
+struct GLRenderPipeline : public GLInternal {
     GLProgram program;
+    GLuint vao{0};
+    GLuint vbo{0};
+    GLuint ebo{0};
+    RenderPipelineDesc desc;
+    VertexLayout vaoLayout{};
+};
+
+struct GLComputePipeline : public GLInternal {
+    GLProgram program;
+    ComputePipelineDesc desc;
 };
 
 struct GLTexture : public GLInternal {
-    GLuint id;
+    GLuint id{0};
     TextureDesc desc;
 };
 
+struct GLRenderPass : public GLInternal {
+    RenderPassDesc desc;
+    GLCommandBinding<GLRenderPipeline> boundPipeline{};
+};
+
 struct GLFramebuffer : public GLInternal {
-    GLuint fbo = 0;
-    GLuint depthRbo = 0;
-    uint32_t width = 0;
-    uint32_t height = 0;
+    GLuint fbo{0};
+    bool hasDepth{false};
+    bool hasStencil{false};
+    GLuint depthStencilTexture{0};
+    uint32_t width{0};
+    uint32_t height{0};
+    GLRenderPass renderPass;  
 };
 
 class GLGraphicsBackend final : public IGraphicsBackend {
@@ -160,20 +192,18 @@ public:
     utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) override;
     utils::AXError DestroyProgram(ShaderHandle& handle) override;
 
-    utils::ExResult<PipelineHandle> CreatePipeline(const PipelineDesc& desc) override;
-    utils::AXError DestroyPipeline(PipelineHandle& handle) override;
-
-    utils::ExResult<VertexInputHandle> CreateVertexInput(const VertexInputDesc& desc) override;
-    utils::AXError DestroyVertexInput(VertexInputHandle& handle) override;
+    utils::ExResult<RenderPipelineHandle> CreateRenderPipeline(const RenderPipelineDesc& desc) override;
+    utils::AXError DestroyRenderPipeline(RenderPipelineHandle& handle) override;
 
     utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) override;
+    utils::AXError DestroyRenderPass(RenderPassHandle& handle) override;
 
     utils::AXError Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, uint32_t z) override;
     utils::AXError BindResources(ICommandList& cmd, Span<Binding> bindings) override;
-    utils::AXError Barrier(ICommandList&, ResourceHandle) override { return utils::AXError::NoError(); }
+    utils::AXError Barrier(ICommandList& cmd, Span<ResourceTransition> transitions) override;
 
     // Execution
-    void Execute(const GLCommandList& cmd);
+    utils::AXError Execute(const GLCommandList& cmd);
 
     template <typename T>
     requires std::is_base_of_v<GLInternal, T>
@@ -192,37 +222,51 @@ public:
         return {index, handles[index]};
     }
 
-    template <typename T, typename TI>
+    template <typename TI>
     requires std::is_base_of_v<GLInternal, TI>
-    bool IsValidHandle(std::vector<TI>& handles, const GfxHandle<T>& handle) const {
-        if (handle.index >= handles.size()) {
+    bool IsValidHandle(std::vector<TI>& handles,
+        uint32_t handleIndex,
+        uint32_t handleGeneration
+    ) const {
+        if (handleIndex >= handles.size()) {
             return false;
         } else {
-            const auto& internal = handles[handle.index];
-            return internal.alive && internal.generation == handle.generation;
+            const auto& internal = handles[handleIndex];
+            return internal.alive && internal.generation == handleGeneration;
         }
     }
 
+    template <typename T, typename TI>
+    requires std::is_base_of_v<GLInternal, TI>
+    bool IsValidHandle(std::vector<TI>& handles, const ExternalHandle<T>& handle) const {
+        return IsValidHandle(handles, handle.index, handle.generation);
+    }
+
     template <typename T>
-    void PostDeleteHandle(GLInternal& internal, GfxHandle<T>& handle, std::vector<uint32_t>& frees) const {
+    void PostDeleteHandle(GLInternal& internal, ExternalHandle<T>& handle, std::vector<uint32_t>& frees) const {
         internal.alive = false;
         internal.generation++;
         frees.push_back(handle.index);
     }
 private:
-    std::vector<GLBuffer>      m_Buffers{};
-    std::vector<GLTexture>     m_Textures{};
-    std::vector<GLProgram>     m_Programs{};
-    std::vector<GLPipeline>    m_Pipelines{};
-    std::vector<GLVertexInput> m_VertexInputs{};
-    std::vector<GLFramebuffer> m_Framebuffers{};
+    std::vector<GLBuffer>           m_Buffers{};
+    std::vector<GLTexture>          m_Textures{};
+    std::vector<GLProgram>          m_Programs{};
+    std::vector<GLRenderPipeline>   m_RenderPipelines{};
+    std::vector<GLComputePipeline>  m_ComputePipelines{};
+    std::vector<GLFramebuffer>      m_Framebuffers{};
+    std::vector<GLRenderPass>       m_RenderPasses{};
 
     std::vector<uint32_t> m_FreeBuffers{};
     std::vector<uint32_t> m_FreeTextures{};
     std::vector<uint32_t> m_FreePrograms{};
-    std::vector<uint32_t> m_FreePipelines{};
-    std::vector<uint32_t> m_FreeVertexInputs{};
+    std::vector<uint32_t> m_FreeRenderPipelines{};
+    std::vector<uint32_t> m_FreeComputePipelines{};
     std::vector<uint32_t> m_FreeFramebuffers{};
+    std::vector<uint32_t> m_FreeRenderPasses{};
+
+    GLCommandBinding<GLRenderPass>      m_CurrentRenderPass{};
+    GLCommandBinding<GLComputePipeline> m_CurrentComputePipeline{};
 
     Slang::ComPtr<slang::IGlobalSession> m_SlangGlobal{nullptr};
 };

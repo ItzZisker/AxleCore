@@ -30,26 +30,24 @@
 namespace axle::gfx {
 
 template<typename Tag>
-struct GfxHandle {
+struct ExternalHandle {
     uint32_t index;
     uint32_t generation;
-
-    bool IsValid() const { return generation; }
 };
 
 enum class BufferUsage {
-    BuVertex,
-    BuIndex,
-    BuUniform,
-    BuStorage,
-    BuIndirect,
-    BuStaging
+    Vertex,
+    Index,
+    Uniform,
+    Storage,
+    Indirect,
+    Staging
 };
 
 enum class BufferAccess {
-    BLvlImmutable,
-    BLvlDynamic,
-    BLvlStream
+    Immutable,
+    Dynamic,
+    Stream
 };
 
 struct BufferDesc {
@@ -63,127 +61,142 @@ struct BufferTag {
     const BufferDesc desc;
 };
 
-using BufferHandle = GfxHandle<BufferTag>;
+using BufferHandle = ExternalHandle<BufferTag>;
 
 enum class TextureType {
-    TxTTex2D,
-    TxTTex3D,
-    TxTCube,
-    TxTArray2D
+    Texture2D,
+    Texture3D,
+    Cubemap,
+    Array2D
 };
 
 enum class TextureUsage : uint32_t {
-    TxuNone            = 0,
-    TxuSampled         = 1 << 0,
-    TxuStorage         = 1 << 1,
-    TxuRenderTarget    = 1 << 2,
-    TxuDepthStencil    = 1 << 3,
-    TxuTransferSrc     = 1 << 4,
-    TxuTransferDst     = 1 << 5
+    Sampled         = 0,
+    RenderTarget    = 1 << 0,
+    DepthOnly       = 1 << 1,
+    DepthStencil    = 1 << 2,
+    TransferSrc     = 1 << 3,
+    TransferDst     = 1 << 4
 };
 
-enum class TextureFormat
-{
+enum class TextureFormat {
     // 8-bit normalized
-    TxFmtR8_UNORM,
-    TxFmtR8_SNORM,
-    TxFmtR8_UINT,
-    TxFmtR8_SINT,
+    R8_UNORM,
+    R8_SNORM,
+    R8_UINT,
+    R8_SINT,
 
-    TxFmtRG8_UNORM,
-    TxFmtRG8_SNORM,
-    TxFmtRG8_UINT,
-    TxFmtRG8_SINT,
+    RG8_UNORM,
+    RG8_SNORM,
+    RG8_UINT,
+    RG8_SINT,
 
-    TxFmtRGBA8_UNORM,
-    TxFmtRGBA8_SNORM,
-    TxFmtRGBA8_UINT,
-    TxFmtRGBA8_SINT,
+    RGBA8_UNORM,
+    RGBA8_SNORM,
+    RGBA8_UINT,
+    RGBA8_SINT,
 
-    TxFmtBGRA8_UNORM, // swapchain-friendly
-    TxFmtRGBA8_SRGB,
+    BGRA8_UNORM, // swapchain-friendly
+    RGBA8_SRGB,
 
     // 16-bit formats
-    TxFmtR16_UNORM,
-    TxFmtR16_SNORM,
-    TxFmtR16_UINT,
-    TxFmtR16_SINT,
-    TxFmtR16_FLOAT,
+    R16_UNORM,
+    R16_SNORM,
+    R16_UINT,
+    R16_SINT,
+    R16_FLOAT,
 
-    TxFmtRG16_UNORM,
-    TxFmtRG16_SNORM,
-    TxFmtRG16_UINT,
-    TxFmtRG16_SINT,
-    TxFmtRG16_FLOAT,
+    RG16_UNORM,
+    RG16_SNORM,
+    RG16_UINT,
+    RG16_SINT,
+    RG16_FLOAT,
 
-    TxFmtRGBA16_UNORM,
-    TxFmtRGBA16_SNORM,
-    TxFmtRGBA16_UINT,
-    TxFmtRGBA16_SINT,
-    TxFmtRGBA16_FLOAT,
+    RGBA16_UNORM,
+    RGBA16_SNORM,
+    RGBA16_UINT,
+    RGBA16_SINT,
+    RGBA16_FLOAT,
 
     // 32-bit formats
-    TxFmtR32_UINT,
-    TxFmtR32_SINT,
-    TxFmtR32_FLOAT,
+    R32_UINT,
+    R32_SINT,
+    R32_FLOAT,
 
-    TxFmtRG32_UINT,
-    TxFmtRG32_SINT,
-    TxFmtRG32_FLOAT,
+    RG32_UINT,
+    RG32_SINT,
+    RG32_FLOAT,
 
-    TxFmtRGB32_FLOAT,
-    TxFmtRGBA32_FLOAT,
+    RGB32_FLOAT,
+    RGBA32_FLOAT,
 
     // Packed / special
-    TxFmtRGB10A2_UNORM,
-    TxFmtRG11B10_FLOAT,
+    RGB10A2_UNORM,
+    RG11B10_FLOAT,
 
     // Depth / Stencil
-    TxFmtD16_UNORM,
-    TxFmtD24_UNORM_S8_UINT,
-    TxFmtD32_FLOAT,
-    TxFmtD32_FLOAT_S8_UINT,
+    S8_UINT,
+    D16_UNORM,
+    D24_UNORM_S8_UINT,
+    D32_FLOAT,
+    D32_FLOAT_S8_UINT,
 
     // Block compression (BCn / S3TC)
-    TxFmtBC1_UNORM,
-    TxFmtBC1_SRGB,
-    TxFmtBC3_UNORM,
-    TxFmtBC3_SRGB,
-    TxFmtBC4_UNORM,
-    TxFmtBC4_SNORM,
-    TxFmtBC5_UNORM,
-    TxFmtBC5_SNORM,
-    TxFmtBC6H_UFLOAT,
-    TxFmtBC6H_SFLOAT,
-    TxFmtBC7_UNORM,
-    TxFmtBC7_SRGB,
+    BC1_UNORM,
+    BC1_SRGB,
+    BC3_UNORM,
+    BC3_SRGB,
+    BC4_UNORM,
+    BC4_SNORM,
+    BC5_UNORM,
+    BC5_SNORM,
+    BC6H_UFLOAT,
+    BC6H_SFLOAT,
+    BC7_UNORM,
+    BC7_SRGB,
 
     // ASTC (mobile)
-    TxFmtASTC_4x4_UNORM,
-    TxFmtASTC_4x4_SRGB,
-    TxFmtASTC_6x6_UNORM,
-    TxFmtASTC_6x6_SRGB,
-    TxFmtASTC_8x8_UNORM,
-    TxFmtASTC_8x8_SRGB,
+    ASTC_4x4_UNORM,
+    ASTC_4x4_SRGB,
+    ASTC_6x6_UNORM,
+    ASTC_6x6_SRGB,
+    ASTC_8x8_UNORM,
+    ASTC_8x8_SRGB,
 
     // Undefined
-    TxFmtUnknown
+    Unknown
 };
 
-inline bool TFmtIsCompressed(const TextureFormat& fmt) {
-    return fmt > TextureFormat::TxFmtBC1_UNORM;
+inline bool TextureFormatIsS3TC(const TextureFormat& fmt) {
+    return TextureFormat::BC1_UNORM <= fmt && fmt <= TextureFormat::BC7_SRGB;
+}
+
+inline bool TextureFormatIsASTC(const TextureFormat& fmt) {
+    return TextureFormat::ASTC_4x4_UNORM <= fmt && fmt <= TextureFormat::ASTC_8x8_SRGB;
+}
+
+inline bool TextureFormatIsDepthOnly(const TextureFormat& fmt) {
+    return fmt == TextureFormat::D16_UNORM || fmt == TextureFormat::D32_FLOAT;
+}
+
+inline bool TextureFormatIsDepthAndStencil(const TextureFormat& fmt) {
+    return fmt == TextureFormat::D24_UNORM_S8_UINT || fmt == TextureFormat::D32_FLOAT_S8_UINT;
+}
+
+inline bool TextureFormatIsStencilOnly(const TextureFormat& fmt) {
+    return fmt == TextureFormat::S8_UINT;
 }
 
 enum class TextureWrap {
-    TwRepeat,             // GL_REPEAT / VK_SAMPLER_ADDRESS_MODE_REPEAT / D3D11_TEXTURE_ADDRESS_WRAP
-    TwMirrorRepeat,       // GL_MIRRORED_REPEAT / VK_MIRROR_REPEAT / D3D11_TEXTURE_ADDRESS_MIRROR
-    TwClampToEdge,        // GL_CLAMP_TO_EDGE / VK_CLAMP_TO_EDGE / D3D11_TEXTURE_ADDRESS_CLAMP
-    TwClampToBorder       // GL_CLAMP_TO_BORDER / VK_CLAMP_TO_BORDER / D3D11_TEXTURE_ADDRESS_BORDER
+    Repeat,             // GL_REPEAT / VK_SAMPLER_ADDRESS_MODE_REPEAT / D3D11_TEXTURE_ADDRESS_WRAP
+    MirrorRepeat,       // GL_MIRRORED_REPEAT / VK_MIRROR_REPEAT / D3D11_TEXTURE_ADDRESS_MIRROR
+    ClampToEdge,        // GL_CLAMP_TO_EDGE / VK_CLAMP_TO_EDGE / D3D11_TEXTURE_ADDRESS_CLAMP
+    ClampToBorder       // GL_CLAMP_TO_BORDER / VK_CLAMP_TO_BORDER / D3D11_TEXTURE_ADDRESS_BORDER
 };
 
 enum class TextureFilter {
-    TfNearest,            // GL_NEAREST / VK_FILTER_NEAREST / D3D11_FILTER_MIN_MAG_MIP_POINT
-    TfLinear,             // GL_LINEAR / VK_FILTER_LINEAR / D3D11_FILTER_MIN_MAG_MIP_LINEAR
+    Nearest,            // GL_NEAREST / VK_FILTER_NEAREST / D3D11_FILTER_MIN_MAG_MIP_POINT
+    Linear,             // GL_LINEAR / VK_FILTER_LINEAR / D3D11_FILTER_MIN_MAG_MIP_LINEAR
 };
 
 struct TextureBorderColor {
@@ -197,12 +210,12 @@ struct TextureSubDesc {
     uint32_t mipLevels{0};
     bool generateMips{false};
 
-    TextureWrap wrapS{TextureWrap::TwRepeat};
-    TextureWrap wrapT{TextureWrap::TwRepeat};
-    TextureWrap wrapR{TextureWrap::TwRepeat}; // used for 3D or arrays or cubemap
+    TextureWrap wrapS{TextureWrap::Repeat};
+    TextureWrap wrapT{TextureWrap::Repeat};
+    TextureWrap wrapR{TextureWrap::Repeat}; // used for 3D or arrays or cubemap
 
-    TextureFilter minFilter{TextureFilter::TfNearest};
-    TextureFilter magFilter{TextureFilter::TfNearest};
+    TextureFilter minFilter{TextureFilter::Nearest};
+    TextureFilter magFilter{TextureFilter::Nearest};
 
     TextureBorderColor borderColor{0, 0, 0, 0};
 };
@@ -213,6 +226,7 @@ struct TextureDesc {
     uint32_t height{1};
     uint32_t depth{1}; // for 3D textures
     uint32_t layers{1}; // for 2D arrays, cube arrays
+    uint32_t samples{1}; // samples
 
     TextureFormat format;
     TextureUsage usage;
@@ -225,26 +239,39 @@ struct TextureDesc {
 
 struct TextureTag {};
 
-using TextureHandle = GfxHandle<TextureTag>;
+using TextureHandle = ExternalHandle<TextureTag>;
 
-enum class ShaderStage {
-    StgVertex,
-    StgFragment,
-    StgCompute,
-    StgGeometry,
-    StgHull,
-    StgDomain
+// NOTE: You cannot have StgCompute linked along with other shaders! they must be separate shader programs!
+enum class ShaderStage { 
+    Vertex,
+    Fragment,
+    Compute,
+    Geometry,
+    Hull,
+    Domain
 };
 
-inline SlangStage StgToSlang(ShaderStage stg) {
+enum class ShaderPipelineType {
+    Graphics, // Classic vertex -> Tessellation/Geometry -> fragment pipline
+    Compute   // Compute ONLY
+};
+
+inline SlangStage ToSlangStage(ShaderStage stg) {
     switch (stg) {
-        case ShaderStage::StgVertex:   return SLANG_STAGE_VERTEX;
-        case ShaderStage::StgFragment: return SLANG_STAGE_FRAGMENT;
-        case ShaderStage::StgCompute:  return SLANG_STAGE_COMPUTE;
-        case ShaderStage::StgGeometry: return SLANG_STAGE_GEOMETRY;
-        case ShaderStage::StgHull:     return SLANG_STAGE_HULL;
-        case ShaderStage::StgDomain:   return SLANG_STAGE_DOMAIN;
+        case ShaderStage::Vertex:   return SLANG_STAGE_VERTEX;
+        case ShaderStage::Fragment: return SLANG_STAGE_FRAGMENT;
+        case ShaderStage::Compute:  return SLANG_STAGE_COMPUTE;
+        case ShaderStage::Geometry: return SLANG_STAGE_GEOMETRY;
+        case ShaderStage::Hull:     return SLANG_STAGE_HULL;
+        case ShaderStage::Domain:   return SLANG_STAGE_DOMAIN;
         default: return SLANG_STAGE_NONE;
+    }
+}
+
+inline ShaderPipelineType ToShaderPipelineType(ShaderStage stg) {
+    switch (stg) {
+        case ShaderStage::Compute: return ShaderPipelineType::Compute;
+        default: return ShaderPipelineType::Graphics;
     }
 }
 
@@ -263,11 +290,11 @@ struct ShaderDesc {
 
 struct ShaderTag {};
 
-using ShaderHandle = GfxHandle<ShaderTag>;
+using ShaderHandle = ExternalHandle<ShaderTag>;
 
 enum class ResourceKind : uint8_t {
-    RkBuffer,
-    RkTexture
+    Buffer,
+    Texture
 };
 
 struct ResourceHandle {
@@ -277,20 +304,46 @@ struct ResourceHandle {
     uint32_t generation;
 
     ResourceHandle(BufferHandle h)
-        : kind(ResourceKind::RkBuffer), index(h.index), generation(h.generation) {}
+        : kind(ResourceKind::Buffer), index(h.index), generation(h.generation) {}
     ResourceHandle(TextureHandle h)
-        : kind(ResourceKind::RkTexture), index(h.index), generation(h.generation) {}
+        : kind(ResourceKind::Texture), index(h.index), generation(h.generation) {}
+};
+
+enum class ResourceState {
+    Undefined,
+
+    ComputeWrite,
+    ComputeRead,
+
+    FragmentRead,
+    FragmentWrite,
+
+    VertexRead,
+    IndexRead,
+
+    IndirectRead,
+
+    DepthWrite,
+    DepthRead,
+
+    RenderTarget,
+    Present
+};
+
+struct ResourceTransition {
+    ResourceHandle resource;
+    ResourceState newState;
 };
 
 enum class LoadOp {
-    LOpLoad,       // keep previous contents
-    LOpClear,      // clear at start
-    LOpDontCare    // contents undefined
+    Load,       // keep previous contents
+    Clear,      // clear at start
+    DontCare    // contents undefined
 };
 
 enum class StoreOp {
-    SOpStore,
-    SOpDiscard
+    Store,
+    Discard
 };
 
 using AttachmentFormat = TextureFormat;
@@ -299,44 +352,56 @@ struct AttachmentDesc {
     AttachmentFormat format;
     LoadOp load;
     StoreOp store;
-    bool isDepth;
 };
 
 struct RenderPassDesc {
     Span<AttachmentDesc> colorAttachments;
-    AttachmentDesc depthAttachment;
+    AttachmentDesc depthStencilAttachment;
+    bool hasDepth{false};
+    bool hasStencil{false};
+};
+
+// used if loadOp == Clear
+struct RenderPassClear {
+    float clearColor[4] = {0.0f,0.0f,0.0f,1.0f};
+    float clearDepth = 1.0f;
+    uint32_t clearStencil = 0;
 };
 
 struct RenderPassTag {};
 
-using RenderPassHandle = GfxHandle<RenderPassTag>;
+using RenderPassHandle = ExternalHandle<RenderPassTag>;
 
 struct FramebufferDesc {
     RenderPassHandle renderPass;
     Span<TextureHandle> colorAttachments;
-    TextureHandle depthAttachment;
+
+    bool hasDepth{false};
+    bool hasStencil{false};
+    TextureHandle depthStencilTexture{}; // optional
+
     uint32_t width;
     uint32_t height;
 };
 
 struct FramebufferTag {};
 
-using FramebufferHandle = GfxHandle<FramebufferTag>;
+using FramebufferHandle = ExternalHandle<FramebufferTag>;
 
 enum class CullMode {
-    CullNone,
-    CullFront,
-    CullBack
+    None,
+    Front,
+    Back
 };
 
 enum class FillMode {
-    FillSolid,
-    FillWireframe
+    Solid,
+    Wireframe
 };
 
 enum class FrontFace {
-    FFClockwise,
-    FFCounterClockwise
+    Clockwise,
+    CounterClockwise
 };
 
 struct RasterState {
@@ -346,52 +411,78 @@ struct RasterState {
 };
 
 enum class CompareOp {
-    CmpOpNever,
-    CmpOpLess,
-    CmpOpEqual,
-    CmpOpLessOrEqual,
-    CmpOpGreater,
-    CmpOpNotEqual,
-    CmpOpGreaterOrEqual,
-    CmpOpAlways
+    Never,
+    Less,
+    Equal,
+    LessOrEqual,
+    Greater,
+    NotEqual,
+    GreaterOrEqual,
+    Always
+};
+
+enum class StencilOp {
+    Keep,
+    Zero,
+    Replace,
+    IncrementAndClamp,
+    DecrementAndClamp,
+    Invert,
+    IncrementAndWrap,
+    DecrementAndWrap
+};
+
+struct StencilOpState {
+    CompareOp compare;
+    uint32_t compareMask;
+    uint32_t writeMask;
+    uint32_t reference;
+
+    // Operations
+    StencilOp failOp;      // stencil fail
+    StencilOp depthFailOp; // depth fail
+    StencilOp passOp;      // pass
 };
 
 struct DepthStencilState {
     bool depthTest;
     bool depthWrite;
     CompareOp depthCompare;
-    bool stencilTest; // optional, but future-proof
+
+    bool stencilTest; // optional
+    StencilOpState stencilFront;
+    StencilOpState stencilBack;
 };
 
 enum class BlendFactor {
-    BlendZero,
-    BlendOne,
+    Zero,
+    One,
 
-    BlendSrcColor,
-    BlendOneMinusSrcColor,
+    SrcColor,
+    OneMinusSrcColor,
 
-    BlendDstColor,
-    BlendOneMinusDstColor,
+    DstColor,
+    OneMinusDstColor,
 
-    BlendSrcAlpha,
-    BlendOneMinusSrcAlpha,
+    SrcAlpha,
+    OneMinusSrcAlpha,
 
-    BlendDstAlpha,
-    BlendOneMinusDstAlpha,
+    DstAlpha,
+    OneMinusDstAlpha,
 
-    BlendConstantColor,
-    BlendOneMinusConstantColor,
+    ConstantColor,
+    OneMinusConstantColor,
 
-    BlendConstantAlpha,
-    BlendOneMinusConstantAlpha
+    ConstantAlpha,
+    OneMinusConstantAlpha
 };
 
 enum class BlendOp {
-    BlendOpAdd,
-    BlendOpSubtract,
-    BlendOpReverseSubtract,
-    BlendOpMin,
-    BlendOpMax
+    Add,
+    Subtract,
+    ReverseSubtract,
+    Min,
+    Max
 };
 
 struct BlendState {
@@ -406,60 +497,23 @@ struct BlendState {
     BlendOp alphaOp;
 };
 
-struct PipelineDesc {
-    ShaderHandle shader;
-
-    const char* vertexEntry;
-    const char* fragmentEntry;
-    const char* computeEntry; // optional
-
-    RasterState raster;
-    DepthStencilState depth;
-    BlendState blend;
-
-    RenderPassHandle renderPass;
-};
-
-struct PipelineTag {};
-
-using PipelineHandle = GfxHandle<PipelineTag>;
-
-enum class BindingType {
-    UniformBuffer,
-    StorageBuffer,
-    SampledTexture,
-    StorageTexture,
-    Sampler
-};
-
-struct Binding {
-    uint32_t slot;
-    BindingType type;
-    ResourceHandle resource;
-};
-
-enum class BarrierType {
-    Buffer,
-    Texture
-};
-
 enum class VertexAttributeClass {
-    VAcInt,
-    VAcFloat,
-    VAcDouble // Requires GL410
+    Int,
+    Float,
+    Double // Requires GL410
 };
 
 enum class VertexAttributeType {
-    VAtInt8,
-    VAtUInt8,
-    VAtInt16,
-    VAtUInt16,
-    VAtInt32,
-    VAtUInt32,
-    VAtInt64, // Requires GL410
-    VAtFloat16,
-    VAtFloat32,
-    VAtFloat64 // Requires GL410
+    Int8,
+    UInt8,
+    Int16,
+    UInt16,
+    Int32,
+    UInt32,
+    Int64, // Requires GL410
+    Float16,
+    Float32,
+    Float64 // Requires GL410
 };
 
 struct VertexTypeDesc {
@@ -482,33 +536,83 @@ struct VertexLayout {
     Span<VertexAttribute> attributes;
 };
 
-struct VertexInputDesc {
+struct RenderPipelineDesc {
+    ShaderHandle shader;
+
+    const char* vertexEntry;
+    const char* fragmentEntry;
+
+    RasterState raster;
+    DepthStencilState depth;
+    BlendState blend;
     VertexLayout layout;
-    Span<BufferHandle> vertexBuffers;
-    BufferHandle indexBuffer; // optional, used if VertexInputDesc#index ~ true
-    bool indexed{false};
+
+    RenderPassHandle renderPass;
 };
 
-struct VertexInputTag {};
+struct RenderPipelineTag {};
 
-using VertexInputHandle = GfxHandle<VertexInputTag>;
+using RenderPipelineHandle = ExternalHandle<RenderPipelineTag>;
+
+struct ComputePipelineDesc {
+    ShaderHandle shader;
+    const char* computeEntry;
+};
+
+struct ComputePipelineTag {};
+
+using ComputePipelineHandle = ExternalHandle<ComputePipelineTag>;
+
+enum class BindingType {
+    UniformBuffer,
+    StorageBuffer,
+    SampledTexture,
+    StorageTexture,
+    Sampler
+};
+
+struct Binding {
+    uint32_t slot;
+    BindingType type;
+    ResourceHandle resource;
+};
 
 enum class GraphicsCapEnum {
-    GCapComputeShaders,
-    GCapShaderStorageBuffers,
-    GCapIndirectDraw,
-    GCapGeometryShaders,
-    GCapTessellation,
-    GCapMultiDrawIndirect,
-    GCapTextureArray,
-    GCapSparseTextures,
-    GCapRayTracing,
+    BindlessTextures,
+    ComputeShaders,
+    ShaderStorageBuffers,
+    IndirectDraw,
+    GeometryShaders,
+    Tessellation,
+    MultiDrawIndirect,
+    TextureArray,
+    SparseTextures,
+    RayTracing,
+    LongPointers,
     __Last__
 };
 
 struct GraphicsCaps {
     std::array<bool, (int)GraphicsCapEnum::__Last__ + 1> caps{};
-    explicit GraphicsCaps() { caps.fill(false); }
+
+    int32_t maxVertexAttribs{0};
+    int32_t maxColorAttachments{0};
+    int32_t maxArrayTextureLayers{0};
+    int32_t maxDrawBuffers{0};
+    int32_t maxUBOBindings{0};
+    int32_t maxUBOSize{0};
+    int32_t maxSSBOBindings{0};
+    int32_t maxSSBOSize{0};
+    int32_t maxTextureUnits{0};
+    int32_t maxCombinedTextureUnits{0};
+    uint32_t maxWorkGroupCount[3]{0, 0, 0};
+
+    explicit GraphicsCaps() {
+        caps.fill(false);
+    }
+    bool Has(GraphicsCapEnum _enum) {
+        return caps[static_cast<int>(_enum)];
+    }
 };
 
 class ICommandList {
@@ -519,16 +623,21 @@ public:
     virtual void Begin() = 0;
     virtual void End() = 0;
 
-    virtual void BeginRenderPass(RenderPassHandle) = 0;
+    virtual void BeginRenderPass(
+        const RenderPassHandle& pass,
+        const FramebufferHandle& framebuffer,
+        const RenderPassClear& clear = {}
+    ) = 0;
     virtual void EndRenderPass() = 0;
 
-    virtual void BindPipeline(PipelineHandle) = 0;
-    virtual void BindVertexBuffer(BufferHandle) = 0;
-    virtual void BindIndexBuffer(BufferHandle) = 0;
+    virtual void BindRenderPipeline(const RenderPipelineHandle& handle) = 0;
+    virtual void BindComputePipeline(const ComputePipelineHandle& handle) = 0;
+    virtual void BindVertexBuffer(const BufferHandle& handle) = 0;
+    virtual void BindIndexBuffer(const BufferHandle& handle) = 0;
 
     virtual void Draw(uint32_t vertexCount, uint32_t firstVertex) = 0;
     virtual void DrawIndexed(uint32_t indexCount, uint32_t firstIndex) = 0;
-    virtual void DrawIndirect(BufferHandle indirect, uint32_t offset) = 0;
+    virtual void DrawIndirect(const BufferHandle& indirectBuff, uint32_t offset) = 0;
 };
 
 inline ResourceHandle GfxResource(BufferHandle h) { return ResourceHandle(h); }
@@ -547,7 +656,7 @@ public:
 
     virtual utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) = 0;
     virtual utils::AXError UpdateTexture(TextureHandle handle, const TextureSubDesc& subDesc, const void* data) = 0;
-    virtual utils::AXError DestroyTexture(TextureHandle& handle);
+    virtual utils::AXError DestroyTexture(TextureHandle& handle) = 0;
 
     virtual utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) = 0;
     virtual utils::AXError DestroyFramebuffer(FramebufferHandle handle) = 0;
@@ -555,17 +664,15 @@ public:
     virtual utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) = 0;
     virtual utils::AXError DestroyProgram(ShaderHandle& handle) = 0;
     
-    virtual utils::ExResult<PipelineHandle> CreatePipeline(const PipelineDesc& desc) = 0;
-    virtual utils::AXError DestroyPipeline(PipelineHandle& handle) = 0;
-
-    virtual utils::ExResult<VertexInputHandle> CreateVertexInput(const VertexInputDesc& desc) = 0;
-    virtual utils::AXError DestroyVertexInput(VertexInputHandle& handle) = 0;
+    virtual utils::ExResult<RenderPipelineHandle> CreateRenderPipeline(const RenderPipelineDesc& desc) = 0;
+    virtual utils::AXError DestroyRenderPipeline(RenderPipelineHandle& handle) = 0;
 
     virtual utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) = 0;
+    virtual utils::AXError DestroyRenderPass(RenderPassHandle& handle) = 0;
 
     virtual utils::AXError Dispatch(ICommandList& cmdlist, uint32_t x, uint32_t y, uint32_t z) = 0;
     virtual utils::AXError BindResources(ICommandList& cmdlist, Span<Binding> bindings) = 0;
-    virtual utils::AXError Barrier(ICommandList& cmdlist, ResourceHandle handle) = 0;
+    virtual utils::AXError Barrier(ICommandList& cmdlist, Span<ResourceTransition> transitions) = 0;
 };
 
 class Graphics {
@@ -584,26 +691,24 @@ public:
 
     // Resource creation (thread-safe, async)
     BufferHandle CreateBuffer(const BufferDesc& desc);
-    void UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data);
-    void DestroyBuffer(BufferHandle handle);
+    void UpdateBuffer(BufferHandle& handle, size_t offset, size_t size, const void* data);
+    void DestroyBuffer(BufferHandle& handle);
 
     TextureHandle CreateTexture(const TextureDesc& desc);
-    void UpdateTexture(TextureHandle handle, uint32_t mip, const void* data);
-    void DestroyTexture(TextureHandle handle);
+    void UpdateTexture(TextureHandle& handle, uint32_t mip, const void* data);
+    void DestroyTexture(TextureHandle& handle);
 
     FramebufferHandle CreateFramebuffer(const FramebufferDesc&);
-    void DestroyFramebuffer(FramebufferHandle);
+    void DestroyFramebuffer(FramebufferHandle& handle);
 
     ShaderHandle CreateProgram(const ShaderDesc& desc);
-    void DestroyProgram(ShaderHandle handle);
+    void DestroyProgram(ShaderHandle& handle);
 
-    PipelineHandle CreatePipeline(const PipelineDesc& desc);
-    void DestroyPipeline(PipelineHandle handle);
-
-    VertexInputHandle CreateVertexInput(const VertexInputDesc& desc);
-    void DestroyVertexInput(VertexInputHandle& handle);
+    RenderPipelineHandle CreatePipeline(const RenderPipelineDesc& desc);
+    void DestroyPipeline(RenderPipelineHandle& handle);
 
     RenderPassHandle CreateRenderPass(const RenderPassDesc& desc);
+    void DestroyRenderPass(RenderPassHandle& handle);
 
     // Command recording (thread-safe, CPU-side)
     ICommandList BeginCommandList();
