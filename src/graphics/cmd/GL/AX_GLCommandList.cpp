@@ -20,7 +20,7 @@ void GLCommandList::BeginRenderPass(
     const FramebufferHandle& framebuffer,
     const RenderPassClear& clear
 ) {
-    m_Commands.push_back({ GLCommandType::BeginRenderPass, {
+    m_Commands.push_back({GLCommandType::BeginRenderPass, {
         pass.index,
         pass.generation,
         framebuffer.index,
@@ -30,35 +30,114 @@ void GLCommandList::BeginRenderPass(
         (size_t)clear.clearColor[2],
         (size_t)clear.clearDepth,
         (size_t)clear.clearStencil
-    } });
+    }});
 }
 
 void GLCommandList::EndRenderPass() {
-    m_Commands.push_back({ GLCommandType::EndRenderPass, {} });
+    m_Commands.push_back({GLCommandType::EndRenderPass, {} });
 }
 
 void GLCommandList::BindRenderPipeline(const RenderPipelineHandle& pipeline) {
-    m_Commands.push_back({ GLCommandType::BindPipeline, { pipeline.index, pipeline.generation } });
+    m_Commands.push_back({GLCommandType::BindRenderPipeline, {
+        pipeline.index,
+        pipeline.generation
+    }});
 }
 
-void GLCommandList::BindVertexBuffer(const BufferHandle& buffer) {
-    m_Commands.push_back({ GLCommandType::BindBuffer, { buffer.index, buffer.generation } });
+void GLCommandList::BindComputePipeline(const ComputePipelineHandle& pipeline) {
+    m_Commands.push_back({GLCommandType::BindComputePipeline, {
+        pipeline.index,
+        pipeline.generation
+    }});
 }
 
-void GLCommandList::BindIndexBuffer(const BufferHandle& buffer) {
-    m_Commands.push_back({ GLCommandType::BindBuffer, { buffer.index, buffer.generation } });
+void GLCommandList::BindBuffer(const BufferHandle& buffer) {
+    m_Commands.push_back({GLCommandType::BindBuffer, {
+        buffer.index,
+        buffer.generation
+    }});
 }
 
-void GLCommandList::Draw(uint32_t vertexCount, uint32_t firstVertex) {
-    m_Commands.push_back({ GLCommandType::Draw, { vertexCount, firstVertex } });
+void GLCommandList::Draw(
+    uint32_t vertexCount,
+    uint32_t firstVertex
+) {
+    m_Commands.push_back({GLCommandType::Draw, {
+        vertexCount,
+        firstVertex
+    }});
 }
 
-void GLCommandList::DrawIndexed(uint32_t indexCount, uint32_t firstIndex) {
-    m_Commands.push_back({ GLCommandType::DrawIndexed, { indexCount, firstIndex } });
+void GLCommandList::DrawInstanced(
+    uint32_t vertexCount,
+    uint32_t firstVertex,
+    uint32_t instanceCount,
+    uint32_t firstInstance
+) {
+    m_Commands.push_back({GLCommandType::DrawInstanced, {
+        vertexCount,
+        firstVertex,
+        instanceCount,
+        firstInstance
+    }});
 }
 
-void GLCommandList::DrawIndirect(const BufferHandle& indirectBuff, uint32_t offset) {
-    m_Commands.push_back({ GLCommandType::DrawIndirect, { indirectBuff.index, indirectBuff.generation, offset } });
+void GLCommandList::DrawIndexed(
+    uint32_t indexCount,
+    uint32_t firstIndex,
+    int32_t baseVertex
+) {
+    m_Commands.push_back({GLCommandType::DrawIndexed, {
+        indexCount,
+        firstIndex,
+        (size_t)baseVertex
+    }});
+}
+
+void GLCommandList::DrawIndexedInstanced(
+    uint32_t indexCount,
+    uint32_t firstIndex,
+    uint32_t instanceCount,
+    int32_t baseVertex,
+    uint32_t firstInstance
+) {
+    m_Commands.push_back({GLCommandType::DrawIndexedInstanced, {
+        indexCount,
+        firstIndex,
+        instanceCount,
+        (size_t)baseVertex,
+        firstInstance
+    }});
+}
+
+void GLCommandList::DrawIndirect(
+    const BufferHandle& indirectBuff,
+    uint32_t offset,
+    uint32_t count,
+    uint32_t stride
+) {
+    m_Commands.push_back({GLCommandType::DrawIndirect, {
+        indirectBuff.index,
+        indirectBuff.generation,
+        offset,
+        count,
+        stride
+    }});
+}
+
+void GLCommandList::DrawIndirectIndexed(
+    const BufferHandle& indirectBuff,
+    uint32_t offset,
+    uint32_t count,
+    uint32_t stride
+) {
+    m_Commands.push_back({GLCommandType::DrawIndirectIndexed, {
+        indirectBuff.index,
+        indirectBuff.generation,
+        offset,
+        count,
+        stride
+    }});
 }
 
 }

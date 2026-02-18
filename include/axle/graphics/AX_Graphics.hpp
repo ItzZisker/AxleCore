@@ -55,6 +55,7 @@ struct BufferDesc {
     BufferUsage usage;
     BufferAccess access;
     bool cpuVisible;
+    uint32_t bindSlot{0};
 };
 
 struct BufferTag {
@@ -251,7 +252,7 @@ enum class ShaderStage {
     Domain
 };
 
-enum class ShaderPipelineType {
+enum class PipelineType {
     Graphics, // Classic vertex -> Tessellation/Geometry -> fragment pipline
     Compute   // Compute ONLY
 };
@@ -268,10 +269,10 @@ inline SlangStage ToSlangStage(ShaderStage stg) {
     }
 }
 
-inline ShaderPipelineType ToShaderPipelineType(ShaderStage stg) {
+inline PipelineType ToPipelineType(ShaderStage stg) {
     switch (stg) {
-        case ShaderStage::Compute: return ShaderPipelineType::Compute;
-        default: return ShaderPipelineType::Graphics;
+        case ShaderStage::Compute: return PipelineType::Compute;
+        default: return PipelineType::Graphics;
     }
 }
 
@@ -628,16 +629,52 @@ public:
         const FramebufferHandle& framebuffer,
         const RenderPassClear& clear = {}
     ) = 0;
+
     virtual void EndRenderPass() = 0;
 
     virtual void BindRenderPipeline(const RenderPipelineHandle& handle) = 0;
     virtual void BindComputePipeline(const ComputePipelineHandle& handle) = 0;
-    virtual void BindVertexBuffer(const BufferHandle& handle) = 0;
-    virtual void BindIndexBuffer(const BufferHandle& handle) = 0;
+    virtual void BindBuffer(const BufferHandle& handle) = 0;
 
-    virtual void Draw(uint32_t vertexCount, uint32_t firstVertex) = 0;
-    virtual void DrawIndexed(uint32_t indexCount, uint32_t firstIndex) = 0;
-    virtual void DrawIndirect(const BufferHandle& indirectBuff, uint32_t offset) = 0;
+    virtual void Draw(
+        uint32_t vertexCount,
+        uint32_t firstVertex
+    ) = 0;
+
+    virtual void DrawInstanced(
+        uint32_t vertexCount,
+        uint32_t firstVertex,
+        uint32_t instanceCount,
+        uint32_t firstInstance = 0
+    ) = 0;
+
+    virtual void DrawIndexed(
+        uint32_t indexCount,
+        uint32_t firstIndex,
+        int32_t baseVertex = 0
+    ) = 0;
+
+    virtual void DrawIndexedInstanced(
+        uint32_t indexCount,
+        uint32_t firstIndex,
+        uint32_t instanceCount,
+        int32_t baseVertex = 0,
+        uint32_t firstInstance = 0
+    ) = 0;
+
+    virtual void DrawIndirect(
+        const BufferHandle& indirectBuff,
+        uint32_t offset,
+        uint32_t count,
+        uint32_t stride
+    ) = 0;
+
+    virtual void DrawIndirectIndexed(
+        const BufferHandle& indirectBuff,
+        uint32_t offset,
+        uint32_t count,
+        uint32_t stride
+    ) = 0;
 };
 
 inline ResourceHandle GfxResource(BufferHandle h) { return ResourceHandle(h); }
@@ -651,21 +688,24 @@ public:
     virtual utils::ExResult<GraphicsCaps> QueryCaps() = 0;
 
     virtual utils::ExResult<BufferHandle> CreateBuffer(const BufferDesc& desc) = 0;
-    virtual utils::AXError UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) = 0;
+    virtual utils::AXError UpdateBuffer(BufferHandle& handle, size_t offset, size_t size, const void* data) = 0;
     virtual utils::AXError DestroyBuffer(BufferHandle& handle) = 0;
 
     virtual utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) = 0;
-    virtual utils::AXError UpdateTexture(TextureHandle handle, const TextureSubDesc& subDesc, const void* data) = 0;
+    virtual utils::AXError UpdateTexture(TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) = 0;
     virtual utils::AXError DestroyTexture(TextureHandle& handle) = 0;
 
     virtual utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) = 0;
-    virtual utils::AXError DestroyFramebuffer(FramebufferHandle handle) = 0;
+    virtual utils::AXError DestroyFramebuffer(FramebufferHandle& handle) = 0;
 
     virtual utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) = 0;
     virtual utils::AXError DestroyProgram(ShaderHandle& handle) = 0;
     
     virtual utils::ExResult<RenderPipelineHandle> CreateRenderPipeline(const RenderPipelineDesc& desc) = 0;
     virtual utils::AXError DestroyRenderPipeline(RenderPipelineHandle& handle) = 0;
+    
+    virtual utils::ExResult<ComputePipelineHandle> CreateComputePipeline(const ComputePipelineDesc& desc) = 0;
+    virtual utils::AXError DestroyComputePipeline(ComputePipelineHandle& handle) = 0;
 
     virtual utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) = 0;
     virtual utils::AXError DestroyRenderPass(RenderPassHandle& handle) = 0;

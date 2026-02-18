@@ -13,7 +13,6 @@
 #include <glad/glad.h>
 
 #include <type_traits>
-#include <utility>
 #include <vector>
 
 #ifdef AX_DEBUG
@@ -104,15 +103,16 @@ GLenum ToGLBlendOp(BlendOp bOp);
 GLenum ToGLStencilOp(StencilOp sOp);
 GLenum ToGLBarrierBit(ResourceState state);
 
-template <typename T>
+template <typename H>
 struct GLCommandBinding {
-    T handle;
+    H handle{};
     bool bound{false};
 
-    void Bind(const T& h) {
+    void Bind(const H& h) {
         handle = h;
         bound = true;
     }
+
     void UnBind() {
         handle = {};
         bound = false;
@@ -120,6 +120,7 @@ struct GLCommandBinding {
 };
 
 struct GLInternal {
+    uint32_t index{0};
     uint32_t generation{1};
     bool alive{false};
 };
@@ -128,6 +129,7 @@ struct GLBuffer : public GLInternal {
     GLuint id{0};
     BufferUsage usage;
     size_t size{0};
+    uint32_t slot{0};
 };
 
 struct GLProgram : public GLInternal {
@@ -135,7 +137,7 @@ struct GLProgram : public GLInternal {
 };
 
 struct GLRenderPipeline : public GLInternal {
-    GLProgram program;
+    GLProgram program{};
     GLuint vao{0};
     GLuint vbo{0};
     GLuint ebo{0};
@@ -155,17 +157,45 @@ struct GLTexture : public GLInternal {
 
 struct GLRenderPass : public GLInternal {
     RenderPassDesc desc;
-    GLCommandBinding<GLRenderPipeline> boundPipeline{};
+    GLCommandBinding<RenderPipelineHandle> boundPipeline{};
 };
 
 struct GLFramebuffer : public GLInternal {
     GLuint fbo{0};
+    
     bool hasDepth{false};
     bool hasStencil{false};
     GLuint depthStencilTexture{0};
+    
     uint32_t width{0};
     uint32_t height{0};
-    GLRenderPass renderPass;  
+
+    GLRenderPass renderPass;
+};
+
+struct GLStateCache {
+    GLuint program{0};
+
+    bool cullEnabled{false};
+    GLenum cullFace{GL_BACK};
+    GLenum frontFace{GL_CCW};
+    GLenum polygonMode{GL_FILL};
+
+    bool depthTest{false};
+    bool depthWrite{true};
+    GLenum depthFunc{GL_LESS};
+
+    bool stencilTest{false};
+
+    bool blendEnabled{false};
+    GLenum srcColor{GL_ONE};
+    GLenum dstColor{GL_ZERO};
+    GLenum srcAlpha{GL_ONE};
+    GLenum dstAlpha{GL_ZERO};
+    GLenum blendColorOp{GL_FUNC_ADD};
+    GLenum blendAlphaOp{GL_FUNC_ADD};
+
+    GLuint vao{0};
 };
 
 class GLGraphicsBackend final : public IGraphicsBackend {
@@ -179,21 +209,24 @@ public:
     utils::ExResult<GraphicsCaps> QueryCaps() override;
 
     utils::ExResult<BufferHandle> CreateBuffer(const BufferDesc& desc) override;
-    utils::AXError UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) override;
+    utils::AXError UpdateBuffer(BufferHandle& handle, size_t offset, size_t size, const void* data) override;
     utils::AXError DestroyBuffer(BufferHandle& handle) override;
 
     utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) override;
-    utils::AXError UpdateTexture(TextureHandle handle, const TextureSubDesc& subDesc, const void* data) override;
+    utils::AXError UpdateTexture(TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) override;
     utils::AXError DestroyTexture(TextureHandle& handle) override;
 
     utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) override;
-    utils::AXError DestroyFramebuffer(FramebufferHandle handle) override;
+    utils::AXError DestroyFramebuffer(FramebufferHandle& handle) override;
 
     utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) override;
     utils::AXError DestroyProgram(ShaderHandle& handle) override;
 
     utils::ExResult<RenderPipelineHandle> CreateRenderPipeline(const RenderPipelineDesc& desc) override;
     utils::AXError DestroyRenderPipeline(RenderPipelineHandle& handle) override;
+
+    utils::ExResult<ComputePipelineHandle> CreateComputePipeline(const ComputePipelineDesc& desc) override;
+    utils::AXError DestroyComputePipeline(ComputePipelineHandle& handle) override;
 
     utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) override;
     utils::AXError DestroyRenderPass(RenderPassHandle& handle) override;
@@ -207,7 +240,7 @@ public:
 
     template <typename T>
     requires std::is_base_of_v<GLInternal, T>
-    inline std::pair<uint32_t, T&> ReserveHandle(
+    inline T& ReserveHandle(
         std::vector<T>& handles,
         std::vector<uint32_t>& frees
     ) {
@@ -217,9 +250,9 @@ public:
             frees.pop_back();
         } else {
             index = static_cast<uint32_t>(handles.size());
-            handles.emplace_back();
+            handles.emplace_back({.index = index});
         }
-        return {index, handles[index]};
+        return handles[index];
     }
 
     template <typename TI>
@@ -264,9 +297,12 @@ private:
     std::vector<uint32_t> m_FreeComputePipelines{};
     std::vector<uint32_t> m_FreeFramebuffers{};
     std::vector<uint32_t> m_FreeRenderPasses{};
+    
+    GLCommandBinding<RenderPassHandle>       m_CurrentRenderPass{};
+    GLCommandBinding<RenderPipelineHandle>   m_CurrentRenderPipeline{};
+    GLCommandBinding<ComputePipelineHandle>  m_CurrentComputePipeline{};
 
-    GLCommandBinding<GLRenderPass>      m_CurrentRenderPass{};
-    GLCommandBinding<GLComputePipeline> m_CurrentComputePipeline{};
+    GLStateCache m_CurrentState{};
 
     Slang::ComPtr<slang::IGlobalSession> m_SlangGlobal{nullptr};
 };
