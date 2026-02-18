@@ -102,6 +102,7 @@ GLenum ToGLBlendFactor(BlendFactor bFactor);
 GLenum ToGLBlendOp(BlendOp bOp);
 GLenum ToGLStencilOp(StencilOp sOp);
 GLenum ToGLBarrierBit(ResourceState state);
+GLenum ToGLPolyMode(PolyMode polyMode);
 
 template <typename H>
 struct GLCommandBinding {

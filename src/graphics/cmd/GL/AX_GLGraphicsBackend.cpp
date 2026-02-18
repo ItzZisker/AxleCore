@@ -19,8 +19,7 @@
 using namespace axle::utils;
 
 /* TODO:
-    - Create/Bind UBOs & SSBOs and abstract them in a way that mimics Vulkan behvaior
-    - Move BindResources() to GLCommand action enum(s)
+    - BindResourceSet(setHandle), Where "set", contains: textures, UBOs, SSBOs, samplers
     - Learn More about Packed Textures
     - Add Multisample Resolve in BindPipeline? or maybe POST-draw? idk
     - Compute Pipeline (Including the ShaderProgram load part, which should have multiple compute entries)
@@ -793,6 +792,20 @@ AXError GLGraphicsBackend::DestroyRenderPipeline(RenderPipelineHandle& handle) {
     return AXError::NoError();
 }
 
+ExResult<ComputePipelineHandle> GLGraphicsBackend::CreateComputePipeline(const ComputePipelineDesc& desc) {
+    auto& pipeline = ReserveHandle(m_ComputePipelines, m_FreeComputePipelines);
+    pipeline.desc = desc;
+    pipeline.alive = true;
+    return ComputePipelineHandle{pipeline.index, pipeline.generation};
+}
+
+AXError GLGraphicsBackend::DestroyComputePipeline(ComputePipelineHandle& handle) {
+    if (!IsValidHandle(m_ComputePipelines, handle))
+        return {"Invalid Handle"};
+    PostDeleteHandle(m_ComputePipelines[handle.index], handle, m_FreeComputePipelines);
+    return AXError::NoError();
+}
+
 ExResult<RenderPassHandle> GLGraphicsBackend::CreateRenderPass(const RenderPassDesc& desc) {
     auto& pass = ReserveHandle(m_RenderPasses, m_FreeRenderPasses);
     pass.desc = desc;
@@ -823,7 +836,7 @@ AXError GLGraphicsBackend::Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, u
 
 AXError GLGraphicsBackend::BindResources(ICommandList& cmd, Span<Binding> bindings) {
     auto& glcmd = static_cast<GLCommandList&>(cmd);
-
+    // TODO: This
 }
 
 AXError GLGraphicsBackend::Barrier(ICommandList&, Span<ResourceTransition> transitions) {
@@ -1146,28 +1159,50 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                 }
                 break;
             }
-            // c.args[0] ~ TRIANGLES, LINES, DOTS
-            // c.args[1] ~ count
             case GLCommandType::Draw: {
-                GL_CALL(glDrawArrays(c.args[0], c.args[2], c.args[1]));
-                //glDrawArraysInstanced();
-                //glDrawElementsInstanced();
-                //glMultiDrawArrays();
-                //glMultiDrawElements();
-                //glMultiDrawArraysIndirect();
-                //glMultiDrawElementsIndirect();
+                auto& pipeline = m_RenderPipelines[m_CurrentRenderPipeline.handle.index];
+                GL_CALL(glDrawArrays(ToGLPolyMode(pipeline.desc.raster.polyMode), c.args[1], c.args[0]));
                 break;
             }
             case GLCommandType::DrawIndexed: {
-                GL_CALL(glDrawElements(c.args[0], c.args[1], GL_UNSIGNED_INT, nullptr));
+                auto& pipeline = m_RenderPipelines[m_CurrentRenderPipeline.handle.index];
+                GL_CALL(glDrawElements(ToGLPolyMode(pipeline.desc.raster.polyMode), c.args[0], GL_UNSIGNED_INT, (void*)c.args[1]));
+                break;
+            }
+            case GLCommandType::DrawInstanced: {
+                auto& pipeline = m_RenderPipelines[m_CurrentRenderPipeline.handle.index];
+                GL_CALL(glDrawArraysInstanced(ToGLPolyMode(pipeline.desc.raster.polyMode), c.args[2], c.args[0], c.args[1]));
+                break;
+            }
+            case GLCommandType::DrawIndexedInstanced: {
+                auto& pipeline = m_RenderPipelines[m_CurrentRenderPipeline.handle.index];
+                GL_CALL(glDrawElementsInstanced(ToGLPolyMode(pipeline.desc.raster.polyMode), c.args[0], GL_UNSIGNED_INT, (void*)c.args[2], c.args[1]));
                 break;
             }
             case GLCommandType::DrawIndirect: {
-                GL_CALL(glDrawArraysIndirect(c.args[0], nullptr));
+                if (!m_Capabilities.Has(GraphicsCapEnum::IndirectDraw))
+                    return {"GLCommand::Execute \"GLCommandType::DrawIndirect\" Failed: Indirect Rendering is Unsupported on this device"};
+                auto& pipeline = m_RenderPipelines[m_CurrentRenderPipeline.handle.index];
+                if (c.args[1] > 1) {
+                    if (!m_Capabilities.Has(GraphicsCapEnum::MultiDrawIndirect))
+                        return {"GLCommand::Execute \"GLCommandType::DrawIndirect\" Failed: Multi-Indirect Rendering is Unsupported on this device"};
+                    GL_CALL(glMultiDrawArraysIndirect(ToGLPolyMode(pipeline.desc.raster.polyMode), (void*)c.args[0], c.args[1], c.args[2]));
+                } else {
+                    GL_CALL(glDrawArraysIndirect(ToGLPolyMode(pipeline.desc.raster.polyMode), (void*)c.args[0]));
+                }
                 break;
             }
             case GLCommandType::DrawIndirectIndexed: {
-                GL_CALL(glDrawElementsIndirect(c.args[0], GL_UNSIGNED_INT, nullptr));
+                if (!m_Capabilities.Has(GraphicsCapEnum::IndirectDraw))
+                    return {"GLCommand::Execute \"GLCommandType::DrawIndirectIndexed\" Failed: Indirect Rendering is Unsupported on this device"};
+                auto& pipeline = m_RenderPipelines[m_CurrentRenderPipeline.handle.index];
+                if (c.args[1] > 1) {
+                    if (!m_Capabilities.Has(GraphicsCapEnum::MultiDrawIndirect))
+                        return {"GLCommand::Execute \"GLCommandType::DrawIndirectIndexed\" Failed: Multi-Indirect Rendering is Unsupported on this device"};
+                    GL_CALL(glMultiDrawElementsIndirect(ToGLPolyMode(pipeline.desc.raster.polyMode), GL_UNSIGNED_INT, (void*)c.args[0], c.args[1], c.args[2]));
+                } else {
+                    GL_CALL(glDrawElementsIndirect(ToGLPolyMode(pipeline.desc.raster.polyMode), GL_UNSIGNED_INT, (void*)c.args[0]));
+                }
                 break;
             }
         }
@@ -1568,6 +1603,15 @@ GLenum ToGLBarrierBit(ResourceState state) {
         case ResourceState::DepthWrite:
             return GL_FRAMEBUFFER_BARRIER_BIT;
         default: return 0;
+    }
+}
+
+GLenum ToGLPolyMode(PolyMode polyMode) {
+    switch (polyMode) {
+        case PolyMode::Dots:        return GL_POINTS;
+        case PolyMode::Lines:       return GL_LINES;
+        case PolyMode::Triangles:   return GL_TRIANGLES;
+        default: return GL_NONE;
     }
 }
 

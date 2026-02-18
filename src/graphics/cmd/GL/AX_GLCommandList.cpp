@@ -70,55 +70,44 @@ void GLCommandList::Draw(
 
 void GLCommandList::DrawInstanced(
     uint32_t vertexCount,
-    uint32_t firstVertex,
     uint32_t instanceCount,
-    uint32_t firstInstance
+    uint32_t firstVertex
 ) {
     m_Commands.push_back({GLCommandType::DrawInstanced, {
         vertexCount,
-        firstVertex,
         instanceCount,
-        firstInstance
+        firstVertex
     }});
 }
 
 void GLCommandList::DrawIndexed(
     uint32_t indexCount,
-    uint32_t firstIndex,
-    int32_t baseVertex
+    uint32_t firstIndex
 ) {
     m_Commands.push_back({GLCommandType::DrawIndexed, {
         indexCount,
-        firstIndex,
-        (size_t)baseVertex
+        firstIndex
     }});
 }
 
 void GLCommandList::DrawIndexedInstanced(
     uint32_t indexCount,
-    uint32_t firstIndex,
     uint32_t instanceCount,
-    int32_t baseVertex,
-    uint32_t firstInstance
+    uint32_t firstIndex
 ) {
     m_Commands.push_back({GLCommandType::DrawIndexedInstanced, {
         indexCount,
-        firstIndex,
         instanceCount,
-        (size_t)baseVertex,
-        firstInstance
+        firstIndex
     }});
 }
 
 void GLCommandList::DrawIndirect(
-    const BufferHandle& indirectBuff,
     uint32_t offset,
     uint32_t count,
     uint32_t stride
 ) {
     m_Commands.push_back({GLCommandType::DrawIndirect, {
-        indirectBuff.index,
-        indirectBuff.generation,
         offset,
         count,
         stride
@@ -126,14 +115,11 @@ void GLCommandList::DrawIndirect(
 }
 
 void GLCommandList::DrawIndirectIndexed(
-    const BufferHandle& indirectBuff,
     uint32_t offset,
     uint32_t count,
     uint32_t stride
 ) {
     m_Commands.push_back({GLCommandType::DrawIndirectIndexed, {
-        indirectBuff.index,
-        indirectBuff.generation,
         offset,
         count,
         stride
