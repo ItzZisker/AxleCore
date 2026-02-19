@@ -64,6 +64,13 @@ struct BufferTag {
 
 using BufferHandle = ExternalHandle<BufferTag>;
 
+enum class SampleCount {
+    Sample1 = 1,
+    Sample2 = 2,
+    Sample4 = 4,
+    Sample8 = 8
+};
+
 enum class TextureType {
     Texture2D,
     Texture3D,
@@ -227,7 +234,7 @@ struct TextureDesc {
     uint32_t height{1};
     uint32_t depth{1}; // for 3D textures
     uint32_t layers{1}; // for 2D arrays, cube arrays
-    uint32_t samples{1}; // samples
+    SampleCount samples{SampleCount::Sample1}; // samples
 
     TextureFormat format;
     TextureUsage usage;
@@ -353,10 +360,17 @@ struct AttachmentDesc {
     AttachmentFormat format;
     LoadOp load;
     StoreOp store;
+    SampleCount samples{SampleCount::Sample1};
+};
+
+struct ColorAttachmentDesc {
+    AttachmentDesc attachment;
+    AttachmentFormat resolveFormat;
+    bool hasResolve{false};
 };
 
 struct RenderPassDesc {
-    Span<AttachmentDesc> colorAttachments;
+    Span<ColorAttachmentDesc> colorAttachments;
     AttachmentDesc depthStencilAttachment;
     bool hasDepth{false};
     bool hasStencil{false};
@@ -374,7 +388,7 @@ struct RenderPassTag {};
 using RenderPassHandle = ExternalHandle<RenderPassTag>;
 
 struct FramebufferDesc {
-    RenderPassHandle renderPass;
+    RenderPassHandle renderPass; // guides behavior (load/store, resolve, sampleCount)
     Span<TextureHandle> colorAttachments;
 
     bool hasDepth{false};

@@ -17,18 +17,36 @@
 
 #ifdef AX_DEBUG
 #include <iostream>
-    #define GL_CALL(x) \
-        do { \
-            while (glGetError() != GL_NO_ERROR); \
-            x; \
-            GLenum err = glGetError(); \
-            if (err != GL_NO_ERROR) { \
-                std::cerr << "GL Error: " << err << std::endl;
-                /*ReportGLError(err, #x, __FILE__, __LINE__);*/ \
-            } \
-        } while (0)
+
+const char* GLErrorToString(GLenum err) {
+    switch (err) {
+        case GL_INVALID_ENUM: return "GL_INVALID_ENUM";
+        case GL_INVALID_VALUE: return "GL_INVALID_VALUE";
+        case GL_INVALID_OPERATION: return "GL_INVALID_OPERATION";
+        case GL_OUT_OF_MEMORY: return "GL_OUT_OF_MEMORY";
+        case GL_INVALID_FRAMEBUFFER_OPERATION: return "GL_INVALID_FRAMEBUFFER_OPERATION";
+        default: return "UNKNOWN_ERROR";
+    }
+}
+
+#define GL_CALL(x)                                    \
+    do {                                              \
+        while (glGetError() != GL_NO_ERROR);          \
+        x;                                            \
+        GLenum err;                                   \
+        while ((err = glGetError()) != GL_NO_ERROR) { \
+            std::cerr << "GL Error: "                 \
+                    << err                            \
+                    << ": "                           \
+                    << GLErrorToString(err)           \
+                    << " in " << #x                   \
+                    << " at " << __FILE__             \
+                    << ":" << __LINE__                \
+                    << std::endl;                     \
+        }                                             \
+    } while (0)
 #else
-    #define GL_CALL(x) x
+#define GL_CALL(x) x
 #endif
 
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
@@ -126,6 +144,10 @@ struct GLInternal {
     bool alive{false};
 };
 
+struct GLProgram : public GLInternal {
+    GLuint id{0};
+};
+
 struct GLBuffer : public GLInternal {
     GLuint id{0};
     BufferUsage usage;
@@ -133,12 +155,8 @@ struct GLBuffer : public GLInternal {
     uint32_t slot{0};
 };
 
-struct GLProgram : public GLInternal {
-    GLuint id{0};
-};
-
 struct GLRenderPipeline : public GLInternal {
-    GLProgram program{};
+    ShaderHandle program{};
     GLuint vao{0};
     GLuint vbo{0};
     GLuint ebo{0};
@@ -147,18 +165,19 @@ struct GLRenderPipeline : public GLInternal {
 };
 
 struct GLComputePipeline : public GLInternal {
-    GLProgram program;
+    ShaderHandle program;
     ComputePipelineDesc desc;
 };
 
 struct GLTexture : public GLInternal {
     GLuint id{0};
+    GLuint resolveId{0};
     TextureDesc desc;
 };
 
 struct GLRenderPass : public GLInternal {
     RenderPassDesc desc;
-    GLCommandBinding<RenderPipelineHandle> boundPipeline{};
+    GLCommandBinding<FramebufferHandle> fbInUse{};
 };
 
 struct GLFramebuffer : public GLInternal {
@@ -167,11 +186,15 @@ struct GLFramebuffer : public GLInternal {
     bool hasDepth{false};
     bool hasStencil{false};
     GLuint depthStencilTexture{0};
-    
+
     uint32_t width{0};
     uint32_t height{0};
 
-    GLRenderPass renderPass;
+    bool hasResolve{false};
+    SampleCount samples{SampleCount::Sample1};
+    GLuint resolveFbo{0};
+
+    RenderPassHandle renderPass;
 };
 
 struct GLStateCache {

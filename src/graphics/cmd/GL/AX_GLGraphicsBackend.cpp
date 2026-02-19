@@ -11,6 +11,7 @@
 
 #include <glad/glad.h>
 
+#include <cstddef>
 #include <unordered_set>
 #include <string>
 #include <cstring>
@@ -20,9 +21,8 @@ using namespace axle::utils;
 
 /* TODO:
     - BindResourceSet(setHandle), Where "set", contains: textures, UBOs, SSBOs, samplers
-    - Learn More about Packed Textures
     - Add Multisample Resolve in BindPipeline? or maybe POST-draw? idk
-    - Compute Pipeline (Including the ShaderProgram load part, which should have multiple compute entries)
+    - Add anisotropic filtering
 */
 
 namespace axle::gfx {
@@ -133,10 +133,8 @@ ExResult<BufferHandle> GLGraphicsBackend::CreateBuffer(const BufferDesc& desc) {
 
     GLuint id = 0;
     GL_CALL(glGenBuffers(1, &id));
-
-    // In GL 3.3, target at allocation time does NOT define buffer type.
-    // We use GL_ARRAY_BUFFER as neutral allocation target.
     GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, id));
+
 
     GLenum usageHint =
         desc.access == BufferAccess::Immutable ? GL_STATIC_DRAW :
@@ -187,8 +185,6 @@ AXError GLGraphicsBackend::DestroyBuffer(BufferHandle& handle) {
 ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc) {
     if (desc.width == 0 || desc.height == 0)
         return AXError{"Invalid dimensions"};
-    if (desc.samples == 0)
-        return AXError{"Samples must be >= 1"};
 
     auto& tex = ReserveHandle(m_Textures, m_FreeTextures);
     
@@ -455,15 +451,22 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
 
         if (!IsValidHandle(m_Textures, texHandle)) {
             return AXError{
-                "Invalid Texture Handle at desc.colorAttachments[" +
-                std::to_string(i) + "]"
+                "Invalid Texture Handle at index " +
+                std::to_string(i)
             };
         }
 
         auto& tex = m_Textures[texHandle.index];
-        const AttachmentDesc& rpAtt = rpDesc.colorAttachments.data[i];
+        const ColorAttachmentDesc& rpAtt = rpDesc.colorAttachments.data[i];
 
-        if (tex.desc.format != rpAtt.format) {
+        if (tex.desc.samples != rpAtt.attachment.samples) {
+            return AXError{
+                "Color attachment sample count mismatch at index " +
+                std::to_string(i)
+            };
+        }
+
+        if (tex.desc.format != rpAtt.attachment.format) {
             return AXError{
                 "Color attachment format mismatch at index " +
                 std::to_string(i)
@@ -558,12 +561,60 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
 
     GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
+    bool needsResolve = false; // TODO: Create Resolve textures internally
+    for (size_t i{0}; i < desc.colorAttachments.size; i++) {
+        auto& tex = m_Textures[desc.colorAttachments.data[i].index];
+        if (tex.desc.samples > SampleCount::Sample1 && rp.desc.colorAttachments.data[i].hasResolve) {
+            needsResolve = true;
+            break;
+        }
+    }
+
+    // If MSAA, create resolve FBO
+    if (needsResolve) {
+        fb.hasResolve = true;
+        GL_CALL(glGenFramebuffers(1, &fb.resolveFbo));
+        GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, fb.resolveFbo));
+
+        for (uint32_t i = 0; i < desc.colorAttachments.size; ++i) {
+            auto& tex = m_Textures[desc.colorAttachments.data[i].index];
+            if (tex.desc.samples > SampleCount::Sample1) {
+                auto& resolveTex = tex.resolveId;
+                GL_CALL(glFramebufferTexture2D(
+                    GL_FRAMEBUFFER,
+                    GL_COLOR_ATTACHMENT0 + i,
+                    GL_TEXTURE_2D,
+                    resolveTex,
+                    0
+                ));
+            }
+        }
+
+        // Depth/Stencil resolve
+        if (hasDepth || hasStencil) {
+            auto& depthTex = m_Textures[desc.depthStencilTexture.index];
+            GL_CALL(glFramebufferTexture2D(
+                GL_FRAMEBUFFER,
+                hasDepth && hasStencil ? GL_DEPTH_STENCIL_ATTACHMENT
+                                    : (hasDepth ? GL_DEPTH_ATTACHMENT : GL_STENCIL_ATTACHMENT),
+                GL_TEXTURE_2D,
+                depthTex.id,
+                0
+            ));
+        }
+
+        GLenum status = GL_CALL(glCheckFramebufferStatus(GL_FRAMEBUFFER));
+        if (status != GL_FRAMEBUFFER_COMPLETE) {
+            return AXError{"Resolve FBO incomplete"};
+        }
+    }
+
     fb.alive  = true;
     fb.hasDepth = hasDepth;
     fb.hasStencil = hasStencil;
     fb.width  = desc.width;
     fb.height = desc.height;
-    fb.renderPass = rp;
+    fb.renderPass = desc.renderPass;
 
     return FramebufferHandle{fb.index, fb.generation};
 }
@@ -582,12 +633,17 @@ AXError GLGraphicsBackend::DestroyFramebuffer(FramebufferHandle& handle) {
 }
 
 ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) {
-    if (desc.entryPoints.size > 1) {
-        for (size_t i{0}; i < desc.entryPoints.size; i++) {
-            if (desc.entryPoints.data[i].stage == ShaderStage::Compute) {
-                return AXError{"A compute pipeline must have only one single compute shader entry"};
-            }
+    bool hasCompute;
+    bool hasOthers;
+    for (size_t i{0}; i < desc.entryPoints.size; i++) {
+        if (desc.entryPoints.data[i].stage == ShaderStage::Compute) {
+            hasCompute = true;
+        } else {
+            hasOthers = true;
         }
+    }
+    if (hasCompute && hasOthers) {
+        return AXError{"Cannot keep fragment/vertex/etc. along with compute in a pipeline program; Compute is separate."};
     }
 
     auto& program = ReserveHandle(m_Programs, m_FreePrograms);
@@ -775,7 +831,7 @@ ExResult<RenderPipelineHandle> GLGraphicsBackend::CreateRenderPipeline(const Ren
     GL_CALL(glBindVertexArray(0));
 
     pipeline.desc = desc;
-    pipeline.program = m_Programs[desc.shader.index];
+    pipeline.program = desc.shader;
     pipeline.vaoLayout = desc.layout;
     pipeline.alive = true;
 
@@ -891,7 +947,7 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                 for (size_t i = 0; i < pass.desc.colorAttachments.size; ++i) {
                     auto& att = pass.desc.colorAttachments.data[i];
 
-                    if (att.load == LoadOp::Clear) {
+                    if (att.attachment.load == LoadOp::Clear) {
                         GL_CALL(glClearBufferfv(GL_COLOR, (GLint)i, (const GLfloat*)(&c.args[4])));
                     }
                 }
@@ -910,6 +966,7 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                     }
                 }
 
+                pass.fbInUse.Bind({fbindex, fbgeneration});
                 m_CurrentRenderPass.Bind({rpindex, rpgeneration});
                 break;
             }
@@ -919,11 +976,31 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                     return {"GLCommand::Execute \"GLCommandType::EndRenderPass\" Failed: Invalid RenderPass handle"};
 
                 GLRenderPass& pass = m_RenderPasses[rpindex];
+                GLFramebuffer& fb = m_Framebuffers[pass.fbInUse.handle.index];
+
+                if (fb.samples > SampleCount::Sample1 && fb.hasResolve) {
+                    GL_CALL(glBindFramebuffer(GL_READ_FRAMEBUFFER, fb.fbo));
+                    GL_CALL(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fb.resolveFbo));
+
+                    for (size_t i = 0; i < pass.desc.colorAttachments.size; ++i) {
+                        GL_CALL(glReadBuffer(GL_COLOR_ATTACHMENT0 + i));
+                        GL_CALL(glDrawBuffer(GL_COLOR_ATTACHMENT0 + i));
+
+                        GL_CALL(glBlitFramebuffer(
+                            0, 0, fb.width, fb.height,
+                            0, 0, fb.width, fb.height,
+                            GL_COLOR_BUFFER_BIT,
+                            GL_NEAREST
+                        ));
+                    }
+                    // Rebind original framebuffer
+                    GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, fb.fbo));
+                }
 
                 std::vector<GLenum> invalidateAttachments;
 
                 for (size_t i = 0; i < pass.desc.colorAttachments.size; ++i) {
-                    if (pass.desc.colorAttachments.data[i].store == StoreOp::Discard)
+                    if (pass.desc.colorAttachments.data[i].attachment.store == StoreOp::Discard)
                         invalidateAttachments.push_back(GL_COLOR_ATTACHMENT0 + i);
                 }
 
@@ -939,6 +1016,8 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                 }
 
                 GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+
+                pass.fbInUse.UnBind();
                 m_CurrentRenderPass.UnBind();
                 break;
             }
@@ -954,6 +1033,10 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                     return {"GLCommand::Execute \"GLCommandType::BindRenderPipeline\" Failed: Invalid RenderPass bound!"};
 
                 auto& pipeline = m_RenderPipelines[index];
+
+                if (!IsValidHandle(m_Programs, pipeline.program))
+                    return {"GLCommand::Execute \"GLCommandType::BindRenderPipeline\" Failed: Invalid Pipeline shader program!"};
+
                 auto& desc = pipeline.desc;
 
                 if (
@@ -966,9 +1049,10 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
 
                 m_CurrentRenderPipeline.Bind({index, generation});
 
-                if (m_CurrentState.program != pipeline.program.id) {
-                    GL_CALL(glUseProgram(pipeline.program.id));
-                    m_CurrentState.program = pipeline.program.id;
+                auto& program = m_Programs[pipeline.program.index];
+                if (m_CurrentState.program != program.id) {
+                    GL_CALL(glUseProgram(program.id));
+                    m_CurrentState.program = program.id;
                 }
 
                 bool wantCull = desc.raster.cull != CullMode::None;
