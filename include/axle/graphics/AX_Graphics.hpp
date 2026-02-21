@@ -3,6 +3,7 @@
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
+
 #include "slang.h"
 
 #include <array>
@@ -217,6 +218,7 @@ struct TextureBorderColor {
 struct TextureSubDesc {
     uint32_t mipLevels{0};
     bool generateMips{false};
+    float aniso{0.0f}; // anisotropic filtering, 0.0 means disabled
 
     TextureWrap wrapS{TextureWrap::Repeat};
     TextureWrap wrapT{TextureWrap::Repeat};
@@ -306,10 +308,12 @@ enum class ResourceKind : uint8_t {
 };
 
 struct ResourceHandle {
-    ResourceKind kind;
+    ResourceKind kind{ResourceKind::Buffer};
 
-    uint32_t index;
-    uint32_t generation;
+    uint32_t index{0};
+    uint32_t generation{0};
+
+    ResourceHandle();
 
     ResourceHandle(BufferHandle h)
         : kind(ResourceKind::Buffer), index(h.index), generation(h.generation) {}
@@ -585,14 +589,31 @@ enum class BindingType {
     StorageBuffer,
     SampledTexture,
     StorageTexture,
-    Sampler
+    //Sampler
 };
 
 struct Binding {
-    uint32_t slot;
-    BindingType type;
+    uint32_t slot{0};
+    BindingType type{};
     ResourceHandle resource;
+
+    uint64_t offset{0}; // for buffer bindings
+    uint64_t range{0};  // 0 = full size
+
+    ResourceHandle sampler; // optional (for SampledTexture)
 };
+
+struct ResourceSetDesc {
+    Span<Binding> bindings{};
+
+    uint32_t layoutID{0}; // layout compatibility id
+    uint32_t setIndex{0}; // descriptor set index
+    uint32_t version{1};  // increment on update
+};
+
+struct ResourceSetTag {};
+
+using ResourceSetHandle = ExternalHandle<ResourceSetTag>;
 
 enum class GraphicsCapEnum {
     BindlessTextures,
@@ -602,11 +623,12 @@ enum class GraphicsCapEnum {
     GeometryShaders,
     Tessellation,
     MultiDrawIndirect,
-    TextureArray,
     SparseTextures,
     RayTracing,
     HalfFloatColorBuffer,
+    FullFloatColorBuffer,
     LongPointers,
+    Anisotropy,
     __Last__
 };
 
@@ -624,6 +646,7 @@ struct GraphicsCaps {
     int32_t maxTextureUnits{0};
     int32_t maxCombinedTextureUnits{0};
     uint32_t maxWorkGroupCount[3]{0, 0, 0};
+    float maxAniso{0.0f};
 
     explicit GraphicsCaps() {
         caps.fill(false);
@@ -651,7 +674,12 @@ public:
 
     virtual void BindRenderPipeline(const RenderPipelineHandle& handle) = 0;
     virtual void BindComputePipeline(const ComputePipelineHandle& handle) = 0;
-    virtual void BindBuffer(const BufferHandle& handle) = 0;
+
+    virtual void BindVertexBuffer(const BufferHandle& handle) = 0;
+    virtual void BindIndexBuffer(const BufferHandle& handle) = 0;
+    virtual void BindIndirectBuffer(const BufferHandle& handle) = 0;
+
+    virtual void BindResourceSet(const ResourceSetHandle& res) = 0;
 
     virtual void Draw(
         uint32_t vertexCount,
@@ -688,9 +716,6 @@ public:
     ) = 0;
 };
 
-inline ResourceHandle GfxResource(BufferHandle h) { return ResourceHandle(h); }
-inline ResourceHandle GfxResource(TextureHandle h) { return ResourceHandle(h); }
-
 class IGraphicsBackend {
 public:
     virtual ~IGraphicsBackend() = default;
@@ -721,8 +746,11 @@ public:
     virtual utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) = 0;
     virtual utils::AXError DestroyRenderPass(RenderPassHandle& handle) = 0;
 
+    virtual utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) = 0;
+    virtual utils::AXError UpdateResourceSet(ResourceSetHandle& handle, Span<Binding> bindings) = 0;
+    virtual utils::AXError DestroyResourceSet(ResourceSetHandle& handle) = 0;
+
     virtual utils::AXError Dispatch(ICommandList& cmdlist, uint32_t x, uint32_t y, uint32_t z) = 0;
-    virtual utils::AXError BindResources(ICommandList& cmdlist, Span<Binding> bindings) = 0;
     virtual utils::AXError Barrier(ICommandList& cmdlist, Span<ResourceTransition> transitions) = 0;
 };
 
@@ -755,11 +783,18 @@ public:
     ShaderHandle CreateProgram(const ShaderDesc& desc);
     void DestroyProgram(ShaderHandle& handle);
 
-    RenderPipelineHandle CreatePipeline(const RenderPipelineDesc& desc);
-    void DestroyPipeline(RenderPipelineHandle& handle);
+    RenderPipelineHandle CreateRenderPipeline(const RenderPipelineDesc& desc);
+    void DestroyRenderPipeline(RenderPipelineHandle& handle);
+
+    ComputePipelineHandle CreateComputePipeline(const ComputePipelineDesc& desc);
+    void DestroyComputePipeline(ComputePipelineHandle& handle);
 
     RenderPassHandle CreateRenderPass(const RenderPassDesc& desc);
     void DestroyRenderPass(RenderPassHandle& handle);
+
+    ResourceSetHandle CreateResourceSet(const ResourceSetDesc& desc);
+    void UpdateResourceSet(ResourceSetHandle& handle, Span<Binding> bindings);
+    void DestroyResourceSet(ResourceSetHandle& handle);
 
     // Command recording (thread-safe, CPU-side)
     ICommandList BeginCommandList();
@@ -767,7 +802,6 @@ public:
 
     // Capabilities (cached, immutable)
     const GraphicsCaps& Capabilities() const;
-    void QueryCaps(GraphicsCaps& out);
 };
 
 

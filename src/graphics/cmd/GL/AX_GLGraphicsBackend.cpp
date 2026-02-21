@@ -19,11 +19,6 @@
 
 using namespace axle::utils;
 
-/* TODO:
-    - BindResourceSet(setHandle), Where "set", contains: textures, UBOs, SSBOs, samplers
-    - Add anisotropic filtering
-*/
-
 namespace axle::gfx {
 
 GLGraphicsBackend::GLGraphicsBackend() {
@@ -44,6 +39,7 @@ ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
 
     const char* versionStr = (const char*)glGetString(GL_VERSION);
     m_IsCore = strstr(versionStr, "OpenGL ES") == nullptr;
+    bool isGL = m_IsCore, isES = !isGL;
 
     int major = 0, minor = 0;
     GL_CALL(glGetIntegerv(GL_MAJOR_VERSION, &major));
@@ -61,46 +57,59 @@ ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
     };
 
     result.caps[(int)GraphicsCapEnum::ComputeShaders] =
-        (major > 4 || (major == 4 && minor >= 3)) ||
+        (isGL  && (major > 4 || (major == 4 && minor >= 3))) ||
+        (isES  && (major > 3 || (major == 3 && minor >= 1))) ||
         HasExt("GL_ARB_compute_shader");
 
     result.caps[(int)GraphicsCapEnum::ShaderStorageBuffers] =
-        (major > 4 || (major == 4 && minor >= 3)) ||
+        (isGL  && (major > 4 || (major == 4 && minor >= 3))) ||
+        (isES  && (major > 3 || (major == 3 && minor >= 1))) ||
         HasExt("GL_ARB_shader_storage_buffer_object");
 
     result.caps[(int)GraphicsCapEnum::IndirectDraw] =
-        (major >= 4) || HasExt("GL_ARB_draw_indirect");
+        (isGL && (major >= 4)) ||
+        HasExt("GL_ARB_draw_indirect");
 
     result.caps[(int)GraphicsCapEnum::GeometryShaders] =
-        (major > 3 || (major == 3 && minor >= 2)) ||
+        (isGL && (major > 3 || (major == 3 && minor >= 2))) ||
+        (isES && (major > 3 || (major == 3 && minor >= 2))) ||
         HasExt("GL_ARB_geometry_shader4");
 
     result.caps[(int)GraphicsCapEnum::Tessellation] =
-        (major > 4 || (major == 4 && minor >= 0)) ||
+        (isGL && (major > 4 || (major == 4 && minor >= 0))) ||
+        (isES && (major > 3 || (major == 3 && minor >= 2))) ||
         HasExt("GL_ARB_tessellation_shader");
-        
+
     result.caps[(int)GraphicsCapEnum::MultiDrawIndirect] =
-        (major > 4 || (major == 4 && minor >= 3)) ||
+        (isGL && (major > 4 || (major == 4 && minor >= 3))) ||
         HasExt("GL_ARB_multi_draw_indirect");
-        
-    result.caps[(int)GraphicsCapEnum::TextureArray] =
-        (major >= 3) ||
-        HasExt("GL_EXT_texture_array");
 
     result.caps[(int)GraphicsCapEnum::SparseTextures] =
-        (major > 4 || (major == 4 && minor >= 4)) ||
+        (isGL && (major > 4 || (major == 4 && minor >= 4))) ||
         HasExt("GL_ARB_sparse_texture");
-    
+
     result.caps[(int)GraphicsCapEnum::RayTracing] =
-        HasExt("GL_NV_ray_tracing"); // NVIDIA-Only
+        HasExt("GL_NV_ray_tracing");
 
     result.caps[(int)GraphicsCapEnum::BindlessTextures] =
         HasExt("GL_ARB_bindless_texture") ||
         HasExt("GL_NV_bindless_texture");
 
     result.caps[(int)GraphicsCapEnum::HalfFloatColorBuffer] =
-        HasExt("GL_EXT_color_buffer_half_float") ||
-        HasExt("GL_EXT_color_buffer_float");
+        (isGL) ||
+        (isES && HasExt("GL_EXT_color_buffer_half_float"));
+
+    result.caps[(int)GraphicsCapEnum::FullFloatColorBuffer] =
+        (isGL) ||
+        (isES && HasExt("GL_EXT_color_buffer_float"));
+
+    result.caps[(int)GraphicsCapEnum::LongPointers] =
+        (isGL && (major > 4 || (major == 4 && minor >= 1))) ||
+        HasExt("GL_ARB_vertex_attrib_64bit");
+
+    result.caps[(int)GraphicsCapEnum::Anisotropy] = 
+        HasExt("GL_EXT_texture_filter_anisotropic") ||
+        HasExt("GL_ARB_texture_filter_anisotropic");;
 
     GL_CALL(glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &result.maxVertexAttribs));
 
@@ -122,6 +131,9 @@ ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
         for (int i = 0; i < 3; ++i) {
             GL_CALL(glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, i, (int*)&result.maxWorkGroupCount[i]));
         }
+    }
+    if (result.Has(GraphicsCapEnum::Anisotropy)) {
+        GL_CALL(glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &result.maxAniso));
     }
 
     return result;
@@ -305,6 +317,20 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
     if (desc.subDesc.generateMips && desc.subDesc.mipLevels == 0)
         GL_CALL(glGenerateMipmap(target));
 
+    if ((desc.subDesc.generateMips || desc.subDesc.mipLevels > 0) && desc.subDesc.aniso > 0.0f) {
+        if (!m_Capabilities.Has(GraphicsCapEnum::Anisotropy)) {
+            return AXError{"Anisotropic filtering is Unsupported on this device"};
+        }
+        if (desc.subDesc.aniso > m_Capabilities.maxAniso) {
+            return AXError{"Maximum supported anisotropy on this device is " + std::to_string(m_Capabilities.maxAniso)};
+        }
+        GL_CALL(glTexParameterf(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_MAX_ANISOTROPY_EXT,
+            desc.subDesc.aniso
+        ));
+    }
+
     GL_CALL(glBindTexture(target, 0));
 
     tex.alive = true;
@@ -426,6 +452,20 @@ AXError GLGraphicsBackend::UpdateTexture(TextureHandle& h, const TextureSubDesc&
     if (subDesc.generateMips && subDesc.mipLevels == 0)
         GL_CALL(glGenerateMipmap(target));
 
+    if ((subDesc.generateMips || subDesc.mipLevels > 0) && subDesc.aniso > 0.0f) {
+        if (!m_Capabilities.Has(GraphicsCapEnum::Anisotropy)) {
+            return AXError{"Anisotropic filtering is Unsupported on this device"};
+        }
+        if (subDesc.aniso > m_Capabilities.maxAniso) {
+            return AXError{"Maximum supported anisotropy on this device is " + std::to_string(m_Capabilities.maxAniso)};
+        }
+        GL_CALL(glTexParameterf(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_MAX_ANISOTROPY_EXT,
+            subDesc.aniso
+        ));
+    }
+
     tex.desc.subDesc = subDesc;
     GL_CALL(glBindTexture(target, 0));
 
@@ -477,6 +517,15 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
                 "Color attachment format mismatch at index " +
                 std::to_string(i)
             };
+        }
+
+        GLenum glType = ToGLType(tex.desc.format);
+
+        if (glType == GL_HALF_FLOAT && !m_Capabilities.Has(GraphicsCapEnum::HalfFloatColorBuffer)) {
+            return AXError{"Host doesn't support 16 bit float Color buffers (Unwritable)"};
+        }
+        if (glType == GL_FLOAT && !m_Capabilities.Has(GraphicsCapEnum::FullFloatColorBuffer)) {
+            return AXError{"Host doesn't support 32 bit float Color buffers (Unwritable)"};
         }
 
         if (tex.desc.width != desc.width || tex.desc.height != desc.height) {
@@ -839,14 +888,10 @@ ExResult<RenderPipelineHandle> GLGraphicsBackend::CreateRenderPipeline(const Ren
 
         switch (attr.typeDesc._class) {
             case VertexAttributeClass::Float: {
-                auto glType = ToGLType(attr.typeDesc.type);
-                if (glType == GL_HALF_FLOAT && !m_Capabilities.Has(GraphicsCapEnum::TypeFloat16)) {
-                    return AXError{"Host doesn't support 16 bit Float data types on GPU"};
-                }
                 GL_CALL(glVertexAttribPointer(
                     attr.location,
                     attr.componentCount,
-                    glType,
+                    ToGLType(attr.typeDesc.type),
                     attr.normalized,
                     desc.layout.stride,
                     (void*)(uintptr_t)attr.offset
@@ -941,11 +986,6 @@ AXError GLGraphicsBackend::Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, u
     return AXError::NoError();
 }
 
-AXError GLGraphicsBackend::BindResources(ICommandList& cmd, Span<Binding> bindings) {
-    auto& glcmd = static_cast<GLCommandList&>(cmd);
-    // TODO: This
-}
-
 AXError GLGraphicsBackend::Barrier(ICommandList&, Span<ResourceTransition> transitions) {
     GLenum bits = 0;
 
@@ -960,16 +1000,16 @@ AXError GLGraphicsBackend::Barrier(ICommandList&, Span<ResourceTransition> trans
 
 AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
     for (const auto& c : cmd.Commands()) {
-        if (c.type >= GLCommandType::BindBuffer) {
+        if (c.type >= GLCommandType::BindVertexBuffer) {
             if (!m_CurrentRenderPass.bound)
-                return {"GLCommand::Execute \"GLCommandType::BindBuffer/DrawXYZ\" Failed: No RenderPass bound, use BeginRenderPass()"};
+                return {"GLCommand::Execute \"GLCommandType::BindVertices/DrawXYZ\" Failed: No RenderPass bound, use BeginRenderPass()"};
             if (!m_CurrentRenderPipeline.bound)
-                return {"GLCommand::Execute \"GLCommandType::BindBuffer/DrawXYZ\" Failed: No RenderPipline bound, use BindRenderPipeline()"};
+                return {"GLCommand::Execute \"GLCommandType::BindVertices/DrawXYZ\" Failed: No RenderPipline bound, use BindRenderPipeline()"};
 
             if (!IsValidHandle(m_RenderPasses, m_CurrentRenderPass.handle))
-                return {"GLCommand::Execute \"GLCommandType::BindBuffer/DrawXYZ\" Failed: Invalid RenderPass bound!"};
+                return {"GLCommand::Execute \"GLCommandType::BindVertices/DrawXYZ\" Failed: Invalid RenderPass bound!"};
             if (!IsValidHandle(m_RenderPipelines, m_CurrentRenderPipeline.handle))
-                return {"GLCommand::Execute \"GLCommandType::BindBuffer/DrawXYZ\" Failed: Invalid RenderPipline bound!"};
+                return {"GLCommand::Execute \"GLCommandType::BindVertices/DrawXYZ\" Failed: Invalid RenderPipline bound!"};
         }
 
         switch (c.type) {
@@ -1245,52 +1285,111 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                 m_CurrentComputePipeline.Bind({index, generation});
                 break;
             }
-            case GLCommandType::BindBuffer: {
+            case GLCommandType::BindVertexBuffer:
+            case GLCommandType::BindIndexBuffer: {
                 uint32_t index = c.args[0], generation = c.args[1];
                 if (!IsValidHandle(m_Buffers, index, generation))
-                    return {"GLCommand::Execute \"GLCommandType::BindBuffer\" Failed: Invalid buffer handle"};
+                    return {"GLCommand::Execute \"GLCommandType::Bind(Vertex/Index)Buffer\" Failed: Invalid buffer handle"};
                 auto& buff = m_Buffers[index];
                 if (!m_CurrentRenderPipeline.bound)
-                    return {"GLCommand::Execute \"GLCommandType::BindBuffer\" Failed: No RenderPipline bound, use BindRenderPipeline()"};
+                    return {"GLCommand::Execute \"GLCommandType::Bind(Vertex/Index)Buffer\" Failed: No RenderPipline bound, use BindRenderPipeline()"};
                 if (!IsValidHandle(m_RenderPipelines, m_CurrentRenderPipeline.handle))
-                    return {"GLCommand::Execute \"GLCommandType::BindBuffer\" Failed: Invalid RenderPipeline bound!"};
-                auto& pipelineHandle = m_CurrentRenderPipeline.handle;
-
+                    return {"GLCommand::Execute \"GLCommandType::Bind(Vertex/Index)Buffer\" Failed: Invalid RenderPipeline bound!"};
+                
+                auto& pipeline = m_RenderPipelines[m_CurrentRenderPipeline.handle.index];
                 switch (buff.usage) {
                     case BufferUsage::Vertex: {
-                        auto& pipeline = m_RenderPipelines[pipelineHandle.index];
                         if (pipeline.vbo != buff.id) {
                             pipeline.vbo = buff.id;
-                            glBindBuffer(GL_ARRAY_BUFFER, buff.id);
+                            GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, buff.id));
                         }
                     }
                     break;
                     case BufferUsage::Index: {
-                        auto& pipeline = m_RenderPipelines[pipelineHandle.index];
                         if (pipeline.ebo != buff.id) {
                             pipeline.ebo = buff.id;
-                            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buff.id);
+                            GL_CALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buff.id));
                         }
                     }
                     break;
-                    case BufferUsage::Uniform:
-                        if (static_cast<int32_t>(c.args[2]) >= m_Capabilities.maxUBOSize)
-                            return {"GLCommand::Execute \"GLCommandType::BindBuffer\" Failed: Uniform buffer slot out of range"};
-                        glBindBufferBase(GL_UNIFORM_BUFFER, buff.slot, buff.id);
-                    break;
-                    case BufferUsage::Storage:
-                        if (static_cast<int32_t>(c.args[2]) >= m_Capabilities.maxUBOSize)
-                            return {"GLCommand::Execute \"GLCommandType::BindBuffer\" Failed: Uniform buffer slot out of range or Unsupported on this device"};
-                        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, buff.slot, buff.id);
-                    break;
-                    case BufferUsage::Indirect:
-                        if (!m_Capabilities.Has(GraphicsCapEnum::IndirectDraw))
-                            return {"GLCommand::Execute \"GLCommandType::BindBuffer\" Failed: Indirect Rendering is Unsupported on this device"};
-                        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buff.id);
-                    break;
-                    case BufferUsage::Staging:
-                        return {"GLCommand::Execute \"GLCommandType::BindBuffer\" Failed: Staging buffers are used only for CPU->GPU copies, never bound."};
-                    break;
+                    default: return {"GLCommand::Execute \"GLCommandType::Bind(Vertex/Index)Buffer\" \
+                        Failed: Illegal buffer handle; must be either Vertex/Index Buffer"};
+                }
+                break;
+            }
+            case GLCommandType::BindIndirectBuffer: {
+                if (!m_Capabilities.Has(GraphicsCapEnum::IndirectDraw))
+                    return {"GLCommand::Execute \"GLCommandType::BindIndirectBuffer\" Failed: Indirect Rendering is Unsupported on this device"};
+
+                uint32_t index = c.args[0], generation = c.args[1];
+                if (!IsValidHandle(m_Buffers, index, generation))
+                    return {"GLCommand::Execute \"GLCommandType::BindIndirectBuffer\" Failed: Invalid buffer handle"};
+
+                auto& buff = m_Buffers[index];
+                if (buff.usage != BufferUsage::Indirect)
+                    return {"GLCommand::Execute \"GLCommandType::BindIndirectBuffer\" Failed: Illegal buffer handle: BufferUsage != Indirect"};
+
+                GL_CALL(glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buff.id));
+                break;
+            }
+            case GLCommandType::BindResourceSet: {
+                uint32_t index = c.args[0], generation = c.args[1];
+                if (!IsValidHandle(m_ResourceSets, index, generation))
+                    return {"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Invalid ResourceSet handle"};
+                auto& res = m_ResourceSets[index];
+
+                for (auto& b : res.bindings) {
+                    switch (b.type) {
+                        case BindingType::UniformBuffer: {
+                            if (!IsValidHandle(m_Buffers, b.resource.index, b.resource.generation))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle"};
+
+                            GL_CALL(glBindBufferRange(
+                                GL_UNIFORM_BUFFER,
+                                b.slot,
+                                m_Buffers[b.resource.index].id,
+                                b.offset,
+                                b.range
+                            ));
+                            break;
+                        }
+                        case BindingType::StorageBuffer: {
+                            if (!IsValidHandle(m_Buffers, b.resource.index, b.resource.generation))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageBuffer\" Failed: Invalid Buffer handle"};
+
+                            GL_CALL(glBindBufferRange(
+                                GL_SHADER_STORAGE_BUFFER,
+                                b.slot,
+                                m_Buffers[b.resource.index].id,
+                                b.offset,
+                                b.range
+                            ));
+                            break;
+                        }
+                        case BindingType::SampledTexture: {
+                            if (!IsValidHandle(m_Textures, b.resource.index, b.resource.generation))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::SampledTexture\" Failed: Invalid Texture handle"};
+                            
+                            GL_CALL(glActiveTexture(GL_TEXTURE0 + b.slot));
+                            GL_CALL(glBindTexture(GL_TEXTURE_2D, m_Textures[b.resource.index].id));
+                            break;
+                        }
+                        case BindingType::StorageTexture: {
+                            if (!IsValidHandle(m_Textures, b.resource.index, b.resource.generation))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Invalid Texture handle"};
+
+                            GL_CALL(glBindImageTexture(
+                                b.slot,
+                                m_Textures[b.resource.index].id,
+                                0,
+                                GL_FALSE,
+                                0,
+                                GL_READ_WRITE,
+                                ToGLFormat(m_Textures[b.resource.index].desc.format)
+                            ));
+                            break;
+                        }
+                    }
                 }
                 break;
             }
@@ -1342,6 +1441,42 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
             }
         }
     }
+    return AXError::NoError();
+}
+
+utils::ExResult<ResourceSetHandle> GLGraphicsBackend::CreateResourceSet(const ResourceSetDesc& desc) {
+    auto& handle = ReserveHandle(m_ResourceSets, m_FreeResourceSets);
+
+    handle.bindings.resize(desc.bindings.size);
+    for (size_t i{0}; i < desc.bindings.size; i++) {
+        handle.bindings[i] = desc.bindings.data[i];
+    }
+    handle.layoutID = desc.layoutID;
+    handle.version = 1;
+    handle.alive = true;
+
+    return ResourceSetHandle{handle.index, handle.generation};
+}
+
+utils::AXError GLGraphicsBackend::UpdateResourceSet(ResourceSetHandle& handle, Span<Binding> bindings) {
+    if (!IsValidHandle(m_ResourceSets, handle))
+        return {"Invalid handle"};
+    auto& res = m_ResourceSets[handle.index];
+
+    res.bindings.resize(bindings.size);
+    for (size_t i{0}; i < bindings.size; i++) {
+        res.bindings[i] = bindings.data[i];
+    }
+    res.version++;
+    return AXError::NoError();
+}
+
+utils::AXError GLGraphicsBackend::DestroyResourceSet(ResourceSetHandle& handle) {
+    if (!IsValidHandle(m_ResourceSets, handle))
+        return {"Invalid handle"};
+    auto& res = m_ResourceSets[handle.index];
+
+    PostDeleteHandle(res, handle, m_FreeResourceSets);
     return AXError::NoError();
 }
 

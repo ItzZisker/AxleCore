@@ -11,7 +11,10 @@ enum class GLCommandType {
     EndRenderPass,
     BindRenderPipeline,
     BindComputePipeline,
-    BindBuffer,
+    BindVertexBuffer,
+    BindIndexBuffer,
+    BindIndirectBuffer,
+    BindResourceSet,
     Draw,
     DrawInstanced,
     DrawIndexed,
@@ -42,7 +45,12 @@ public:
 
     void BindRenderPipeline(const RenderPipelineHandle& pipeline) override;
     void BindComputePipeline(const ComputePipelineHandle& pipeline) override;
-    void BindBuffer(const BufferHandle& buffer) override;
+
+    void BindVertexBuffer(const BufferHandle& buffer) override;
+    void BindIndexBuffer(const BufferHandle& buffer) override;
+    void BindIndirectBuffer(const BufferHandle& buffer) override;
+
+    void BindResourceSet(const ResourceSetHandle& res) override;
 
     void Draw(
         uint32_t vertexCount,

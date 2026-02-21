@@ -18,6 +18,7 @@ public:
         : std::runtime_error(msg), code(code) {}
 };
 
+// TODO: rename to ExError
 struct AXError {
     int code{-1};
     std::string msg{"Unknown error"};

@@ -51,10 +51,31 @@ void GLCommandList::BindComputePipeline(const ComputePipelineHandle& pipeline) {
     }});
 }
 
-void GLCommandList::BindBuffer(const BufferHandle& buffer) {
-    m_Commands.push_back({GLCommandType::BindBuffer, {
+void GLCommandList::BindVertexBuffer(const BufferHandle& buffer) {
+    m_Commands.push_back({GLCommandType::BindVertexBuffer, {
         buffer.index,
         buffer.generation
+    }});
+}
+
+void GLCommandList::BindIndexBuffer(const BufferHandle& buffer) {
+    m_Commands.push_back({GLCommandType::BindIndexBuffer, {
+        buffer.index,
+        buffer.generation
+    }});
+}
+
+void GLCommandList::BindIndirectBuffer(const BufferHandle& buffer) {
+    m_Commands.push_back({GLCommandType::BindIndirectBuffer, {
+        buffer.index,
+        buffer.generation
+    }});
+}
+
+void GLCommandList::BindResourceSet(const ResourceSetHandle& res) {
+    m_Commands.push_back({GLCommandType::BindResourceSet, {
+        res.index,
+        res.generation
     }});
 }
 

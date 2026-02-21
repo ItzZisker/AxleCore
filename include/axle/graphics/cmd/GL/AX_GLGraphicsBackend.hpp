@@ -105,6 +105,14 @@ const char* GLErrorToString(GLenum err) {
 #define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR 0x93D7
 #endif
 
+#ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
+#define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
+#endif
+
+#ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+#endif
+
 namespace axle::gfx {
 
 GLenum ToGLTarget(TextureType type);
@@ -196,6 +204,12 @@ struct GLFramebuffer : public GLInternal {
     RenderPassHandle renderPass;
 };
 
+struct GLResourceSet : public GLInternal {
+    std::vector<Binding> bindings;
+    uint32_t layoutID{0};
+    uint32_t version{1};
+};
+
 struct GLStateCache {
     GLuint program{0};
 
@@ -258,8 +272,11 @@ public:
     utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) override;
     utils::AXError DestroyRenderPass(RenderPassHandle& handle) override;
 
+    utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) override;
+    utils::AXError UpdateResourceSet(ResourceSetHandle& handle, Span<Binding> bindings) override;
+    utils::AXError DestroyResourceSet(ResourceSetHandle& handle) override;
+
     utils::AXError Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, uint32_t z) override;
-    utils::AXError BindResources(ICommandList& cmd, Span<Binding> bindings) override;
     utils::AXError Barrier(ICommandList& cmd, Span<ResourceTransition> transitions) override;
 
     // Execution
@@ -316,6 +333,7 @@ private:
     std::vector<GLComputePipeline>  m_ComputePipelines{};
     std::vector<GLFramebuffer>      m_Framebuffers{};
     std::vector<GLRenderPass>       m_RenderPasses{};
+    std::vector<GLResourceSet>      m_ResourceSets{};
 
     std::vector<uint32_t> m_FreeBuffers{};
     std::vector<uint32_t> m_FreeTextures{};
@@ -324,7 +342,8 @@ private:
     std::vector<uint32_t> m_FreeComputePipelines{};
     std::vector<uint32_t> m_FreeFramebuffers{};
     std::vector<uint32_t> m_FreeRenderPasses{};
-    
+    std::vector<uint32_t> m_FreeResourceSets{};
+
     GLCommandBinding<RenderPassHandle>       m_CurrentRenderPass{};
     GLCommandBinding<RenderPipelineHandle>   m_CurrentRenderPipeline{};
     GLCommandBinding<ComputePipelineHandle>  m_CurrentComputePipeline{};
