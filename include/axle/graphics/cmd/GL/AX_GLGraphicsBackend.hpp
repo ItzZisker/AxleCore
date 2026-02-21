@@ -191,7 +191,6 @@ struct GLFramebuffer : public GLInternal {
     uint32_t height{0};
 
     bool hasResolve{false};
-    SampleCount samples{SampleCount::Sample1};
     GLuint resolveFbo{0};
 
     RenderPassHandle renderPass;
@@ -225,9 +224,13 @@ struct GLStateCache {
 class GLGraphicsBackend final : public IGraphicsBackend {
 private:
     GraphicsCaps m_Capabilities{};
+    bool m_IsCore{false};
 public:
     GLGraphicsBackend();
     ~GLGraphicsBackend() override;
+
+    bool IsES() const { return !m_IsCore; }
+    bool IsCore() const { return m_IsCore; }
 
     bool SupportsCap(GraphicsCapEnum cap) override;
     utils::ExResult<GraphicsCaps> QueryCaps() override;

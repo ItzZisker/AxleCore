@@ -361,16 +361,11 @@ struct AttachmentDesc {
     LoadOp load;
     StoreOp store;
     SampleCount samples{SampleCount::Sample1};
-};
-
-struct ColorAttachmentDesc {
-    AttachmentDesc attachment;
-    AttachmentFormat resolveFormat;
     bool hasResolve{false};
 };
 
 struct RenderPassDesc {
-    Span<ColorAttachmentDesc> colorAttachments;
+    Span<AttachmentDesc> colorAttachments;
     AttachmentDesc depthStencilAttachment;
     bool hasDepth{false};
     bool hasStencil{false};
@@ -610,6 +605,7 @@ enum class GraphicsCapEnum {
     TextureArray,
     SparseTextures,
     RayTracing,
+    HalfFloatColorBuffer,
     LongPointers,
     __Last__
 };

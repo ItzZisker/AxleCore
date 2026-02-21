@@ -21,7 +21,6 @@ using namespace axle::utils;
 
 /* TODO:
     - BindResourceSet(setHandle), Where "set", contains: textures, UBOs, SSBOs, samplers
-    - Add Multisample Resolve in BindPipeline? or maybe POST-draw? idk
     - Add anisotropic filtering
 */
 
@@ -42,6 +41,9 @@ bool GLGraphicsBackend::SupportsCap(GraphicsCapEnum cap) {
 
 ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
     GraphicsCaps result{};
+
+    const char* versionStr = (const char*)glGetString(GL_VERSION);
+    m_IsCore = strstr(versionStr, "OpenGL ES") == nullptr;
 
     int major = 0, minor = 0;
     GL_CALL(glGetIntegerv(GL_MAJOR_VERSION, &major));
@@ -95,6 +97,10 @@ ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
     result.caps[(int)GraphicsCapEnum::BindlessTextures] =
         HasExt("GL_ARB_bindless_texture") ||
         HasExt("GL_NV_bindless_texture");
+
+    result.caps[(int)GraphicsCapEnum::HalfFloatColorBuffer] =
+        HasExt("GL_EXT_color_buffer_half_float") ||
+        HasExt("GL_EXT_color_buffer_float");
 
     GL_CALL(glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &result.maxVertexAttribs));
 
@@ -457,16 +463,16 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
         }
 
         auto& tex = m_Textures[texHandle.index];
-        const ColorAttachmentDesc& rpAtt = rpDesc.colorAttachments.data[i];
+        const AttachmentDesc& rpAtt = rpDesc.colorAttachments.data[i];
 
-        if (tex.desc.samples != rpAtt.attachment.samples) {
+        if (tex.desc.samples != rpAtt.samples) {
             return AXError{
                 "Color attachment sample count mismatch at index " +
                 std::to_string(i)
             };
         }
 
-        if (tex.desc.format != rpAtt.attachment.format) {
+        if (tex.desc.format != rpAtt.format) {
             return AXError{
                 "Color attachment format mismatch at index " +
                 std::to_string(i)
@@ -549,6 +555,7 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
             depthStencilTex.id,
             0
         ));
+        fb.depthStencilTexture = depthStencilTex.id;
     }
 
     GLenum status = GL_CALL(glCheckFramebufferStatus(GL_FRAMEBUFFER));
@@ -561,7 +568,8 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
 
     GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
-    bool needsResolve = false; // TODO: Create Resolve textures internally
+    bool needsResolve = false;
+    bool needsDSResolve = false;
     for (size_t i{0}; i < desc.colorAttachments.size; i++) {
         auto& tex = m_Textures[desc.colorAttachments.data[i].index];
         if (tex.desc.samples > SampleCount::Sample1 && rp.desc.colorAttachments.data[i].hasResolve) {
@@ -569,17 +577,48 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
             break;
         }
     }
+    if (hasDepth || hasStencil) {
+        auto& dsTex = m_Textures[desc.depthStencilTexture.index];
+        if (dsTex.desc.samples > SampleCount::Sample1 && rp.desc.depthStencilAttachment.hasResolve) {
+            needsDSResolve = true;
+        }
+    }
 
     // If MSAA, create resolve FBO
-    if (needsResolve) {
+    if (needsResolve || needsDSResolve) {
         fb.hasResolve = true;
         GL_CALL(glGenFramebuffers(1, &fb.resolveFbo));
         GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, fb.resolveFbo));
 
+        auto createSingleSample = [](const TextureDesc& msaaDesc) {
+            GLuint resolveTex;
+            GL_CALL(glGenTextures(1, &resolveTex));
+            GL_CALL(glBindTexture(GL_TEXTURE_2D, resolveTex));
+
+            GL_CALL(glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                ToGLInternalFormat(msaaDesc.format),
+                msaaDesc.width,
+                msaaDesc.height,
+                0,
+                ToGLFormat(msaaDesc.format),
+                ToGLType(msaaDesc.format),
+                nullptr
+            ));
+            GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+            GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+            
+            GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
+            GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
+
+            return resolveTex;
+        };
+
         for (uint32_t i = 0; i < desc.colorAttachments.size; ++i) {
             auto& tex = m_Textures[desc.colorAttachments.data[i].index];
-            if (tex.desc.samples > SampleCount::Sample1) {
-                auto& resolveTex = tex.resolveId;
+            if (tex.desc.samples > SampleCount::Sample1 && !tex.resolveId) {
+                GLuint resolveTex = createSingleSample(tex.desc);
                 GL_CALL(glFramebufferTexture2D(
                     GL_FRAMEBUFFER,
                     GL_COLOR_ATTACHMENT0 + i,
@@ -587,20 +626,25 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
                     resolveTex,
                     0
                 ));
+                tex.resolveId = resolveTex;
             }
         }
 
         // Depth/Stencil resolve
-        if (hasDepth || hasStencil) {
+        if (needsDSResolve) {
             auto& depthTex = m_Textures[desc.depthStencilTexture.index];
-            GL_CALL(glFramebufferTexture2D(
-                GL_FRAMEBUFFER,
-                hasDepth && hasStencil ? GL_DEPTH_STENCIL_ATTACHMENT
-                                    : (hasDepth ? GL_DEPTH_ATTACHMENT : GL_STENCIL_ATTACHMENT),
-                GL_TEXTURE_2D,
-                depthTex.id,
-                0
-            ));
+            if (!depthTex.resolveId) {
+                GLuint resolveTex = createSingleSample(depthTex.desc);
+                GL_CALL(glFramebufferTexture2D(
+                    GL_FRAMEBUFFER,
+                    hasDepth && hasStencil ? GL_DEPTH_STENCIL_ATTACHMENT
+                                        : (hasDepth ? GL_DEPTH_ATTACHMENT : GL_STENCIL_ATTACHMENT),
+                    GL_TEXTURE_2D,
+                    depthTex.id,
+                    0
+                ));
+                depthTex.resolveId = resolveTex;
+            }
         }
 
         GLenum status = GL_CALL(glCheckFramebufferStatus(GL_FRAMEBUFFER));
@@ -794,17 +838,22 @@ ExResult<RenderPipelineHandle> GLGraphicsBackend::CreateRenderPipeline(const Ren
         GL_CALL(glEnableVertexAttribArray(attr.location));
 
         switch (attr.typeDesc._class) {
-            case VertexAttributeClass::Float:
+            case VertexAttributeClass::Float: {
+                auto glType = ToGLType(attr.typeDesc.type);
+                if (glType == GL_HALF_FLOAT && !m_Capabilities.Has(GraphicsCapEnum::TypeFloat16)) {
+                    return AXError{"Host doesn't support 16 bit Float data types on GPU"};
+                }
                 GL_CALL(glVertexAttribPointer(
                     attr.location,
                     attr.componentCount,
-                    ToGLType(attr.typeDesc.type),
+                    glType,
                     attr.normalized,
                     desc.layout.stride,
                     (void*)(uintptr_t)attr.offset
                 ));
-            break;
-            case VertexAttributeClass::Int:
+                break;
+            }
+            case VertexAttributeClass::Int: {
                 GL_CALL(glVertexAttribIPointer(
                     attr.location,
                     attr.componentCount,
@@ -812,8 +861,9 @@ ExResult<RenderPipelineHandle> GLGraphicsBackend::CreateRenderPipeline(const Ren
                     desc.layout.stride,
                     (void*)(uintptr_t)attr.offset
                 ));
-            break;
-            case VertexAttributeClass::Double:
+                break;
+            }
+            case VertexAttributeClass::Double: {
                 if (!m_Capabilities.Has(GraphicsCapEnum::LongPointers) || glVertexAttribLPointer == nullptr) {
                     return AXError("Invalid vertex attribute type: Host GPU doesn't support 64 bit pointers");
                 }
@@ -824,7 +874,8 @@ ExResult<RenderPipelineHandle> GLGraphicsBackend::CreateRenderPipeline(const Ren
                     desc.layout.stride,
                     (void*)(uintptr_t)attr.offset
                 ));
-            break;
+                break;
+            }
         }
         GL_CALL(glVertexAttribDivisor(attr.location, attr.divisor));
     }
@@ -947,7 +998,7 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                 for (size_t i = 0; i < pass.desc.colorAttachments.size; ++i) {
                     auto& att = pass.desc.colorAttachments.data[i];
 
-                    if (att.attachment.load == LoadOp::Clear) {
+                    if (att.load == LoadOp::Clear) {
                         GL_CALL(glClearBufferfv(GL_COLOR, (GLint)i, (const GLfloat*)(&c.args[4])));
                     }
                 }
@@ -978,7 +1029,7 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                 GLRenderPass& pass = m_RenderPasses[rpindex];
                 GLFramebuffer& fb = m_Framebuffers[pass.fbInUse.handle.index];
 
-                if (fb.samples > SampleCount::Sample1 && fb.hasResolve) {
+                if (fb.hasResolve) {
                     GL_CALL(glBindFramebuffer(GL_READ_FRAMEBUFFER, fb.fbo));
                     GL_CALL(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fb.resolveFbo));
 
@@ -1000,7 +1051,7 @@ AXError GLGraphicsBackend::Execute(const GLCommandList& cmd) {
                 std::vector<GLenum> invalidateAttachments;
 
                 for (size_t i = 0; i < pass.desc.colorAttachments.size; ++i) {
-                    if (pass.desc.colorAttachments.data[i].attachment.store == StoreOp::Discard)
+                    if (pass.desc.colorAttachments.data[i].store == StoreOp::Discard)
                         invalidateAttachments.push_back(GL_COLOR_ATTACHMENT0 + i);
                 }
 
@@ -1597,7 +1648,7 @@ GLenum ToGLType(VertexAttributeType type) {
         case VertexAttributeType::Int32:    return GL_INT;
         case VertexAttributeType::UInt32:   return GL_UNSIGNED_INT;
 
-        case VertexAttributeType::Float16:  return GL_HALF_FLOAT; // TODO: CRITICAL!! Verify extensions!!!
+        case VertexAttributeType::Float16:  return GL_HALF_FLOAT;
         case VertexAttributeType::Float32:  return GL_FLOAT;
         case VertexAttributeType::Float64:  return GL_DOUBLE;
 
