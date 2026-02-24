@@ -1,21 +1,38 @@
 #include "axle/core/ctx/GL/AX_RenderContextGLWin32.hpp"
-#include <windef.h>
 
 #if defined(__AX_GRAPHICS_GL__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
+
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include <gl/gl.h>
-#include <gl/glext.h>
-#include <gl/wglext.h>
+#ifdef AX_DEBUG
+#define wglMakeCurrent(hdc, hglrc) \
+    [&](){ \
+        auto result = ::wglMakeCurrent(hdc, hglrc); \
+        std::cout << "wglMakeCurrent called with HDC=" << hdc << " HGLRC=" << hglrc \
+                  << ", result=" << result \
+                  << ", curHDC=" << ::wglGetCurrentDC() \
+                  << ", curHGLRC=" << ::wglGetCurrentContext() \
+                  << ", GetLastError=" << GetLastError() << "\n"; \
+        return result; \
+    }()
+#endif
 
+#include <glad/gl.h>
+
+#include <memory>
 #include <mutex>
+
+#include <string>
+#include <iostream>
 
 namespace axle::core {
 
-RenderContextGLWin32::RenderContextGLWin32() = default;
-RenderContextGLWin32::~RenderContextGLWin32() {
-    Shutdown();
-}
+typedef BOOL (WINAPI *PFNWGLSWAPINTERVALEXTPROC)(int);
+typedef HGLRC (GLAD_API_PTR *PFNWGLCREATECONTEXTATTRIBSARBPROC)(HDC hDC, HGLRC hShareContext, const int * attribList);
+
+RenderContextGLWin32::RenderContextGLWin32() {}
+RenderContextGLWin32::~RenderContextGLWin32() { Shutdown(); }
 
 void* GetGLProcAddressRaw(const char* name) {
     void* p = (void*)wglGetProcAddress(name);
@@ -25,25 +42,30 @@ void* GetGLProcAddressRaw(const char* name) {
     return (void*)GetProcAddress(mod, name);
 }
 
-bool RenderContextGLWin32::Init(IWindow* app) {
+bool RenderContextGLWin32::Init(SharedPtr<IWindow> window) {
     if (m_Initialized) return true;
-    if (!app) return false;
+    if (!window) return false;
 
-    std::lock_guard<std::mutex> lock(app->m_HandleMutex);
-    m_hwnd = reinterpret_cast<HWND>(app->GetNativeWindowHandle());
-
+    std::lock_guard<std::mutex> lock(window->m_HandleMutex);
+    m_hwnd = reinterpret_cast<HWND>(window->GetNativeWindowHandle());
     m_hdc = GetDC((HWND)m_hwnd);
-    if (!m_hdc)
-        return false;
 
+    if (!m_hdc) return false;
+
+    RECT rect;
+    GetClientRect((HWND)m_hwnd, &rect);
+    m_Handle->surfaceInfo.width  = rect.right  - rect.left;
+    m_Handle->surfaceInfo.height = rect.bottom - rect.top;
+
+    // TODO: Make OpenGL pfd configurable
     PIXELFORMATDESCRIPTOR pfd = {};
     pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
     pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
     pfd.iPixelType = PFD_TYPE_RGBA;
-    pfd.cColorBits = 32;
-    pfd.cDepthBits = 24;
-    pfd.cStencilBits = 8;
+    pfd.cColorBits = (BYTE)m_Handle->surfaceInfo.colorBits;
+    pfd.cDepthBits = (BYTE)m_Handle->surfaceInfo.depthBits;
+    pfd.cStencilBits = (BYTE)m_Handle->surfaceInfo.stenctilBits;
     pfd.iLayerType = PFD_MAIN_PLANE;
 
     int pixelFormat = ChoosePixelFormat((HDC)m_hdc, &pfd);
@@ -60,7 +82,12 @@ bool RenderContextGLWin32::Init(IWindow* app) {
     }
 
     // Load modern context creation function
-    auto wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC) wglGetProcAddress("wglCreateContextAttribsARB");
+    if (!m_Func_wglCreateContextAttribsARB) {
+        auto wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC) wglGetProcAddress("wglCreateContextAttribsARB");
+        m_Func_wglCreateContextAttribsARB = wglCreateContextAttribsARB;
+    }
+
+    auto wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC) m_Func_wglCreateContextAttribsARB;
     if (!wglCreateContextAttribsARB) {
         // No modern context support
         wglMakeCurrent(nullptr, nullptr);
@@ -107,17 +134,17 @@ bool RenderContextGLWin32::Init(IWindow* app) {
         return false;
     }
 
-    m_hglrc = realContext;
+    m_Handle->hglrc = realContext;
 
     // Load GL functions
-    if (!gladLoadGLLoader((GLADloadproc)GetGLProcAddressRaw)) {
+    if (!gladLoaderLoadGLContext(&m_Handle->glCtx)) {
         return false;
     }
 
     // Verify version ≥ 3.3
     int major = 0, minor = 0;
-    glGetIntegerv(GL_MAJOR_VERSION, &major);
-    glGetIntegerv(GL_MINOR_VERSION, &minor);
+    m_Handle->glCtx.GetIntegerv(GL_MAJOR_VERSION, &major);
+    m_Handle->glCtx.GetIntegerv(GL_MINOR_VERSION, &minor);
 
     if (major < 3 || (major == 3 && minor < 3))
         return false;
@@ -127,9 +154,13 @@ bool RenderContextGLWin32::Init(IWindow* app) {
 }
 
 void RenderContextGLWin32::MakeCurrent() {
-    if (m_hdc && m_hglrc) {
-        wglMakeCurrent((HDC)m_hdc, (HGLRC)m_hglrc);
+    if (m_hdc && m_Handle->hglrc) {
+        wglMakeCurrent((HDC)m_hdc, (HGLRC)m_Handle->hglrc);
     }
+}
+
+void RenderContextGLWin32::ReleaseCurrent() {
+    wglMakeCurrent(nullptr, nullptr);
 }
 
 void RenderContextGLWin32::SwapBuffers() {
@@ -137,12 +168,10 @@ void RenderContextGLWin32::SwapBuffers() {
 }
 
 void RenderContextGLWin32::SetVSync(bool enabled) {
-    typedef BOOL(WINAPI *PFNWGLSWAPINTERVALEXTPROC)(int);
-    static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = nullptr;
-
-    if (!wglSwapIntervalEXT) {
-        wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+    if (!m_Func_wglSwapIntervalEXT) {
+        m_Func_wglSwapIntervalEXT = wglGetProcAddress("wglSwapIntervalEXT");
     }
+    auto wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC) m_Func_wglSwapIntervalEXT;
     if (wglSwapIntervalEXT) {
         wglSwapIntervalEXT(enabled ? 1 : 0);
     }
@@ -151,10 +180,10 @@ void RenderContextGLWin32::SetVSync(bool enabled) {
 void RenderContextGLWin32::Shutdown() {
     if (!m_Initialized) return;
 
-    if (m_hglrc) {
+    if (m_Handle->hglrc) {
         wglMakeCurrent(nullptr, nullptr);
-        wglDeleteContext((HGLRC)m_hglrc);
-        m_hglrc = nullptr;
+        wglDeleteContext((HGLRC)m_Handle->hglrc);
+        m_Handle->hglrc = nullptr;
     }
     if (m_hdc) {
         ReleaseDC((HWND)m_hwnd, (HDC)m_hdc);
@@ -165,8 +194,8 @@ void RenderContextGLWin32::Shutdown() {
     m_Initialized = false;
 }
 
-void* RenderContextGLWin32::GetContextHandle() const {
-    return reinterpret_cast<void*>(m_hglrc);
+SharedPtr<void> RenderContextGLWin32::GetContextHandle() const {
+    return (SharedPtr<void>)m_Handle;
 }
 
 }

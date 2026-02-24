@@ -1,7 +1,5 @@
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
 #include "axle/core/concurrency/AX_TaskQueue.hpp"
-#include "axle/core/ctx/AX_IRenderContext.hpp"
-#include "axle/core/window/AX_IWindow.hpp"
 #include "axle/utils/AX_Types.hpp"
 
 #include <atomic>
@@ -151,17 +149,18 @@ bool ThreadContextGeneric::StartCycle(
     std::function<SharedPtr<EmptyStruct>()> initFunc,
     std::function<void(EmptyStruct& gctx)> constWork
 ) {
-    return Start(sleepMS, std::move(initFunc), std::move(constWork));
+    auto constWk = [this, constWork = constWork](){ if (m_Ctx) constWork(*m_Ctx.get()); };
+    return Start(sleepMS, std::move(initFunc), std::move(constWk));
 }
 
 bool ThreadContextWnd::StartApp(CtxCreatorFunc initFunc, int64_t sleepMS) {
-    auto constWk = [this](IWindow&){ if (m_Ctx) m_Ctx->PollEvents(); };
+    auto constWk = [this](){ if (m_Ctx) m_Ctx->PollEvents(); };
     return Start(sleepMS, std::move(initFunc), std::move(constWk));
 }
 
 // swapbuffers already introduce GPU-synch block which will push the GPU and CPU into battle and gives maximum framerate
 bool ThreadContextGfx::StartGfx(CtxCreatorFunc initFunc) {
-    auto constWk = [this](IRenderContext&){ if (m_Ctx) m_Ctx->SwapBuffers(); };
+    auto constWk = [this](){ if (m_Ctx) m_Ctx->SwapBuffers(); };
     return Start(0, std::move(initFunc), std::move(constWk)); // so, based on explanation above; mssleep becomes 0
 }
 

@@ -49,7 +49,7 @@ std::string SharedState::GetTitle() const {
 
 void SharedState::PushEvent(const WndEvent& event) {
     std::lock_guard<std::mutex> lock(m_Mutex);
-    if (event.type == WndEventType::EvVoid) return;
+    if (event.type == WndEventType::Void) return;
     if (m_SharedEventsQ.size() >= m_MaxEventQueueCapacity)
         m_SharedEventsQ.pop_front();
     m_SharedEventsQ.push_back(event);

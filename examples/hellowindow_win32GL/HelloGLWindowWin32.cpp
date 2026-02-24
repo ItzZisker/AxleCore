@@ -1,13 +1,11 @@
 // Application Context
-#include "axle/core/AX_GameLoop.hpp"
+#include "axle/core/window/AX_IWindow.hpp"
 
-#include "axle/core/app/AX_IApplication.hpp"
-#include "axle/core/app/AX_ApplicationWin32.hpp"
+#include "axle/core/app/AX_Application.hpp"
 
 // Render Context
 #include "axle/core/ctx/AX_IRenderContext.hpp"
-#include "axle/core/ctx/GL/AX_GLRenderContextWin32.hpp"
-#include "axle/graphics/cmd/GL/AX_GSGLViewCommands.hpp"
+#include "axle/utils/AX_Types.hpp"
 
 // ALSoft Audio
 #ifdef __AX_AUDIO_ALSOFT__
@@ -22,16 +20,12 @@
 #endif
 
 // Graphics
-#include "axle/graphics/cmd/AX_GraphicsCommand.hpp"
+#include "axle/graphics/AX_Graphics.hpp"
 
 #include <iostream>
 #include <chrono>
 #include <cmath>
-#include <memory>
 #include <ostream>
-#include <thread>
-
-#include <unistd.h>
 
 #define HW_WIDTH  800
 #define HW_HEIGHT 600
@@ -72,11 +66,59 @@ float HW_DeltaTime() {
         Tip: We could also add CertainMethod#Requirements() or Extensions, etc. any name, just to identify which method requires which extension.
 */
 
+struct MiscData {
+    audio::ALAudioStreamVorbisPlayer& music;
+    audio::ALAudioStreamVorbis& musicStream;
+
+    SharedPtr<core::IWindow> ctx{nullptr};
+    SharedPtr<gfx::Graphics> gfx{nullptr};
+};
+
+void UpdateMain(float dT, core::Application& app, void* miscData) {
+    auto misc = (MiscData*) miscData;
+
+    auto& music = misc->music;
+    if (!misc->ctx) {
+        misc->ctx = app.GetWindowThread()->GetContext();
+    }
+    auto ctx = misc->ctx;
+    if (!misc->gfx) {
+        misc->gfx = std::make_shared<gfx::Graphics>(app.GetGraphicsThread());
+    }
+    auto gfx = misc->gfx;
+
+    auto eq = ctx->GetSharedState().TakeEvents();
+    for (auto& e : eq) {
+        if (e.type == core::WndEventType::WindowResize) {
+            auto& ev = e.value.windowResize;
+            auto cmdList = gfx->BeginCommandList();
+            cmdList->Begin();
+            cmdList->SetViewport(0.0f, 0.0f, float(ev.width), float(ev.height));
+            cmdList->End();
+            gfx->Submit(cmdList).get();
+            break;
+        }
+    }
+    
+#ifdef __AX_AUDIO_ALSOFT__
+    static audio::ALAudioStreamVorbisSource* source{nullptr};
+
+    try {
+        if (!source || !source->IsPlaying()) {
+            source = music.Play(&misc->musicStream);
+        }
+        music.Tick(dT);
+    } catch (const std::exception& ex) {
+        std::cerr << "Audio Exception: " << ex.what() << std::endl;
+    }
+#endif
+}
+
 int main() {
 #if defined(__AX_PLATFORM_WIN32__) && defined(__AX_GRAPHICS_GL__)
 
 #ifdef __AX_AUDIO_ALSOFT__
-    if (!audio::AL_CreateContext(nullptr)) {
+    if (!audio::alc::CreateContext(nullptr)) {
         std::cerr << "Failed to create Audio Context\n";
     }
 
@@ -101,80 +143,35 @@ int main() {
         std::cerr << "Audio Exception: " << ex.what() << std::endl;
     }
 #endif
-    using namespace graphics;
+    using namespace axle::gfx;
 
-    SharedPtr<core::RenderThreadContext> glThread = std::make_shared<core::RenderThreadContext>();
-    SharedPtr<core::ApplicationThreadContext> appThread = std::make_shared<core::ApplicationThreadContext>();
-
-    appThread->StartApp([&glThread]() -> std::shared_ptr<core::IApplication> {
-        core::ApplicationSpecification spec {
-            .title = "Hello Window",
-            .width = HW_WIDTH,
-            .height = HW_HEIGHT,
+    core::Application app;
+    core::ApplicationSpec spec {
+        .wndspec {
+            .title = "Test",
+            .width = 800,
+            .height = 600,
             .resizable = true
-        };
-        auto* app = new core::ApplicationWin32(spec);
-        app->Launch();
-        return std::shared_ptr<core::ApplicationWin32>(app);
-    });
-    appThread->AwaitStart();
+        },
+        .fixedTickRate = ChMillis(10),
+        .enforceGfxType = true,
+        .enforcedGfxType = core::GfxType::GL330,
+    };
 
-    glThread->StartGraphics([&appThread]() -> std::shared_ptr<core::IRenderContext> {
-        auto* ctx = new core::GLRenderContextWin32();
-        ctx->Init(appThread->GetContext().get());
-        if (!((core::GLRenderContextWin32*) ctx)->LoadGLFunctions()) {
-            std::cerr << "Couldn't Load GLAD Functions\n";
-            std::exit(1);
-        }
-        ctx->SetVSync(false);
-        return std::shared_ptr<core::GLRenderContextWin32>(ctx);
-    });
-    glThread->AwaitStart();
+    MiscData misc {
+        .music = music,
+        .musicStream = stream
+    };
+    app.InitCurrent(spec, UpdateMain, &misc);
 
-    auto& appState = appThread->GetContext()->GetSharedState();
-
-#ifdef __AX_AUDIO_ALSOFT__
-    try {
-        music.Play(&stream);
-    } catch (const std::exception& ex) {
-        std::cerr << "Audio Exception: " << ex.what() << std::endl;
-    }
-#endif
-
-    std::atomic<float> tT{0.0f};
-    glThread->PushWork("Rainbow", [&tT, glThread](){
-        tT.store(tT.load() + HW_DeltaTime());
-        float r, g, b;
-        HW_RGBScroll(tT.load(), r, g, b);
-        GS_GLCmdSetColor(r, g, b, 1.0f).Dispatch(glThread);
-        GS_GLCmdClear(GSB_Color | GSB_Depth).Dispatch(glThread);
-    });
-
-    while (!appState.IsQuitting()) {
-        auto eq = appState.TakeEvents();
-        for (auto& e : eq) {
-            if (e.type == core::EventType::WindowResize) {
-                auto& ev = e.value.windowResize;
-                GS_PushTNR(glThread, GS_GLCmdSetView(0, 0, ev.width, ev.height));
-                break;
-            }
-        }
-#ifdef __AX_AUDIO_ALSOFT__
-        music.Tick(1);
-#endif
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-
-    std::cout << "1\n";
-    glThread->Stop();
-    std::cout << "2\n";
-    glThread->GetContext()->Shutdown();
-    std::cout << "3\n";
-
-    appThread->Stop();
-    std::cout << "4\n";
-    appThread->GetContext()->Shutdown();
-    std::cout << "5\n";
+    // std::atomic<float> tT{0.0f};
+    // glThread->PushWork("Rainbow", [&tT, glThread](){
+    //     tT.store(tT.load() + HW_DeltaTime());
+    //     float r, g, b;
+    //     HW_RGBScroll(tT.load(), r, g, b);
+    //     GS_GLCmdSetColor(r, g, b, 1.0f).Dispatch(glThread);
+    //     GS_GLCmdClear(GSB_Color | GSB_Depth).Dispatch(glThread);
+    // });
 
     return 0;
 #else

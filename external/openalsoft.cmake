@@ -35,11 +35,22 @@ add_library(ALSoft SHARED IMPORTED GLOBAL)
 
 # Create imported target for linking
 if (WIN32)
+    if (MSVC)
+        set_target_properties(ALSoft PROPERTIES
+            IMPORTED_LOCATION "${OPENALSOFT_INSTALL_DIR}/bin/OpenAL32.dll"
+            IMPORTED_IMPLIB  "${OPENALSOFT_INSTALL_DIR}/lib/OpenAL32.lib"
+        )
+    else()
+        set_target_properties(ALSoft PROPERTIES
+            IMPORTED_LOCATION "${OPENALSOFT_INSTALL_DIR}/bin/OpenAL32.dll"
+            IMPORTED_IMPLIB  "${OPENALSOFT_INSTALL_DIR}/lib/libOpenAL32.dll.a"
+        )
+    endif()
+elseif (APPLE)
     set_target_properties(ALSoft PROPERTIES
-        IMPORTED_LOCATION "${OPENALSOFT_INSTALL_DIR}/bin/OpenAL32.dll"
-        IMPORTED_IMPLIB  "${OPENALSOFT_INSTALL_DIR}/lib/libOpenAL32.dll.a"
+        IMPORTED_LOCATION "${OPENALSOFT_INSTALL_DIR}/lib/libopenal.dylib"
     )
-elseif (UNIX AND NOT APPLE)
+elseif (UNIX)
     set_target_properties(ALSoft PROPERTIES
         IMPORTED_LOCATION "${OPENALSOFT_INSTALL_DIR}/lib/libopenal.so"
     )

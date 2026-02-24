@@ -87,15 +87,15 @@ public:
     bool Start(
         int64_t sleepMS,
         CtxCreatorFunc creatorFunc,
-        std::function<void(T& ctx)> constWork = [](T&){}
+        std::function<void()> constWork = [](){}
     ) {
-        Start(sleepMS);
+        ThreadCycler::Start(sleepMS);
         CtxCreatorFunc wrapped = [this, &creatorFunc]() {
             std::lock_guard<std::mutex> lock(m_CtxMutex);
             return creatorFunc();
         };
         auto res = EnqueueFuture(std::move(wrapped)).get();
-        if (res.has_error()) {
+        if (!res.has_value()) {
             std::cerr << res.error().msg << std::endl;
             Stop(true);
             return false;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
+#include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
 
@@ -8,6 +9,7 @@
 
 #include <array>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 #define AX_HEX_RGB(hex) \
@@ -313,8 +315,7 @@ struct ResourceHandle {
     uint32_t index{0};
     uint32_t generation{0};
 
-    ResourceHandle();
-
+    ResourceHandle() {}
     ResourceHandle(BufferHandle h)
         : kind(ResourceKind::Buffer), index(h.index), generation(h.generation) {}
     ResourceHandle(TextureHandle h)
@@ -401,6 +402,24 @@ struct FramebufferDesc {
 struct FramebufferTag {};
 
 using FramebufferHandle = ExternalHandle<FramebufferTag>;
+
+struct SurfaceInfo {
+    uint32_t width{0};
+    uint32_t height{0};
+    TextureFormat format{TextureFormat::RGBA8_UINT};
+    uint32_t depthBits{0};
+    uint32_t stencilBits{0};
+    bool vsync{false};
+};
+
+struct SwapchainDesc {
+    SurfaceInfo surface;
+    uint32_t imageCount;
+};
+
+struct SwapchainTag {};
+
+using SwapchainHandle = ExternalHandle<SwapchainTag>;
 
 enum class CullMode {
     None,
@@ -658,11 +677,26 @@ struct GraphicsCaps {
 
 class ICommandList {
 public:
-    ICommandList();
     virtual ~ICommandList() = default;
 
     virtual void Begin() = 0;
     virtual void End() = 0;
+
+    virtual void SetViewport(
+        float x,
+        float y,
+        float width,
+        float height,
+        float minDepth = 0.0f,
+        float maxDepth = 1.0f
+    ) = 0;
+
+    virtual void SetScissor(
+        int32_t x,
+        int32_t y,
+        uint32_t width,
+        uint32_t height
+    ) = 0;
 
     virtual void BeginRenderPass(
         const RenderPassHandle& pass,
@@ -721,87 +755,97 @@ public:
     virtual ~IGraphicsBackend() = default;
 
     virtual bool SupportsCap(GraphicsCapEnum cap) = 0;
+    virtual const GraphicsCaps& GetCaps() const = 0;
     virtual utils::ExResult<GraphicsCaps> QueryCaps() = 0;
 
+    virtual utils::ExResult<SwapchainHandle> CreateSwapchain(const SwapchainDesc& desc) = 0;
+    virtual utils::AXError DestroySwapchain(const SwapchainHandle& desc) = 0;
+    virtual utils::AXError ResizeSwapchain(const SwapchainHandle& desc, uint32_t width, uint32_t height) = 0;
+
     virtual utils::ExResult<BufferHandle> CreateBuffer(const BufferDesc& desc) = 0;
-    virtual utils::AXError UpdateBuffer(BufferHandle& handle, size_t offset, size_t size, const void* data) = 0;
-    virtual utils::AXError DestroyBuffer(BufferHandle& handle) = 0;
+    virtual utils::AXError UpdateBuffer(const BufferHandle& handle, size_t offset, size_t size, const void* data) = 0;
+    virtual utils::AXError DestroyBuffer(const BufferHandle& handle) = 0;
 
     virtual utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) = 0;
-    virtual utils::AXError UpdateTexture(TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) = 0;
-    virtual utils::AXError DestroyTexture(TextureHandle& handle) = 0;
+    virtual utils::AXError UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) = 0;
+    virtual utils::AXError DestroyTexture(const TextureHandle& handle) = 0;
 
     virtual utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) = 0;
-    virtual utils::AXError DestroyFramebuffer(FramebufferHandle& handle) = 0;
+    virtual utils::AXError DestroyFramebuffer(const FramebufferHandle& handle) = 0;
 
     virtual utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) = 0;
-    virtual utils::AXError DestroyProgram(ShaderHandle& handle) = 0;
+    virtual utils::AXError DestroyProgram(const ShaderHandle& handle) = 0;
     
     virtual utils::ExResult<RenderPipelineHandle> CreateRenderPipeline(const RenderPipelineDesc& desc) = 0;
-    virtual utils::AXError DestroyRenderPipeline(RenderPipelineHandle& handle) = 0;
+    virtual utils::AXError DestroyRenderPipeline(const RenderPipelineHandle& handle) = 0;
     
     virtual utils::ExResult<ComputePipelineHandle> CreateComputePipeline(const ComputePipelineDesc& desc) = 0;
-    virtual utils::AXError DestroyComputePipeline(ComputePipelineHandle& handle) = 0;
+    virtual utils::AXError DestroyComputePipeline(const ComputePipelineHandle& handle) = 0;
 
     virtual utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) = 0;
-    virtual utils::AXError DestroyRenderPass(RenderPassHandle& handle) = 0;
+    virtual utils::AXError DestroyRenderPass(const RenderPassHandle& handle) = 0;
 
     virtual utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) = 0;
-    virtual utils::AXError UpdateResourceSet(ResourceSetHandle& handle, Span<Binding> bindings) = 0;
-    virtual utils::AXError DestroyResourceSet(ResourceSetHandle& handle) = 0;
+    virtual utils::AXError UpdateResourceSet(const ResourceSetHandle& handle, Span<Binding> bindings) = 0;
+    virtual utils::AXError DestroyResourceSet(const ResourceSetHandle& handle) = 0;
 
-    virtual utils::AXError Dispatch(ICommandList& cmdlist, uint32_t x, uint32_t y, uint32_t z) = 0;
-    virtual utils::AXError Barrier(ICommandList& cmdlist, Span<ResourceTransition> transitions) = 0;
+    virtual utils::AXError Execute(const ICommandList& cmd) = 0;
+    virtual utils::AXError Dispatch(const ICommandList& cmdlist, uint32_t x, uint32_t y, uint32_t z) = 0;
+    virtual utils::AXError Barrier(const ICommandList& cmdlist, Span<ResourceTransition> transitions) = 0;
+
+    virtual utils::ExResult<uint32_t> AcquireNextImage() = 0;
+    virtual utils::ExResult<FramebufferHandle> GetSwapchainFramebuffer(uint32_t imageIndex) = 0;
+    virtual utils::AXError Present(uint32_t imageIndex) = 0;
 };
 
 class Graphics {
 private:
-    SharedPtr<core::ThreadContextGfx> m_GfxThread;
+    SharedPtr<core::ThreadContextGfx> m_GfxThread{nullptr};
+    UniquePtr<IGraphicsBackend> m_GfxBackend{nullptr};
+
+    core::GfxType m_GfxType{core::GfxType::GL330};
+
+    std::mutex m_GfxCapsMutex{};
 public:
     explicit Graphics(SharedPtr<core::ThreadContextGfx> gfxThread);
-    ~Graphics();
-
-    // Frame lifecycle (scheduled onto gfx thread)
-    void BeginFrame();
-    void EndFrame();
 
     // Swapchain / presentation control
     void SetVSync(bool enabled);
 
     // Resource creation (thread-safe, async)
-    BufferHandle CreateBuffer(const BufferDesc& desc);
-    void UpdateBuffer(BufferHandle& handle, size_t offset, size_t size, const void* data);
-    void DestroyBuffer(BufferHandle& handle);
+    Future<utils::ExResult<BufferHandle>> CreateBuffer(const BufferDesc& desc);
+    Future<utils::AXError> UpdateBuffer(const BufferHandle& handle, size_t offset, size_t size, const void* data);
+    Future<utils::AXError> DestroyBuffer(const BufferHandle& handle);
 
-    TextureHandle CreateTexture(const TextureDesc& desc);
-    void UpdateTexture(TextureHandle& handle, uint32_t mip, const void* data);
-    void DestroyTexture(TextureHandle& handle);
+    Future<utils::ExResult<TextureHandle>> CreateTexture(const TextureDesc& desc);
+    Future<utils::AXError> UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data);
+    Future<utils::AXError> DestroyTexture(const TextureHandle& handle);
 
-    FramebufferHandle CreateFramebuffer(const FramebufferDesc&);
-    void DestroyFramebuffer(FramebufferHandle& handle);
+    Future<utils::ExResult<FramebufferHandle>> CreateFramebuffer(const FramebufferDesc&);
+    Future<utils::AXError> DestroyFramebuffer(const FramebufferHandle& handle);
 
-    ShaderHandle CreateProgram(const ShaderDesc& desc);
-    void DestroyProgram(ShaderHandle& handle);
+    Future<utils::ExResult<ShaderHandle>> CreateProgram(const ShaderDesc& desc);
+    Future<utils::AXError> DestroyProgram(const ShaderHandle& handle);
 
-    RenderPipelineHandle CreateRenderPipeline(const RenderPipelineDesc& desc);
-    void DestroyRenderPipeline(RenderPipelineHandle& handle);
+    Future<utils::ExResult<RenderPipelineHandle>> CreateRenderPipeline(const RenderPipelineDesc& desc);
+    Future<utils::AXError> DestroyRenderPipeline(const RenderPipelineHandle& handle);
 
-    ComputePipelineHandle CreateComputePipeline(const ComputePipelineDesc& desc);
-    void DestroyComputePipeline(ComputePipelineHandle& handle);
+    Future<utils::ExResult<ComputePipelineHandle>> CreateComputePipeline(const ComputePipelineDesc& desc);
+    Future<utils::AXError> DestroyComputePipeline(const ComputePipelineHandle& handle);
 
-    RenderPassHandle CreateRenderPass(const RenderPassDesc& desc);
-    void DestroyRenderPass(RenderPassHandle& handle);
+    Future<utils::ExResult<RenderPassHandle>> CreateRenderPass(const RenderPassDesc& desc);
+    Future<utils::AXError> DestroyRenderPass(const RenderPassHandle& handle);
 
-    ResourceSetHandle CreateResourceSet(const ResourceSetDesc& desc);
-    void UpdateResourceSet(ResourceSetHandle& handle, Span<Binding> bindings);
-    void DestroyResourceSet(ResourceSetHandle& handle);
+    Future<utils::ExResult<ResourceSetHandle>> CreateResourceSet(const ResourceSetDesc& desc);
+    Future<utils::AXError> UpdateResourceSet(const ResourceSetHandle& handle, Span<Binding> bindings);
+    Future<utils::AXError> DestroyResourceSet(const ResourceSetHandle& handle);
 
     // Command recording (thread-safe, CPU-side)
-    ICommandList BeginCommandList();
-    void Submit(ICommandList&& cmdList);
+    SharedPtr<ICommandList> BeginCommandList();
+    Future<utils::AXError> Submit(SharedPtr<ICommandList> cmdList);
 
     // Capabilities (cached, immutable)
-    const GraphicsCaps& Capabilities() const;
+    const GraphicsCaps& Capabilities();
 };
 
 

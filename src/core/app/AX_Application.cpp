@@ -5,10 +5,12 @@
 
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
+#include <algorithm>
 
 #ifdef __AX_PLATFORM_WIN32__
 #include "axle/core/window/AX_WindowWin32.hpp"
 #endif
+
 #ifdef __AX_PLATFORM_X11
 #include "axle/core/window/AX_WindowX11.hpp"
 #endif
@@ -16,7 +18,8 @@
 namespace axle::core
 {
 
-int Application::InitCurrent(ApplicationSpec spec, TickJob updateFunc) {
+// TODO: Support Android Cycles (NOTE: Main thread == UI) ASAP!!!
+int Application::InitCurrent(ApplicationSpec spec, std::function<void(float, Application&, void*)> updateFunc, void* miscData) {
     using namespace axle::utils;
 
     bool wndRes = m_WndThread->StartApp([wndspec = std::move(spec.wndspec)]() -> ExResult<SharedPtr<IWindow>> {
@@ -31,7 +34,7 @@ int Application::InitCurrent(ApplicationSpec spec, TickJob updateFunc) {
         wndPtr->Launch();
         return SharedPtr<IWindow>(wndPtr);
     });
-    if (!wndRes) return false;
+    if (!wndRes) return -1;
 
     m_WndThread->AwaitStart();
 
@@ -44,73 +47,64 @@ int Application::InitCurrent(ApplicationSpec spec, TickJob updateFunc) {
         bool enforced = false;
         if (spec.enforceGfxType) {
             auto enforcedType = spec.enforcedGfxType;
-            if (!(combinedTypes & enforcedType)) {
+            if (!(combinedTypes & (int)enforcedType)) {
                 return AXError("AX Error: Specified enforced gfx type is not supported!");
             }
             enforced = spec.enforceGfxType;
-            combinedTypes = enforcedType;
+            combinedTypes = (int)enforcedType;
         }
-        if (combinedTypes & GfxVK) {
+        if (combinedTypes & (int)GfxType::VK) {
+#ifdef __AX_GRAPHICS_VK
             //ctxPtr = new VKRenderContext();
             //ctxPtr.TryInit();
+#else
+            goto _bkPreDX11;
+#endif
         }
         _bkPreDX11:
-        if (combinedTypes & GfxDX11) {
+        if (combinedTypes & (int)GfxType::DX11) {
 #ifdef __AX_GRAPHICS_DX11
             // TODO
             //ctxPtr = new DX11RenderContext();
             //ctxPtr.TryInit();
 #else
-            return AXError("AX Error: IWindow::ChooseType() Failed -> Platform Unsupported!");
+            goto _bkPreGL330;
 #endif
         }
-        // LoadGLFunctions in case its GL Context
-        // if (!((core::GLRenderContextWin32*) ctx)->LoadGLFunctions()) {
-            // std::cerr << "Couldn't Load GLAD Functions\n";
-            // std::exit(1);
-        // }
-        // ctx->SetVSync(false); // Remove this.
         _bkPreGL330:
-        if (combinedTypes & GfxGL330) {
+        if (combinedTypes & (int)GfxType::GL330) {
 #ifdef __AX_GRAPHICS_GL__
 #if defined(__AX_PLATFORM_WIN32__)
             ctxPtr = new RenderContextGLWin32();
-            if (!ctxPtr->Init(wndCtx.get())) {
-                return AXError("AX Error: Couldn't Create enforced-GL Context");
-            }
-            if (!((RenderContextGLWin32*) ctxPtr)->LoadGLFunctions()) {
-                return AXError("AX Error: Couldn't load enforced-GLAD Functions");
-            }
 #elif defined(__AX_PLATFORM_X11__)
             ctxPtr = new RenderContextGLX11();
-            ctxPtr->Init(wndCtx.get());
-            if (!((RenderContextGLX11*) ctxPtr)->LoadGLFunctions()) {
-                return AXError("AX Error: Couldn't load GLAD Functions");
-            }
 #else
             return AXError("AX Error: IWindow::ChooseType() Failed -> Platform Unsupported!");
 #endif
 #endif
         }
+        if (!ctxPtr->Init(wndCtx)) {
+            return AXError("AX Error: Couldn't Create enforced-GL Context");
+        }
         return SharedPtr<IRenderContext>(ctxPtr);
     });
-    if (!gfxRes) return false;
+    if (!gfxRes) return -2;
 
     m_GfxThread->AwaitStart();
 
     auto& state = wndCtx->GetSharedState();
 
-    using clock = std::chrono::steady_clock;
+    using namespace std::chrono;
 
     auto tickRate = spec.fixedTickRate;
-    auto lastTime = clock::now();
+    auto lastTime = steady_clock::now();
     while (!state.IsQuitting()) {
-        auto now = clock::now();
-        std::chrono::duration<double> delta = now - lastTime;
+        auto now = steady_clock::now();
+        auto delta = duration_cast<milliseconds>(now - lastTime);
         lastTime = now;
-        updateFunc(delta.count());
+        updateFunc(delta.count() / 1000.0f, *this, miscData);
         if (tickRate.count() > 0) {
-            std::this_thread::sleep_for(tickRate);
+            std::this_thread::sleep_for(ChMillis(std::max(tickRate.count() - delta.count(), (int64_t)0)));
         }
     }
     if (m_GfxThread->IsRunning()) {
@@ -119,7 +113,7 @@ int Application::InitCurrent(ApplicationSpec spec, TickJob updateFunc) {
     if (m_WndThread->IsRunning()) {
         m_WndThread->Stop(true);
     }
-    return true;
+    return 0;
 }
 
 void Application::RequestQuit() {

@@ -9,8 +9,8 @@
 
 #include <X11/Xlib.h>
 
-#include <glad/glad.h>
-#include <GL/glx.h>
+#include <glad/glx.h>
+#include <glad/gl.h>
 
 // Shared Objects Util
 #include <dlfcn.h>

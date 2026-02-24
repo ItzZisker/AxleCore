@@ -9,7 +9,7 @@ if(MSVC)
 		/W4
 		/permissive-
 		/MP
-		/O2
+		# /O2
 	)
 else()
     add_compile_options(

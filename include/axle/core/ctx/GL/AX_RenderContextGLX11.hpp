@@ -21,7 +21,7 @@ public:
     void SetVSync(bool enabled) override;
     void Shutdown() override;
 
-    void* GetContextHandle() const override;
+    SharedPtr<void> GetContextHandle() const override;
 
     // Define GLAD/glx 3.3 Functions, must be called post Context Creation.
     // Returns true if success, false if none or atleast one of functions failed to load.

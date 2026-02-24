@@ -3,6 +3,7 @@
 #if defined(__AX_GRAPHICS_DX11__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include "AX_PCH.hpp"
 
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 namespace axle::core {

@@ -88,6 +88,8 @@ set(BULLET_LIBS
     "${BULLET_INSTALL_DIR}/lib/libLinearMath.a"
 )
 add_library(Bullet STATIC IMPORTED GLOBAL)
+
+# TODO: Change these, map to .dylib, .so and .lib (WIN32 MSVC) and .dll.a (WIN32 Mingw)
 set_target_properties(Bullet PROPERTIES
     IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
     IMPORTED_LOCATION "${BULLET_INSTALL_DIR}/lib/libBulletDynamics.a"

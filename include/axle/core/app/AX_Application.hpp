@@ -14,7 +14,7 @@ struct ApplicationSpec {
     WindowSpec wndspec{};
     ChMillis fixedTickRate = ChMillis(50);
     bool enforceGfxType{false};
-    GfxType enforcedGfxType{GfxVK};
+    GfxType enforcedGfxType{GfxType::VK};
 };
 
 class Application {
@@ -25,7 +25,7 @@ private:
     core::SharedState m_State{};
     std::atomic_bool m_FirstInit{true};
 public:
-    int InitCurrent(ApplicationSpec spec, TickJob updateFunc);
+    int InitCurrent(ApplicationSpec spec, std::function<void(float, Application&, void*)> updateFunc, void* miscData);
     void RequestQuit();
 
     SharedPtr<ThreadContextWnd> GetWindowThread() const { return m_WndThread; }

@@ -23,6 +23,74 @@
         "AX_IMPL_AUDIO_SOFTOPENAL": "ON",
         "AX_BUILD_EXAMPLES": "ON"
       }
+    },
+    {
+      "name": "msvc-ninja",
+      "displayName": "MSVC x64 (Ninja)",
+      "description": "MSVC compiler with Ninja generator",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/msvc_ninja/x64",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "out/install/msvc_ninja/x64",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_GENERATOR_TOOLSET": "host=x64",
+        "CMAKE_GENERATOR_PLATFORM": "x64",
+
+        "AX_IMPL_ASSIMP": "ON",
+        "AX_IMPL_BULLET3": "ON",
+        "AX_IMPL_LAYER_SDL3": "OFF",
+        "AX_IMPL_LAYER_WIN32": "ON",
+        "AX_IMPL_LAYER_X11": "ON",
+        "AX_IMPL_GRAPHICS_DX11": "OFF",
+        "AX_IMPL_GRAPHICS_GL": "ON",
+        "AX_IMPL_AUDIO_SOFTOPENAL": "ON",
+        "AX_BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "msvcx64",
+      "displayName": "MSVC x64",
+	    "description": "Build with Visual Studio compiler",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/out/build/msvc/x64",
+      "architecture": "x64",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "out/install/msvc/x64",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AX_IMPL_ASSIMP": "OFF",
+        "AX_IMPL_BULLET3": "OFF",
+        "AX_IMPL_LAYER_SDL3": "OFF",
+        "AX_IMPL_LAYER_WIN32": "ON",
+        "AX_IMPL_LAYER_X11": "ON",
+        "AX_IMPL_GRAPHICS_DX11": "OFF",
+        "AX_IMPL_GRAPHICS_GL": "ON",
+        "AX_IMPL_AUDIO_SOFTOPENAL": "ON",
+        "AX_BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "msvcx86",
+      "displayName": "MSVC x86",
+	    "description": "Build with Visual Studio compiler",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/out/build/msvc/x86",
+      "architecture": "x86",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "out/install/msvc/x86",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AX_IMPL_ASSIMP": "ON",
+        "AX_IMPL_BULLET3": "ON",
+        "AX_IMPL_LAYER_SDL3": "OFF",
+        "AX_IMPL_LAYER_WIN32": "ON",
+        "AX_IMPL_LAYER_X11": "ON",
+        "AX_IMPL_GRAPHICS_DX11": "OFF",
+        "AX_IMPL_GRAPHICS_GL": "ON",
+        "AX_IMPL_AUDIO_SOFTOPENAL": "ON",
+        "AX_BUILD_EXAMPLES": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -30,6 +98,16 @@
       "name": "build-clang",
       "configurePreset": "clang",
       "description": "Build with Clang and Ninja under MSYS2"
+    },
+    {
+      "name": "build-msvcx64",
+      "configurePreset": "msvcx64",
+      "description": "Build with MSVC x64"
+    },
+    {
+      "name": "build-msvcx86",
+      "configurePreset": "msvcx86",
+      "description": "Build with MSVC x86"
     }
   ]
 }

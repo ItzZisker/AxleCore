@@ -10,7 +10,7 @@
 #include <slang.h>
 #include <slang-com-ptr.h>
 
-#include <glad/glad.h>
+#include <glad/gl.h>
 
 #include <type_traits>
 #include <vector>
@@ -18,14 +18,16 @@
 #ifdef AX_DEBUG
 #include <iostream>
 
-const char* GLErrorToString(GLenum err) {
-    switch (err) {
-        case GL_INVALID_ENUM: return "GL_INVALID_ENUM";
-        case GL_INVALID_VALUE: return "GL_INVALID_VALUE";
-        case GL_INVALID_OPERATION: return "GL_INVALID_OPERATION";
-        case GL_OUT_OF_MEMORY: return "GL_OUT_OF_MEMORY";
-        case GL_INVALID_FRAMEBUFFER_OPERATION: return "GL_INVALID_FRAMEBUFFER_OPERATION";
-        default: return "UNKNOWN_ERROR";
+namespace axle::gfx {
+    const char* GLErrorToString(GLenum err) {
+        switch (err) {
+            case GL_INVALID_ENUM: return "GL_INVALID_ENUM";
+            case GL_INVALID_VALUE: return "GL_INVALID_VALUE";
+            case GL_INVALID_OPERATION: return "GL_INVALID_OPERATION";
+            case GL_OUT_OF_MEMORY: return "GL_OUT_OF_MEMORY";
+            case GL_INVALID_FRAMEBUFFER_OPERATION: return "GL_INVALID_FRAMEBUFFER_OPERATION";
+            default: return "UNKNOWN_ERROR";
+        }
     }
 }
 
@@ -49,68 +51,12 @@ const char* GLErrorToString(GLenum err) {
 #define GL_CALL(x) x
 #endif
 
-#ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
-#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
-#endif
-
 #ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
 #define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 0x8C4D
 #endif
 
-#ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
-#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
-#endif
-
 #ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
 #define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
-#endif
-
-#ifndef GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT
-#define GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT 0x8E8F
-#endif
-
-#ifndef GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT
-#define GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT 0x8E8E
-#endif
-
-#ifndef GL_COMPRESSED_RGBA_BPTC_UNORM
-#define GL_COMPRESSED_RGBA_BPTC_UNORM 0x8E8C
-#endif
-
-#ifndef GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM
-#define GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM 0x8E8D
-#endif
-
-#ifndef GL_COMPRESSED_RGBA_ASTC_4x4_KHR
-#define GL_COMPRESSED_RGBA_ASTC_4x4_KHR 0x93B0
-#endif
-
-#ifndef GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR
-#define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR 0x93D0
-#endif
-
-#ifndef GL_COMPRESSED_RGBA_ASTC_6x6_KHR
-#define GL_COMPRESSED_RGBA_ASTC_6x6_KHR 0x93B4
-#endif
-
-#ifndef GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR
-#define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR 0x93D4
-#endif
-
-#ifndef GL_COMPRESSED_RGBA_ASTC_8x8_KHR
-#define GL_COMPRESSED_RGBA_ASTC_8x8_KHR 0x93B7
-#endif
-
-#ifndef GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR
-#define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR 0x93D7
-#endif
-
-#ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
-#define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
-#endif
-
-#ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT
-#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
 #endif
 
 namespace axle::gfx {
@@ -129,6 +75,14 @@ GLenum ToGLBlendOp(BlendOp bOp);
 GLenum ToGLStencilOp(StencilOp sOp);
 GLenum ToGLBarrierBit(ResourceState state);
 GLenum ToGLPolyMode(PolyMode polyMode);
+
+class GLContextGuard {
+private:
+    SharedPtr<core::IRenderContext> m_RCtx;
+public:
+    GLContextGuard(SharedPtr<core::IRenderContext> ctx); // Make Current
+    ~GLContextGuard();                                   // Release
+};
 
 template <typename H>
 struct GLCommandBinding {
@@ -202,6 +156,15 @@ struct GLFramebuffer : public GLInternal {
     GLuint resolveFbo{0};
 
     RenderPassHandle renderPass;
+
+    bool isSwapchain{false};
+};
+
+struct GLSwapchain {
+    uint32_t width{0};
+    uint32_t height{0};
+    TextureFormat format{TextureFormat::RGBA8_UINT};
+    FramebufferHandle backbuffer{};
 };
 
 struct GLResourceSet : public GLInternal {
@@ -235,52 +198,72 @@ struct GLStateCache {
     GLuint vao{0};
 };
 
+/*
+    TODO:
+    - Pass IGraphicsBackend to ThreadContextGfx instead of IRenderContext, and use IGraphicsBackend->Present() to Swap buffers, so its backend-managed
+    - Make IGraphicsBackend->VSyncToggleSwapchain() to toggle vsync for swapchains by UI event (must be called via main thread, just like ResizeSwapchain())
+    - Once done, draw Rainbow RGB scroll and verify if its working or nah.
+    - Make ThreadContextAudio for supporting audio stream ticking, decoding and playing sound ques asynch.
+    - Remove every piece of unhandled exception thrown in code, specially in DataSerializers and Audio code (mostly Old Codes have that)
+    - Implement logger like spdlog, based on previous java codes of MiddleWare Console, (Flushing, Compiled Patterns, ANSI) and log Vulkan/GL errors through that or engine-related stuff
+*/
+
 class GLGraphicsBackend final : public IGraphicsBackend {
 private:
+    SharedPtr<core::IRenderContext> m_Context{nullptr};
+    GladGLContext* m_GL{nullptr};
+
     GraphicsCaps m_Capabilities{};
     bool m_IsCore{false};
 public:
-    GLGraphicsBackend();
+    GLGraphicsBackend(SharedPtr<core::IRenderContext> context);
     ~GLGraphicsBackend() override;
 
     bool IsES() const { return !m_IsCore; }
     bool IsCore() const { return m_IsCore; }
 
+    const GraphicsCaps& GetCaps() const override;
     bool SupportsCap(GraphicsCapEnum cap) override;
     utils::ExResult<GraphicsCaps> QueryCaps() override;
 
+    utils::ExResult<SwapchainHandle> CreateSwapchain(const SwapchainDesc& desc) override;
+    utils::AXError DestroySwapchain(const SwapchainHandle& desc) override;
+    utils::AXError ResizeSwapchain(const SwapchainHandle& desc, uint32_t width, uint32_t height) override;
+
     utils::ExResult<BufferHandle> CreateBuffer(const BufferDesc& desc) override;
-    utils::AXError UpdateBuffer(BufferHandle& handle, size_t offset, size_t size, const void* data) override;
-    utils::AXError DestroyBuffer(BufferHandle& handle) override;
+    utils::AXError UpdateBuffer(const BufferHandle& handle, size_t offset, size_t size, const void* data) override;
+    utils::AXError DestroyBuffer(const BufferHandle& handle) override;
 
     utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) override;
-    utils::AXError UpdateTexture(TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) override;
-    utils::AXError DestroyTexture(TextureHandle& handle) override;
+    utils::AXError UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) override;
+    utils::AXError DestroyTexture(const TextureHandle& handle) override;
 
     utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) override;
-    utils::AXError DestroyFramebuffer(FramebufferHandle& handle) override;
+    utils::AXError DestroyFramebuffer(const FramebufferHandle& handle) override;
 
     utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) override;
-    utils::AXError DestroyProgram(ShaderHandle& handle) override;
+    utils::AXError DestroyProgram(const ShaderHandle& handle) override;
 
     utils::ExResult<RenderPipelineHandle> CreateRenderPipeline(const RenderPipelineDesc& desc) override;
-    utils::AXError DestroyRenderPipeline(RenderPipelineHandle& handle) override;
+    utils::AXError DestroyRenderPipeline(const RenderPipelineHandle& handle) override;
 
     utils::ExResult<ComputePipelineHandle> CreateComputePipeline(const ComputePipelineDesc& desc) override;
-    utils::AXError DestroyComputePipeline(ComputePipelineHandle& handle) override;
+    utils::AXError DestroyComputePipeline(const ComputePipelineHandle& handle) override;
 
     utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) override;
-    utils::AXError DestroyRenderPass(RenderPassHandle& handle) override;
+    utils::AXError DestroyRenderPass(const RenderPassHandle& handle) override;
 
     utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) override;
-    utils::AXError UpdateResourceSet(ResourceSetHandle& handle, Span<Binding> bindings) override;
-    utils::AXError DestroyResourceSet(ResourceSetHandle& handle) override;
+    utils::AXError UpdateResourceSet(const ResourceSetHandle& handle, Span<Binding> bindings) override;
+    utils::AXError DestroyResourceSet(const ResourceSetHandle& handle) override;
 
-    utils::AXError Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, uint32_t z) override;
-    utils::AXError Barrier(ICommandList& cmd, Span<ResourceTransition> transitions) override;
+    utils::AXError Execute(const ICommandList& cmd) override;
+    utils::AXError Dispatch(const ICommandList& cmd, uint32_t x, uint32_t y, uint32_t z) override;
+    utils::AXError Barrier(const ICommandList& cmd, Span<ResourceTransition> transitions) override;
 
-    // Execution
-    utils::AXError Execute(const GLCommandList& cmd);
+    utils::ExResult<uint32_t> AcquireNextImage() override;
+    utils::ExResult<FramebufferHandle> GetSwapchainFramebuffer(uint32_t imageIndex) override;
+    utils::AXError Present(uint32_t imageIndex) override;
 
     template <typename T>
     requires std::is_base_of_v<GLInternal, T>
@@ -294,7 +277,8 @@ public:
             frees.pop_back();
         } else {
             index = static_cast<uint32_t>(handles.size());
-            handles.emplace_back({.index = index});
+            handles.emplace_back();
+            handles.back().index = index;
         }
         return handles[index];
     }
@@ -320,7 +304,12 @@ public:
     }
 
     template <typename T>
-    void PostDeleteHandle(GLInternal& internal, ExternalHandle<T>& handle, std::vector<uint32_t>& frees) const {
+    bool IsEqualHandles(const ExternalHandle<T>& handle0, const ExternalHandle<T>& handle1) const {
+        return handle0.index == handle1.index && handle0.generation == handle1.generation;
+    }
+
+    template <typename T>
+    void PostDeleteHandle(GLInternal& internal, const ExternalHandle<T>& handle, std::vector<uint32_t>& frees) const {
         internal.alive = false;
         internal.generation++;
         frees.push_back(handle.index);
@@ -335,18 +324,21 @@ private:
     std::vector<GLRenderPass>       m_RenderPasses{};
     std::vector<GLResourceSet>      m_ResourceSets{};
 
-    std::vector<uint32_t> m_FreeBuffers{};
-    std::vector<uint32_t> m_FreeTextures{};
-    std::vector<uint32_t> m_FreePrograms{};
-    std::vector<uint32_t> m_FreeRenderPipelines{};
-    std::vector<uint32_t> m_FreeComputePipelines{};
-    std::vector<uint32_t> m_FreeFramebuffers{};
-    std::vector<uint32_t> m_FreeRenderPasses{};
-    std::vector<uint32_t> m_FreeResourceSets{};
+    std::vector<uint32_t>   m_FreeBuffers{};
+    std::vector<uint32_t>   m_FreeTextures{};
+    std::vector<uint32_t>   m_FreePrograms{};
+    std::vector<uint32_t>   m_FreeRenderPipelines{};
+    std::vector<uint32_t>   m_FreeComputePipelines{};
+    std::vector<uint32_t>   m_FreeFramebuffers{};
+    std::vector<uint32_t>   m_FreeRenderPasses{};
+    std::vector<uint32_t>   m_FreeResourceSets{};
 
     GLCommandBinding<RenderPassHandle>       m_CurrentRenderPass{};
     GLCommandBinding<RenderPipelineHandle>   m_CurrentRenderPipeline{};
     GLCommandBinding<ComputePipelineHandle>  m_CurrentComputePipeline{};
+
+    FramebufferHandle  m_DefaultBackbuffer{};
+    GLSwapchain        m_Swapchain{};
 
     GLStateCache m_CurrentState{};
 

@@ -3,16 +3,12 @@
 #include "axle/audio/AL/stream/AX_ALAudioStreamVorbisSource.hpp"
 #include "axle/audio/AL/stream/AX_ALIAudioStream.hpp"
 #include "axle/audio/data/AX_AudioOGG.hpp"
-#include "axle/core/app/AX_ApplicationX11.hpp"
-#include "axle/core/app/AX_IApplication.hpp"
+
+#include "axle/core/window/AX_WindowX11.hpp"
+#include "axle/core/window/AX_IWindow.hpp"
 
 // GL RenderContext For Xorg
-#include "axle/core/ctx/GL/AX_GLRenderContextX11.hpp"
-
-// GL Functions
-#ifdef __AX_GRAPHICS_GL__
-#include "glad/glad.h"
-#endif
+#include "axle/core/ctx/GL/AX_RenderContextGLX11.hpp"
 
 // ALSoft Audio
 #ifdef __AX_AUDIO_ALSOFT__

@@ -11,9 +11,9 @@
 namespace axle::core {
 
 enum class WndCursorMode {
-    CmNormal,
-    CmHidden,
-    CmLocked // centered & raw mouse movement
+    Normal,
+    Hidden,
+    Locked // centered & raw mouse movement
 };
 
 struct WindowSpec {
@@ -24,21 +24,21 @@ struct WindowSpec {
 };
 
 enum WindowType {
-    WndWin32,
-    WndX11,
-    WndCocoa,
-    WndSurfaceFlinger,
-    WndUnknown
+    Win32,
+    X11,
+    Cocoa,
+    SurfaceFlinger,
+    Unknown
 };
 
 enum WndEventType {
-    EvVoid,
-    EvKey,
-    EvWindowResize,
-    EvWindowFocus,
-    EvMouseMove,
-    EvMouseButton,
-    EvQuit
+    Void,
+    Key,
+    WindowResize,
+    WindowFocus,
+    MouseMove,
+    MouseButton,
+    Quit
 };
 
 union WndEventValue {
@@ -50,7 +50,7 @@ union WndEventValue {
 };
 
 struct WndEvent {
-    WndEventType type{WndEventType::EvVoid};
+    WndEventType type{WndEventType::Void};
     WndEventValue value;
 };
 
@@ -87,7 +87,7 @@ private:
     friend class WindowWin32;
     friend class WindowX11;
 
-    WndCursorMode m_CursorMode{WndCursorMode::CmNormal};
+    WndCursorMode m_CursorMode{WndCursorMode::Normal};
     uint32_t m_Width{1024}, m_Height{768};
 
     uint32_t m_MaxEventQueueCapacity{32};
@@ -104,15 +104,14 @@ private:
 
 class IWindow {
 public:
-    IWindow(const WindowSpec& spec, uint32_t maxSharedEvents) 
-        : m_State(spec, maxSharedEvents) {}
+    IWindow(const WindowSpec& spec, uint32_t maxSharedEvents) : m_State(spec, maxSharedEvents) {}
 
     IWindow(const IWindow&) = delete;
     IWindow& operator=(const IWindow&) = delete;
 
     IWindow(IWindow&&) = delete;
     IWindow& operator=(const IWindow&&) = delete;
-    
+
     virtual ~IWindow() = default;
 
     virtual void Launch() = 0;

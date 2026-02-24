@@ -59,6 +59,8 @@ ExternalProject_Add(
 
 # Create imported target for linking
 add_library(Assimp STATIC IMPORTED GLOBAL)
+
+# TODO: Change these, map to .dylib, .so and .lib (WIN32 MSVC) and .dll.a (WIN32 Mingw)
 set_target_properties(Assimp PROPERTIES
     IMPORTED_LOCATION ${ASSIMP_INSTALL_DIR}/lib/libassimp.a
 )

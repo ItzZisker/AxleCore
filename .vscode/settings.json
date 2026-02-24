@@ -3,18 +3,18 @@
     "<C-p>": false,
     "<C-f>": false
   },
-  "C_Cpp.intelliSenseEngine": "disabled",
-  "clangd.arguments": ["--compile-commands-dir=out/build/clang"],
+  "C_Cpp.intelliSenseEngine": "default",
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+  "clangd.arguments": [
+    "--compile-commands-dir=out/build/msvc_ninja/x64",
+    "--query-driver=C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.32.31326/bin/Hostx64/x64/cl.exe"
+  ],
   "clangd.path": "clangd",
-  "cmake.generator": "Ninja",
+  "cmake.cmakePath": "C:/Program Files/CMake/bin/cmake.exe",
   "cmake.configureSettings": {
-    "CMAKE_C_COMPILER": "clang",
-    "CMAKE_CXX_COMPILER": "clang++",
     "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
     "CMAKE_BUILD_TYPE": "Debug"
   },
-  "cmake.buildDirectory": "out/build/clang",
-  "cmake.installPrefix": "out/install/clang",
   "cmake.buildBeforeRun": true,
   "cmake.configureOnOpen": true,
   "cmake.configureOnEdit": false,
@@ -93,5 +93,6 @@
     "xutility": "cpp",
     "xstring": "cpp",
     "ranges": "cpp"
-  }
+  },
+  "C_Cpp.default.compilerPath": "cl.exe"
 }

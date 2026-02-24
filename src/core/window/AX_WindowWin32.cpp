@@ -3,6 +3,7 @@
 
 #ifdef __AX_PLATFORM_WIN32__
 
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <windowsx.h>
 
@@ -30,7 +31,7 @@ void WindowWin32::Launch() {
     WNDCLASS wc = {};
     wc.lpfnWndProc = (WNDPROC)WindowWin32::WndProc;
     wc.hInstance = (HINSTANCE)m_Instance;
-    wc.lpszClassName = "Application WIN32";
+    wc.lpszClassName = "AX Application";
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClass(&wc);
 
@@ -55,7 +56,7 @@ void WindowWin32::Launch() {
     );
 
     if (!m_Hwnd) {
-        MessageBox(nullptr, "Failed to create window", "Error", MB_OK);
+        MessageBox(nullptr, "Failed To Create Window", "Error", MB_OK);
         exit(1);
     }
 
@@ -104,15 +105,13 @@ void WindowWin32::SetResizable(bool enabled) {
 }
 
 void WindowWin32::SetCursorMode(WndCursorMode mode) {
-    if (mode == WndCursorMode::CmNormal) {
+    if (mode == WndCursorMode::Normal) {
         ShowCursor(TRUE);
         ClipCursor(nullptr);
-    }
-    else if (mode == WndCursorMode::CmHidden) {
+    } else if (mode == WndCursorMode::Hidden) {
         ShowCursor(FALSE);
         ClipCursor(nullptr);
-    }
-    else if (mode == WndCursorMode::CmLocked) {
+    } else if (mode == WndCursorMode::Locked) {
         ShowCursor(FALSE);
 
         RECT rect;
@@ -128,105 +127,92 @@ void WindowWin32::SetCursorMode(WndCursorMode mode) {
     m_State.SetCursorMode(mode);
 }
 
-vLRESULT CALLBACK WindowWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam)
-{
+vLRESULT CALLBACK WindowWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam) {
     WindowWin32* app = g_App;
-
     WndEvent event;
-    switch (msg)
-    {
-    case WM_CLOSE:
-    {
-        app->m_State.RequestQuit();
-        break;
-    }
-    case WM_DESTROY:
-    {
-        PostQuitMessage(0);
-        break;
-    }
-    case WM_SIZE:
-    {
-        uint32_t w = LOWORD(lParam);
-        uint32_t h = HIWORD(lParam);
-        app->m_State.SetSize(w, h);
 
-        event.type = WndEventType::EvWindowResize;
-        event.value.windowResize = { w, h };
-        break;
-    }
-    case WM_KEYDOWN:
-    case WM_KEYUP:
-    {
-        event.type = WndEventType::EvKey;
-        event.value.key = { (uint64_t)wParam, (msg == WM_KEYDOWN) };
-        break;
-    }
-    case WM_MOUSEMOVE:
-    {
-        float x = (float)GET_X_LPARAM(lParam);
-        float y = (float)GET_Y_LPARAM(lParam);
-
-        event.type = WndEventType::EvMouseMove;
-        event.value.mouseMove = { x, y };
-        break;
-    }
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONUP:
-    {
-        bool pressed = (msg == WM_LBUTTONDOWN);
-        if (pressed) {
-           if (app->m_IsMouseOnEdge) app->m_Grabbed = true;
-        } else {
-            app->m_Grabbed = false;
+    switch (msg) {
+        case WM_CLOSE: {
+            app->m_State.RequestQuit();
+            break;
         }
-        event.type = WndEventType::EvMouseButton;
-        event.value.mouseButton = { 0, pressed };
-        break;
-    }
-    case WM_RBUTTONDOWN:
-    case WM_RBUTTONUP:
-    {
-        event.type = WndEventType::EvMouseButton;
-        event.value.mouseButton = { 1, (msg == WM_RBUTTONDOWN) };
-        break;
-    }
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONUP:
-    {
-        event.type = WndEventType::EvMouseButton;
-        event.value.mouseButton = { 2, (msg == WM_MBUTTONDOWN) };
-        break;
-    }
-    case WM_ACTIVATE:
-    {
-        app->m_Focused = (LOWORD(wParam) == WA_ACTIVE);
-        event.type = WndEventType::EvWindowFocus;
-        event.value.windowFocus = { app->m_Focused };
-        break;
-    }
-    case WM_NCHITTEST:
-    {
-        LRESULT hit = DefWindowProc((HWND)hwnd, msg, wParam, lParam);
-
-        if (hit == HTBOTTOM || hit == HTTOP || hit == HTRIGHT || hit == HTLEFT ||
-            hit == HTBOTTOMLEFT || hit == HTBOTTOMRIGHT || hit == HTTOPLEFT || hit == HTTOPRIGHT) {
-            app->m_IsMouseOnEdge = true;
-        } else {
-            app->m_IsMouseOnEdge = false;
+        case WM_DESTROY: {
+            PostQuitMessage(0);
+            break;
         }
-        return hit;
-    }
-    case WM_ENTERSIZEMOVE:
-    case WM_EXITSIZEMOVE:
-    {
-        app->m_Grabbed = (msg == WM_ENTERSIZEMOVE);
-        if (!app->m_Grabbed) app->m_IsMouseOnEdge = false;
-        break;
-    }
+        case WM_SIZE: {
+            uint32_t w = LOWORD(lParam);
+            uint32_t h = HIWORD(lParam);
+            app->m_State.SetSize(w, h);
+
+            event.type = WndEventType::WindowResize;
+            event.value.windowResize = { w, h };
+            break;
+        }
+        case WM_KEYDOWN:
+        case WM_KEYUP: {
+            event.type = WndEventType::Key;
+            event.value.key = { (uint64_t)wParam, (msg == WM_KEYDOWN) };
+            break;
+        }
+        case WM_MOUSEMOVE: {
+            float x = (float)GET_X_LPARAM(lParam);
+            float y = (float)GET_Y_LPARAM(lParam);
+
+            event.type = WndEventType::MouseMove;
+            event.value.mouseMove = { x, y };
+            break;
+        }
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP: {
+            bool pressed = (msg == WM_LBUTTONDOWN);
+            if (pressed) {
+            if (app->m_MouseOnEdge) app->m_Grabbed = true;
+            } else {
+                app->m_Grabbed = false;
+            }
+            event.type = WndEventType::MouseButton;
+            event.value.mouseButton = { 0, pressed };
+            break;
+        }
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP: {
+            event.type = WndEventType::MouseButton;
+            event.value.mouseButton = { 1, (msg == WM_RBUTTONDOWN) };
+            break;
+        }
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP: {
+            event.type = WndEventType::MouseButton;
+            event.value.mouseButton = { 2, (msg == WM_MBUTTONDOWN) };
+            break;
+        }
+        case WM_ACTIVATE: {
+            app->m_Focused = (LOWORD(wParam) == WA_ACTIVE);
+            event.type = WndEventType::WindowFocus;
+            event.value.windowFocus = { app->m_Focused };
+            break;
+        }
+        case WM_NCHITTEST: {
+            LRESULT hit = DefWindowProc((HWND)hwnd, msg, wParam, lParam);
+
+            if (hit == HTBOTTOM || hit == HTTOP || hit == HTRIGHT || hit == HTLEFT ||
+                hit == HTBOTTOMLEFT || hit == HTBOTTOMRIGHT || hit == HTTOPLEFT || hit == HTTOPRIGHT) {
+                app->m_MouseOnEdge = true;
+            } else {
+                app->m_MouseOnEdge = false;
+            }
+            return hit;
+        }
+        case WM_ENTERSIZEMOVE:
+        case WM_EXITSIZEMOVE: {
+            app->m_Grabbed = (msg == WM_ENTERSIZEMOVE);
+            if (!app->m_Grabbed) app->m_MouseOnEdge = false;
+            break;
+        }
     }
 
-    if (event.type != WndEventType::EvVoid) {
+    if (event.type != WndEventType::Void) {
         app->m_State.PushEvent(event);
         return 0;
     }

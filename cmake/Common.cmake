@@ -15,14 +15,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 include(Platform)
 include(Compiler)
 
-# Default include directories
-include_directories(${CMAKE_SOURCE_DIR}/include)
-
-# For Emscripten builds
-if(DEFINED EMSCRIPTEN_ROOT_PATH)
-    include_directories(${EMSCRIPTEN_ROOT_PATH}/cache/sysroot/include)
-endif()
-
 option(AX_BUILD_EMWEB "Build for WebAssembly via Emscripten" OFF)
 
 # Utility: output compiler info

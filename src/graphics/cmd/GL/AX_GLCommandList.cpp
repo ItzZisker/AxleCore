@@ -15,6 +15,38 @@ void GLCommandList::Begin() {
 
 void GLCommandList::End() {}
 
+void GLCommandList::SetViewport(
+    float x,
+    float y,
+    float width,
+    float height,
+    float minDepth,
+    float maxDepth
+) {
+    m_Commands.push_back({GLCommandType::SetViewport, {
+        (size_t)x,
+        (size_t)y,
+        (size_t)width,
+        (size_t)height,
+        (size_t)minDepth,
+        (size_t)maxDepth
+    }});
+}
+
+void GLCommandList::SetScissor(
+    int32_t x,
+    int32_t y,
+    uint32_t width,
+    uint32_t height
+) {
+    m_Commands.push_back({GLCommandType::SetScissor, {
+        (size_t)x,
+        (size_t)y,
+        (size_t)width,
+        (size_t)height
+    }});
+}
+
 void GLCommandList::BeginRenderPass(
     const RenderPassHandle& pass,
     const FramebufferHandle& framebuffer,

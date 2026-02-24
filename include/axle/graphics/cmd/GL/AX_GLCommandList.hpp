@@ -7,6 +7,8 @@
 namespace axle::gfx {
 
 enum class GLCommandType {
+    SetViewport,
+    SetScissor,
     BeginRenderPass,
     EndRenderPass,
     BindRenderPipeline,
@@ -34,6 +36,22 @@ public:
 
     void Begin() override;
     void End() override;
+
+    void SetViewport(
+        float x,
+        float y,
+        float width,
+        float height,
+        float minDepth = 0.0f,
+        float maxDepth = 1.0f
+    ) override;
+
+    void SetScissor(
+        int32_t x,
+        int32_t y,
+        uint32_t width,
+        uint32_t height
+    ) override;
 
     void BeginRenderPass(
         const RenderPassHandle& pass,
