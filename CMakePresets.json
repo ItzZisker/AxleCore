@@ -72,6 +72,27 @@
       }
     },
     {
+      "name": "msvcx64vc18",
+      "displayName": "MSVC x64 VS 2026",
+	    "description": "Build with Visual Studio compiler",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/out/build/msvc/x64",
+      "architecture": "x64",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "out/install/msvc/x64",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AX_IMPL_ASSIMP": "OFF",
+        "AX_IMPL_BULLET3": "OFF",
+        "AX_IMPL_LAYER_SDL3": "OFF",
+        "AX_IMPL_LAYER_WIN32": "ON",
+        "AX_IMPL_LAYER_X11": "ON",
+        "AX_IMPL_GRAPHICS_DX11": "OFF",
+        "AX_IMPL_GRAPHICS_GL": "ON",
+        "AX_IMPL_AUDIO_SOFTOPENAL": "ON",
+        "AX_BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
       "name": "msvcx86",
       "displayName": "MSVC x86",
 	    "description": "Build with Visual Studio compiler",

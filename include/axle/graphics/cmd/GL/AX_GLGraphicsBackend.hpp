@@ -216,8 +216,10 @@ private:
     GraphicsCaps m_Capabilities{};
     bool m_IsCore{false};
 public:
-    GLGraphicsBackend(SharedPtr<core::IRenderContext> context);
+    GLGraphicsBackend(core::IRenderContext* context);
     ~GLGraphicsBackend() override;
+
+    SharedPtr<core::IRenderContext> GetContext() const { return m_Context; }
 
     bool IsES() const { return !m_IsCore; }
     bool IsCore() const { return m_IsCore; }

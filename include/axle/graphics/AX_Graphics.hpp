@@ -754,6 +754,8 @@ class IGraphicsBackend {
 public:
     virtual ~IGraphicsBackend() = default;
 
+    virtual SharedPtr<core::IRenderContext> GetContext() const = 0;
+
     virtual bool SupportsCap(GraphicsCapEnum cap) = 0;
     virtual const GraphicsCaps& GetCaps() const = 0;
     virtual utils::ExResult<GraphicsCaps> QueryCaps() = 0;

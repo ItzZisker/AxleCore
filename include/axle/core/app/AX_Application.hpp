@@ -25,7 +25,12 @@ private:
     core::SharedState m_State{};
     std::atomic_bool m_FirstInit{true};
 public:
-    int InitCurrent(ApplicationSpec spec, std::function<void(float, Application&, void*)> updateFunc, void* miscData);
+    int InitCurrent(
+        ApplicationSpec spec,
+        std::function<void(Application&, void*)> initFunc,
+        std::function<void(float, Application&, void*)> updateFunc,
+        void* miscData
+    );
     void RequestQuit();
 
     SharedPtr<ThreadContextWnd> GetWindowThread() const { return m_WndThread; }

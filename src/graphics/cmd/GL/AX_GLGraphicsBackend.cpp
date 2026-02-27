@@ -44,7 +44,7 @@ GLContextGuard::~GLContextGuard() {
 #endif
 }
 
-GLGraphicsBackend::GLGraphicsBackend(SharedPtr<core::IRenderContext> context) : m_Context(context) {
+GLGraphicsBackend::GLGraphicsBackend(core::IRenderContext* context) : m_Context(context) {
     slang::createGlobalSession(m_SlangGlobal.writeRef());
 #ifdef __AX_PLATFORM_WIN32__
     auto handle = std::static_pointer_cast<core::GLCHandleWin32>(m_Context->GetContextHandle());

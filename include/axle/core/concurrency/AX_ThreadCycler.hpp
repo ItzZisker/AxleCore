@@ -1,8 +1,9 @@
 #pragma once
 
 #include "axle/core/window/AX_IWindow.hpp"
-#include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/core/concurrency/AX_TaskQueue.hpp"
+
+#include "axle/graphics/AX_Graphics.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
@@ -123,14 +124,24 @@ public:
 };
 // TODO: Create an "ALAudioContext" Class which holds streams, music, sources by respect to audio thread ownership
 
-class ThreadContextWnd : public ThreadContext<IWindow> {
+class ThreadContextWnd : public ThreadContext<core::IWindow> {
 public:
     bool StartApp(CtxCreatorFunc initFunc, int64_t sleepMS = 10);
 };
 
-class ThreadContextGfx : public ThreadContext<IRenderContext> {
+class ThreadContextGfx : public ThreadContext<gfx::IGraphicsBackend> {
+private:
+    std::atomic_bool m_IsAutoPresent{false};
+    std::atomic<float> m_LastFrameTime{0.0f};
+    std::atomic<float> m_FrameCap{0.0f};
 public:
-    bool StartGfx(CtxCreatorFunc initFunc);
+    bool StartGfx(CtxCreatorFunc initFunc, float frameCap = 0.0f, bool autoPresent = false);
+
+    bool IsAutoPresent() const { return m_IsAutoPresent.load(); };
+    float GetLastFrameTime() const { return m_LastFrameTime.load(std::memory_order_relaxed); }
+
+    void SetAutoPresent(bool autoPresent) { m_IsAutoPresent.store(autoPresent); }
+    void CapFrames(float maxFPS = 0.0f) { m_FrameCap.store(maxFPS); }
 };
 
 }

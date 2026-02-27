@@ -1,25 +1,39 @@
 #include "axle/core/app/AX_Application.hpp"
 #include "axle/core/ctx/AX_IRenderContext.hpp"
-#include "axle/core/ctx/GL/AX_RenderContextGLWin32.hpp"
 #include "axle/core/window/AX_IWindow.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
-#include <algorithm>
+
+#ifdef __AX_GRAPHICS_GL__
+#include "axle/graphics/cmd/GL/AX_GLGraphicsBackend.hpp"
+#endif
 
 #ifdef __AX_PLATFORM_WIN32__
 #include "axle/core/window/AX_WindowWin32.hpp"
+
+#ifdef __AX_GRAPHICS_GL__
+#include "axle/core/ctx/GL/AX_RenderContextGLWin32.hpp"
+#endif
 #endif
 
 #ifdef __AX_PLATFORM_X11
 #include "axle/core/window/AX_WindowX11.hpp"
 #endif
 
+#include <algorithm>
+#include <memory>
+
 namespace axle::core
 {
 
 // TODO: Support Android Cycles (NOTE: Main thread == UI) ASAP!!!
-int Application::InitCurrent(ApplicationSpec spec, std::function<void(float, Application&, void*)> updateFunc, void* miscData) {
+int Application::InitCurrent(
+    ApplicationSpec spec,
+    std::function<void(Application&, void*)> initFunc,
+    std::function<void(float, Application&, void*)> updateFunc,
+    void* miscData
+) {
     using namespace axle::utils;
 
     bool wndRes = m_WndThread->StartApp([wndspec = std::move(spec.wndspec)]() -> ExResult<SharedPtr<IWindow>> {
@@ -40,7 +54,7 @@ int Application::InitCurrent(ApplicationSpec spec, std::function<void(float, App
 
     auto wndCtx = m_WndThread->GetContext();
 
-    bool gfxRes = m_GfxThread->StartGfx([wndCtx, spec = std::move(spec)]() -> ExResult<SharedPtr<IRenderContext>> {
+    bool gfxRes = m_GfxThread->StartGfx([wndCtx, spec = std::move(spec)]() -> ExResult<SharedPtr<gfx::IGraphicsBackend>> {
         IRenderContext* ctxPtr{nullptr};
         int32_t combinedTypes = IRenderContext::CombinedTypes();
         auto& sortedTypesByOS = IRenderContext::SortedTypesByPlatform();
@@ -86,11 +100,15 @@ int Application::InitCurrent(ApplicationSpec spec, std::function<void(float, App
         if (!ctxPtr->Init(wndCtx)) {
             return AXError("AX Error: Couldn't Create enforced-GL Context");
         }
-        return SharedPtr<IRenderContext>(ctxPtr);
+        switch (ctxPtr->GetType()) {
+            case GfxType::GL330: return {std::make_shared<gfx::GLGraphicsBackend>(ctxPtr)};
+            default: throw std::runtime_error("Bruh");
+        }
     });
     if (!gfxRes) return -2;
 
     m_GfxThread->AwaitStart();
+    initFunc(*this, miscData);
 
     auto& state = wndCtx->GetSharedState();
 

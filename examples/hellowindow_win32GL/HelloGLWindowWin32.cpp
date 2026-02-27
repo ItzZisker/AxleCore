@@ -74,17 +74,33 @@ struct MiscData {
     SharedPtr<gfx::Graphics> gfx{nullptr};
 };
 
-void UpdateMain(float dT, core::Application& app, void* miscData) {
+void InitMain(core::Application& app, void* miscData) {
     auto misc = (MiscData*) miscData;
 
-    auto& music = misc->music;
+#ifdef __AX_AUDIO_ALSOFT__
+    try {
+        misc->music.Play(&misc->musicStream);
+    } catch (const std::exception& ex) {
+        std::cerr << "Audio Exception: " << ex.what() << std::endl;
+    }
+#endif
+    auto gfxThread = app.GetGraphicsThread();
+
+    gfxThread->SetAutoPresent(false);
+    gfxThread->CapFrames(1000.0f);
+
     if (!misc->ctx) {
         misc->ctx = app.GetWindowThread()->GetContext();
     }
-    auto ctx = misc->ctx;
     if (!misc->gfx) {
-        misc->gfx = std::make_shared<gfx::Graphics>(app.GetGraphicsThread());
+        misc->gfx = std::make_shared<gfx::Graphics>(gfxThread);
     }
+}
+
+void UpdateMain(float dT, core::Application& app, void* miscData) {
+    auto misc = (MiscData*) miscData;
+
+    auto ctx = misc->ctx;
     auto gfx = misc->gfx;
 
     auto eq = ctx->GetSharedState().TakeEvents();
@@ -94,20 +110,17 @@ void UpdateMain(float dT, core::Application& app, void* miscData) {
             auto cmdList = gfx->BeginCommandList();
             cmdList->Begin();
             cmdList->SetViewport(0.0f, 0.0f, float(ev.width), float(ev.height));
+            //cmdList->BeginRenderPass() // How to draw clearcolor in the viewport???
             cmdList->End();
             gfx->Submit(cmdList).get();
+            gfx.???
             break;
         }
     }
     
 #ifdef __AX_AUDIO_ALSOFT__
-    static audio::ALAudioStreamVorbisSource* source{nullptr};
-
     try {
-        if (!source || !source->IsPlaying()) {
-            source = music.Play(&misc->musicStream);
-        }
-        music.Tick(dT);
+        misc->music.Tick(dT);
     } catch (const std::exception& ex) {
         std::cerr << "Audio Exception: " << ex.what() << std::endl;
     }
@@ -162,7 +175,7 @@ int main() {
         .music = music,
         .musicStream = stream
     };
-    app.InitCurrent(spec, UpdateMain, &misc);
+    app.InitCurrent(spec, InitMain, UpdateMain, &misc);
 
     // std::atomic<float> tT{0.0f};
     // glThread->PushWork("Rainbow", [&tT, glThread](){

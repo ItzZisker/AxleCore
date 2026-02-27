@@ -135,7 +135,7 @@ void ThreadCycler::DoCycle() {
         for (auto& job : localTasks) {
             job();
         }
-        for (WorkHandle h : localOrder) {
+        for (WorkHandle& h : localOrder) {
             const WorkSlot& slot = localSlots[h];
             if (slot.alive && slot.job) slot.job();
         }
@@ -158,10 +158,27 @@ bool ThreadContextWnd::StartApp(CtxCreatorFunc initFunc, int64_t sleepMS) {
     return Start(sleepMS, std::move(initFunc), std::move(constWk));
 }
 
-// swapbuffers already introduce GPU-synch block which will push the GPU and CPU into battle and gives maximum framerate
-bool ThreadContextGfx::StartGfx(CtxCreatorFunc initFunc) {
-    auto constWk = [this](){ if (m_Ctx) m_Ctx->SwapBuffers(); };
-    return Start(0, std::move(initFunc), std::move(constWk)); // so, based on explanation above; mssleep becomes 0
+bool ThreadContextGfx::StartGfx(CtxCreatorFunc initFunc, float frameCap, bool autoPresent) {
+    m_IsAutoPresent.store(autoPresent);
+    using namespace std::chrono;
+    auto clock = SharedPtr<steady_clock>();
+    auto constWk = [this, clock](){
+        if (!m_Ctx) return;
+        auto time_now = clock->now();
+        auto img = m_Ctx->AcquireNextImage();
+        if (img.has_value()) {
+            m_Ctx->Present(img.value());
+        } else {
+            std::cerr << "AX Error (AutoPresent); Cannot present next image: " << img.error().msg << std::endl;
+        }
+        float frameCap = m_FrameCap.load(std::memory_order_relaxed);
+        if (frameCap > 0.0f) {
+            auto delta = duration_cast<milliseconds>(clock->now() - time_now);
+            m_LastFrameTime.store(delta.count() / 1000.0f, std::memory_order_relaxed);
+            std::this_thread::sleep_for(ChMillis(std::max((int64_t)(frameCap * 1000) - delta.count(), (int64_t)0)));
+        }
+    };
+    return Start(0, std::move(initFunc), std::move(constWk));
 }
 
 }
