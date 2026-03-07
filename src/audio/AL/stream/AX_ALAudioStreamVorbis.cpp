@@ -7,15 +7,18 @@ namespace axle::audio
 {
 
 ALAudioStreamVorbis::ALAudioStreamVorbis(OGGAudio& ogg, AudioStreamDesc desc)
-    : m_Data(ogg), ALIAudioStream(ogg.channels, ogg.sampleRate, desc) {
+    : m_Data(ogg), ALIAudioStream(ogg.channels, ogg.sampleRate, desc) {}
 
+utils::ExError ALAudioStreamVorbis::Open() {
     int error = 0;
     m_Vorbis = stb_vorbis_open_memory(m_Data.entireStream.data(), (int)m_Data.entireStream.size(), &error, nullptr);
 
     if (!m_Vorbis) {
-        throw std::runtime_error("Failed to open Vorbis from memory, error=" + std::to_string(error));
+        return {"Cannot Open VorbisStream: stb_vorbis_open_memory failed, error=" + std::to_string(error)};
     }
     m_Info = stb_vorbis_get_info(m_Vorbis);
+    m_Opened = true;
+    return utils::ExError::NoError();
 }
 
 ALAudioStreamVorbis::~ALAudioStreamVorbis() {
@@ -23,10 +26,11 @@ ALAudioStreamVorbis::~ALAudioStreamVorbis() {
         stb_vorbis_close(m_Vorbis);
         m_Vorbis = nullptr;
     }
+    m_Opened = false;
 }
 
 void ALAudioStreamVorbis::Tick(float dT) {
-    if (m_EndOfStream) return;
+    if (!m_Opened || m_EndOfStream) return;
 
     const size_t samplesPerPeriod = size_t(m_SampleRate * m_Desc.periodSeconds) * m_Channels;
 
@@ -62,6 +66,8 @@ void ALAudioStreamVorbis::Tick(float dT) {
 }
 
 size_t ALAudioStreamVorbis::PopSamples(int16_t* out, size_t samples) {
+    if (!m_Opened) return 0;
+
     size_t count = std::min(samples, m_FilledSamples);
 
     for (size_t i = 0; i < count; i++) {
@@ -74,20 +80,26 @@ size_t ALAudioStreamVorbis::PopSamples(int16_t* out, size_t samples) {
 }
 
 void ALAudioStreamVorbis::Reset() {
-    stb_vorbis_seek_start(m_Vorbis);
-    m_WriteCursor = m_ReadCursor = m_FilledSamples = 0;
-    m_EndOfStream = false;
+    if (m_Opened) {
+        stb_vorbis_seek_start(m_Vorbis);
+        m_WriteCursor = m_ReadCursor = m_FilledSamples = 0;
+        m_EndOfStream = false;
+    }
 }
 
 void ALAudioStreamVorbis::SeekSeconds(float seconds) {
-    uint64_t sample = uint64_t(seconds * m_SampleRate);
-    SeekSamples(sample);
+    if (m_Opened) {
+        uint64_t sample = uint64_t(seconds * m_SampleRate);
+        SeekSamples(sample);
+    }
 }
 
 void ALAudioStreamVorbis::SeekSamples(uint64_t sampleIndex) {
-    stb_vorbis_seek(m_Vorbis, sampleIndex);
-    m_WriteCursor = m_ReadCursor = m_FilledSamples = 0;
-    m_EndOfStream = false;
+    if (m_Opened) {
+        stb_vorbis_seek(m_Vorbis, sampleIndex);
+        m_WriteCursor = m_ReadCursor = m_FilledSamples = 0;
+        m_EndOfStream = false;
+    }
 }
 
 

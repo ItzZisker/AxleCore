@@ -59,11 +59,7 @@ ImageFormat Img_GetImageFormat(int nrChannels, int bits, bool isHDR) {
             }
         }
     }
-    throw std::runtime_error("ImageFormat not found for nrChannels="
-        + std::to_string(nrChannels) + ", bits="
-        + std::to_string(bits) + ", isHDR="
-        + std::to_string(isHDR)
-    );
+    return ImageFormat::Unknown;
 }
 
 }

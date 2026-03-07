@@ -62,8 +62,6 @@ set(PROJECT_SRC
     src/core/window/AX_WindowWin32.cpp
     src/core/window/AX_WindowX11.cpp
 
-    src/data/AX_DataSerializer.cpp
-    src/data/AX_DataDeserializer.cpp
     src/data/AX_DataStreamImplBuffer.cpp
     src/data/AX_DataStreamImplFile.cpp
     src/data/AX_DataTemplates.cpp
@@ -76,7 +74,7 @@ set(PROJECT_SRC
     ${AUDIO_SRC}
 
     src/graphics/cmd/AX_Graphics.cpp
-
+    
     src/graphics/cmd/GL/AX_GLCommandList.cpp
     src/graphics/cmd/GL/AX_GLGraphicsBackend.cpp
     
@@ -88,6 +86,10 @@ set(PROJECT_SRC
     src/graphics/base/texture/AX_TextureBRDFLUT.cpp
     src/graphics/base/texture/AX_TextureDXT.cpp
     src/graphics/base/texture/AX_TextureASTC.cpp
+
+    src/graphics/scene/AX_Camera.cpp
+
+    src/utils/AX_Coordination.cpp
 
     # external/glad/gles2.c
 )

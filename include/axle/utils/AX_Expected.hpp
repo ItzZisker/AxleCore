@@ -5,28 +5,47 @@
 #include <utility>
 #include <stdexcept>
 
+#define AX_PROPAGATE_ERROR(statement)         \
+do {                                          \
+    ::axle::utils::ExError err = (statement); \
+    if (!err.IsNoError()) {                   \
+        return err;                           \
+    }                                         \
+} while (0)
+
+#define AX_PROPAGATE_RESULT_ERROR(statement)  \
+do {                                          \
+    auto res = (statement);                   \
+    if (!res.has_value()) {                   \
+        return res.error();                   \
+    }                                         \
+} while (0)
+
+#define AX_PROPAGATE_RESULT(statement)  \
+do {                                    \
+    auto res = (statement);             \
+    if (!res.has_value()) {             \
+        return res.error();             \
+    } else {                            \
+        return res.value();             \
+    }                                   \
+} while (0)
+
 namespace axle::utils
 {
 
-#define AX_DECLR_EXRR_FUNC(ReturnType, Name, ...) \
-    utils::ExResult<ReturnType> Name(__VA_ARGS__)
-
-class ExException : public std::runtime_error {
-public:
-    int code;
-    ExException(int code, const std::string& msg)
-        : std::runtime_error(msg), code(code) {}
-};
-
-// TODO: rename to ExError
-struct AXError {
+struct ExError {
     int code{-1};
     std::string msg{"Unknown error"};
 
-    AXError(std::string msg) : msg(msg) {}
-    AXError(int code, std::string msg) : code(code), msg(msg) {}
+    ExError(std::string msg) : msg(msg) {}
+    ExError(int code, std::string msg) : code(code), msg(msg) {}
 
-    static AXError NoError() { return {0, "No error"}; }
+    bool IsNoError() const { return code == 0; }
+    bool IsValid() const { return !IsNoError(); }
+    void ThrowIfValid() const { if (IsValid()) throw std::runtime_error(msg); }
+
+    static ExError NoError() { return {0, "No error"}; }
 };
 
 template<typename T, typename E>
@@ -94,37 +113,82 @@ private:
 };
 
 template<typename T>
-using ExResult = Expected<T, AXError>;
+using ExResult = Expected<T, ExError>;
 
 template<typename T>
-utils::Expected<T, AXError> RExError(std::string msg) {
-    return utils::Expected<T, AXError>::error({std::move(msg)});
+inline ExResult<T> operator|(ExResult<T>&& result, const T&) {
+    return std::move(result);
 }
 
 template<typename T>
-utils::Expected<T, AXError> RExError(int code, std::string msg) {
-    return utils::Expected<T, AXError>::error({std::move(code), std::move(msg)});
+inline ExResult<T> operator|(ExResult<T>&& result, T&&) {
+    return std::move(result);
 }
 
 template<typename T>
-utils::Expected<T, AXError> RExError(const AXError& ref) {
-    return utils::Expected<T, AXError>::error({ref});
+inline ExResult<T> operator|(const ExResult<T>& result, const T&) {
+    return result;
 }
 
 template<typename T>
-T ExpectOrThrow(ExResult<T>&& r) {
+inline ExResult<T> operator|(ExResult<T>&& result, const ExError& error_operand) {
+    if (!result.has_value()) {
+        return result;
+    }
+    return error_operand; 
+}
+
+template<typename T>
+inline ExResult<T> operator|(ExResult<T>&& result, ExError&& error_operand) {
+    if (!result.has_value()) {
+        return std::move(result);
+    }
+    return std::move(error_operand);
+}
+
+template<typename T>
+inline ExResult<T> operator|(const ExResult<T>& result, const ExError& error_operand) {
+    if (!result.has_value()) {
+        return result;
+    }
+    return error_operand;
+}
+
+inline ExError operator|(ExError&& result, const ExError& error_operand) {
+    if (!result.IsNoError()) {
+        return result;
+    }
+    return error_operand; 
+}
+
+inline ExError operator|(ExError&& result, ExError&& error_operand) {
+    if (!result.IsNoError()) {
+        return std::move(result);
+    }
+    return std::move(error_operand);
+}
+
+inline ExError operator|(const ExError& result, const ExError& error_operand) {
+    if (!result.IsNoError()) {
+        return result;
+    }
+    return error_operand;
+}
+
+template<typename T>
+inline T ExpectOrThrow(ExResult<T>&& r) {
     if (!r.has_value()) {
-        const AXError& e = r.error();
-        throw ExException(e.code, e.msg);
+        const ExError& e = r.error();
+        throw std::runtime_error(e.msg);
     }
     return std::move(r.value());
 }
 
 template<typename T>
-T ExpectOrThrow(const ExResult<T>& r) {
+inline T ExpectOrThrow(const ExResult<T>& r) {
     if (!r.has_value()) {
-        const AXError& e = r.error();
-        throw ExException(e.code, e.msg);
+        const ExError& e = r.error();
+        throw std::runtime_error(e.msg);
     }
     return r.value();
 }

@@ -34,6 +34,8 @@ static inline int16_t FloatToPCM16(float v) {
 
 class ALIAudioStream : public tick::ITickAdapter {
 protected:
+    bool m_Opened{false};
+
     uint32_t m_Channels {2};
     uint32_t m_SampleRate {44100};
 
@@ -52,6 +54,9 @@ protected:
     }
 public:
     virtual ~ALIAudioStream() = default;
+
+    // Open Stream first
+    virtual utils::ExError Open() = 0;
 
     // Decode & fill ring buffer
     virtual void Tick(float dT) override = 0;

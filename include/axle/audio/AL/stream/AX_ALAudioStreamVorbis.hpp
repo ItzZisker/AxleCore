@@ -24,6 +24,8 @@ public:
     explicit ALAudioStreamVorbis(OGGAudio& data, AudioStreamDesc desc = {});
     ~ALAudioStreamVorbis();
 
+    utils::ExError Open() override;
+
     void Tick(float dT) override;
 
     size_t PopSamples(int16_t* out, size_t samples) override;

@@ -18,6 +18,8 @@ private:
     bool m_DetachAfterEndOfStream {false};
     int m_InitBufferCount {4};
 
+    bool m_Looping{false};
+
     void PurgeBuffers();
 public:
     ~ALAudioStreamVorbisSource();
@@ -29,6 +31,9 @@ public:
 
     void Attach(ALAudioStreamVorbis* stream);
     ALAudioStreamVorbis* Detach();
+
+    bool IsLooping() const override;
+    void SetLooping(bool loop) override;
 
     void Tick(float dT) override;
 };

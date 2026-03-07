@@ -34,8 +34,9 @@ struct GLCSurfaceInfo {
     uint32_t width{0};
     uint32_t height{0};
     uint32_t colorBits{32};
+    uint32_t alphaBits{8};
     uint32_t depthBits{24};
-    uint32_t stenctilBits{8};
+    uint32_t stencilBits{8};
     bool vsync{false};
 };
 

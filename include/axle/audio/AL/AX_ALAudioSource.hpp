@@ -28,11 +28,14 @@ public:
     void Purge();
 
     bool IsPlaying() const;
-    bool IsLooping() const;
+
+    virtual bool IsLooping() const;
+
     bool IsPaused() const;
     bool IsStopped() const;
 
-    void SetLooping(bool loop);
+    virtual void SetLooping(bool loop);
+
     void SetPitch(float pitch);
     void SetGain(float gain);
     void SetPosition(float x, float y, float z);

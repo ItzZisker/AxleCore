@@ -57,7 +57,7 @@ float BRDF_GeometrySchlickGGX(float NdotV, float roughness) {
 	return nom / denom;
 }
 
-float GeometrySmith(float roughness, float NoV, float NoL) {
+float BRDF_GeometrySmith(float roughness, float NoV, float NoL) {
 	float ggx2 = BRDF_GeometrySchlickGGX(NoV, roughness);
 	float ggx1 = BRDF_GeometrySchlickGGX(NoL, roughness);
 
@@ -86,7 +86,7 @@ glm::vec2 BRDF_IntegrateBRDF_RG(float NdotV, float roughness, unsigned int sampl
 		float NoV = glm::max(dot(N, V), 0.0f);
 
 		if (NoL > 0.0) {
-			float G = GeometrySmith(roughness, NoV, NoL);
+			float G = BRDF_GeometrySmith(roughness, NoV, NoL);
 
 			float G_Vis = (G * VoH) / (NoH * NoV);
 			float Fc = pow(1.0 - VoH, 5.0);

@@ -8,9 +8,9 @@
 namespace axle::core {
 
 enum class GfxType {
-    GL330 = (1 << 1),
-    DX11 = (1 << 2),
-    VK = (1 << 3)
+    GL330 = (1 << 0),
+    DX11 = (1 << 1),
+    VK = (1 << 2)
 };
 
 class IRenderContext {

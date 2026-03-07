@@ -1,6 +1,9 @@
 #pragma once
 
-#include "axle/data/AX_DataDeserializer.hpp"
+#include "axle/data/AX_IDataStream.hpp"
+
+#include "axle/utils/AX_Expected.hpp"
+#include "axle/utils/AX_Span.hpp"
 
 #include <filesystem>
 #include <vector>
@@ -14,12 +17,8 @@ struct OGGAudio {
     std::vector<uint8_t> entireStream; 
 };
 
-OGGAudio OGG_LoadFile(const std::filesystem::path& path);
-OGGAudio OGG_LoadFileBytes(data::DataDeserializer& buffer);
-OGGAudio OGG_LoadFileBytes(const uint8_t* bytes, int length);
-
-bool OGG_isValidFileBytes(data::DataDeserializer& buffer);
-bool OGG_isValidFileBytes(const uint8_t* bytes, int length);
-bool OGG_isValidFile(const std::filesystem::path& path);
+utils::ExResult<OGGAudio> OGG_LoadFile(const std::filesystem::path& path);
+utils::ExResult<OGGAudio> OGG_LoadFileBytes(data::IDataStream& buffer);
+utils::ExResult<OGGAudio> OGG_LoadFileBytes(utils::Span<uint8_t> bufferView);
 
 }

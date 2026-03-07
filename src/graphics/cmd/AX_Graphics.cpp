@@ -18,25 +18,13 @@ namespace axle::gfx
 {
 
 Graphics::Graphics(SharedPtr<core::ThreadContextGfx> gfxThread) : m_GfxThread(gfxThread) {
-    auto context = gfxThread->GetContext();
-    m_GfxType = context->GetType();
-    switch (m_GfxType) {
-        case core::GfxType::GL330:
-            m_GfxBackend = m_GfxThread->EnqueueFuture([context](){
-                return std::make_unique<GLGraphicsBackend>(context);
-            }).get();
-        break;
-        case core::GfxType::DX11: // TODO
-        break;
-        case core::GfxType::VK: // TODO
-        break;
-    }
+    m_GfxBackend = gfxThread->GetContext();
 }
 
 void Graphics::SetVSync(bool enabled) {
     m_GfxThread->EnqueueTask([this, enabled = enabled]{
         auto ctx = m_GfxThread->GetContext();
-        ctx->SetVSync(enabled);
+        ctx->GetContext()->SetVSync(enabled);
     });
 }
 
@@ -46,18 +34,16 @@ Future<ExResult<BufferHandle>> Graphics::CreateBuffer(const BufferDesc& desc) {
     });
 }
 
-Future<AXError> Graphics::UpdateBuffer(const BufferHandle& handle, size_t offset, size_t size, const void* data) {
+Future<ExError> Graphics::UpdateBuffer(const BufferHandle& handle, size_t offset, size_t size, const void* data) {
     return m_GfxThread->EnqueueFuture([this, 
-        handle = handle,
-        offset = offset,
-        size = size,
-        data = data
+        handle = handle, offset = offset,
+        size = size, data = data
     ](){
         return m_GfxBackend->UpdateBuffer(handle, offset, size, data);
     });
 }
 
-Future<AXError> Graphics::DestroyBuffer(const BufferHandle& handle) {
+Future<ExError> Graphics::DestroyBuffer(const BufferHandle& handle) {
     return m_GfxThread->EnqueueFuture([this, handle = handle](){
         return m_GfxBackend->DestroyBuffer(handle);
     });
@@ -69,17 +55,13 @@ Future<ExResult<TextureHandle>> Graphics::CreateTexture(const TextureDesc& desc)
     });
 }
 
-Future<AXError> Graphics::UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) {
-    return m_GfxThread->EnqueueFuture([this,
-        handle = handle,
-        subDesc = subDesc,
-        data = data
-    ](){
+Future<ExError> Graphics::UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) {
+    return m_GfxThread->EnqueueFuture([this, handle = handle, subDesc = subDesc, data = data](){
         return m_GfxBackend->UpdateTexture(handle, subDesc, data);
     });
 }
 
-Future<AXError> Graphics::DestroyTexture(const TextureHandle& handle) {
+Future<ExError> Graphics::DestroyTexture(const TextureHandle& handle) {
     return m_GfxThread->EnqueueFuture([this, handle = handle](){
         return m_GfxBackend->DestroyTexture(handle);
     });
@@ -91,7 +73,7 @@ Future<ExResult<FramebufferHandle>> Graphics::CreateFramebuffer(const Framebuffe
     });
 }
 
-Future<AXError> Graphics::DestroyFramebuffer(const FramebufferHandle& handle) {
+Future<ExError> Graphics::DestroyFramebuffer(const FramebufferHandle& handle) {
     return m_GfxThread->EnqueueFuture([this, handle = handle](){
         return m_GfxBackend->DestroyFramebuffer(handle);
     });
@@ -103,7 +85,7 @@ Future<ExResult<ShaderHandle>> Graphics::CreateProgram(const ShaderDesc& desc) {
     });
 }
 
-Future<AXError> Graphics::DestroyProgram(const ShaderHandle& handle) {
+Future<ExError> Graphics::DestroyProgram(const ShaderHandle& handle) {
     return m_GfxThread->EnqueueFuture([this, handle = handle](){
         return m_GfxBackend->DestroyProgram(handle);
     });
@@ -115,7 +97,7 @@ Future<ExResult<RenderPipelineHandle>> Graphics::CreateRenderPipeline(const Rend
     });
 }
 
-Future<AXError> Graphics::DestroyRenderPipeline(const RenderPipelineHandle& handle) {
+Future<ExError> Graphics::DestroyRenderPipeline(const RenderPipelineHandle& handle) {
     return m_GfxThread->EnqueueFuture([this, handle = handle](){
         return m_GfxBackend->DestroyRenderPipeline(handle);
     });
@@ -127,9 +109,15 @@ Future<ExResult<ComputePipelineHandle>> Graphics::CreateComputePipeline(const Co
     });
 }
 
-Future<AXError> Graphics::DestroyComputePipeline(const ComputePipelineHandle& handle) {
+Future<ExError> Graphics::DestroyComputePipeline(const ComputePipelineHandle& handle) {
     return m_GfxThread->EnqueueFuture([this, handle = handle](){
         return m_GfxBackend->DestroyComputePipeline(handle);
+    });
+}
+
+Future<ExResult<RenderPassHandle>> Graphics::CreateDefaultRenderPass(const DefaultRenderPassDesc& desc) {
+    return m_GfxThread->EnqueueFuture([this, desc = desc](){
+        return m_GfxBackend->CreateDefaultRenderPass(desc);
     });
 }
 
@@ -139,7 +127,7 @@ Future<ExResult<RenderPassHandle>> Graphics::CreateRenderPass(const RenderPassDe
     });
 }
 
-Future<AXError> Graphics::DestroyRenderPass(const RenderPassHandle& handle) {
+Future<ExError> Graphics::DestroyRenderPass(const RenderPassHandle& handle) {
     return m_GfxThread->EnqueueFuture([this, handle = handle](){
         return m_GfxBackend->DestroyRenderPass(handle);
     });
@@ -151,22 +139,37 @@ Future<ExResult<ResourceSetHandle>> Graphics::CreateResourceSet(const ResourceSe
     });
 }
 
-Future<AXError> Graphics::UpdateResourceSet(const ResourceSetHandle& handle, Span<Binding> bindings) {
-    return m_GfxThread->EnqueueFuture([this,
-        handle = handle,
-        bindings = bindings
-    ](){
+Future<ExError> Graphics::UpdateResourceSet(const ResourceSetHandle& handle, std::vector<Binding> bindings) {
+    return m_GfxThread->EnqueueFuture([this, handle = handle, bindings = bindings](){
         return m_GfxBackend->UpdateResourceSet(handle, bindings);
     });
 }
 
-Future<AXError> Graphics::DestroyResourceSet(const ResourceSetHandle& handle) {
+Future<ExError> Graphics::DestroyResourceSet(const ResourceSetHandle& handle) {
     return m_GfxThread->EnqueueFuture([this, handle = handle](){
         return m_GfxBackend->DestroyResourceSet(handle);
     });
 }
 
-SharedPtr<ICommandList> Graphics::BeginCommandList() {
+Future<utils::ExResult<uint32_t>> Graphics::AcquireNextImage() {
+    return m_GfxThread->EnqueueFuture([this](){
+        return m_GfxBackend->AcquireNextImage();
+    });
+}
+
+Future<utils::ExResult<FramebufferHandle>> Graphics::GetSwapchainFramebuffer(uint32_t imageIndex) {
+    return m_GfxThread->EnqueueFuture([this, imageIndex = imageIndex](){
+        return m_GfxBackend->GetSwapchainFramebuffer(imageIndex);
+    });
+}
+
+Future<utils::ExError> Graphics::Present(uint32_t imageIndex) {
+    return m_GfxThread->EnqueueFuture([this, imageIndex = imageIndex](){
+        return m_GfxBackend->Present(imageIndex);
+    });
+}
+
+SharedPtr<ICommandList> Graphics::PrepCommandList() {
     switch (m_GfxType) {
         case core::GfxType::GL330:
 #ifdef __AX_GRAPHICS_GL__
@@ -176,7 +179,7 @@ SharedPtr<ICommandList> Graphics::BeginCommandList() {
     }
 }
 
-Future<AXError> Graphics::Submit(SharedPtr<ICommandList> cmdList) {
+Future<ExError> Graphics::Submit(SharedPtr<ICommandList> cmdList) {
     return m_GfxThread->EnqueueFuture([this, cmdList = cmdList](){
         return m_GfxBackend->Execute(*cmdList);
     });

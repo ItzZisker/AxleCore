@@ -1,7 +1,6 @@
 #pragma once
 
-#include "axle/data/AX_DataSerializer.hpp"
-#include "axle/data/AX_DataDeserializer.hpp"
+#include "axle/data/AX_IDataStream.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 
@@ -11,16 +10,16 @@
 namespace axle::data
 {
 
-AX_DECLR_EXRR_FUNC(bool,        ReadBool,     DataDeserializer* buffer);
-AX_DECLR_EXRR_FUNC(uint8_t,     ReadChar,     DataDeserializer* buffer);
-AX_DECLR_EXRR_FUNC(uint32_t,    ReadVarInt,   DataDeserializer* buffer);
-AX_DECLR_EXRR_FUNC(uint64_t,    ReadVarUInt,  DataDeserializer* buffer);
-AX_DECLR_EXRR_FUNC(std::string, ReadString,   DataDeserializer* buffer,  uint32_t maximumLength = 1024);
+utils::ExResult<bool> ReadBool(IDataStream& buffer);
+utils::ExResult<uint8_t> ReadChar(IDataStream& buffer);
+utils::ExResult<int64_t> ReadVarInt(IDataStream& buffer);
+utils::ExResult<uint64_t> ReadVarUInt(IDataStream& buffer);
+utils::ExResult<std::string> ReadString(IDataStream& buffer, uint32_t maxLength = 1024);
 
-AX_DECLR_EXRR_FUNC(void,    WriteBool,     DataSerializer* buffer,  bool value);
-AX_DECLR_EXRR_FUNC(void,    WriteChar,     DataSerializer* buffer,  char value);
-AX_DECLR_EXRR_FUNC(void,    WriteVarInt,   DataSerializer* buffer,  int64_t value);
-AX_DECLR_EXRR_FUNC(void,    WriteVarUInt,  DataSerializer* buffer,  uint64_t value);
-AX_DECLR_EXRR_FUNC(void,    WriteString,   DataSerializer* buffer,  const std::string& value, uint32_t maximumLength = 1024);
+utils::ExError WriteBool(IDataStream& buffer, bool value);
+utils::ExError WriteChar(IDataStream& buffer, uint8_t value);
+utils::ExError WriteVarInt(IDataStream& buffer, int64_t value);
+utils::ExError WriteVarUInt(IDataStream& buffer, uint64_t value);
+utils::ExError WriteString(IDataStream& buffer, const std::string& value, uint32_t maxLength = 1024);
 
 }

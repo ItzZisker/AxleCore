@@ -74,31 +74,31 @@ std::optional<T*> ALIAudioPlayer<T>::AcquireFreeSource() {
 template <T_ext_ALAudioSource T>
 void ALIAudioPlayer<T>::SetLooping(bool loop) {
     m_looping = loop;
-    for (auto& w : m_sources) w.SetLooping(loop);
+    for (auto& w : m_sources) w->SetLooping(loop);
 }
 
 template <T_ext_ALAudioSource T>
 void ALIAudioPlayer<T>::SetPitch(float pitch) {
     m_pitch = pitch;
-    for (auto& w : m_sources) w.SetPitch(pitch);
+    for (auto& w : m_sources) w->SetPitch(pitch);
 }
 
 template <T_ext_ALAudioSource T>
 void ALIAudioPlayer<T>::SetGain(float gain) {
     m_gain = gain;
-    for (auto& w : m_sources) w.SetGain(gain);
+    for (auto& w : m_sources) w->SetGain(gain);
 }
 
 template <T_ext_ALAudioSource T>
 void ALIAudioPlayer<T>::SetPosition(float x, float y, float z) {
     m_pos[0] = x; m_pos[1] = y; m_pos[2] = z;
-    for (auto& w : m_sources) w.SetPosition(x, y, z);
+    for (auto& w : m_sources) w->SetPosition(x, y, z);
 }
 
 template <T_ext_ALAudioSource T>
 void ALIAudioPlayer<T>::SetVelocity(float x, float y, float z) {
     m_vel[0] = x; m_vel[1] = y; m_vel[2] = z;
-    for (auto& w : m_sources) w.SetVelocity(x, y, z);
+    for (auto& w : m_sources) w->SetVelocity(x, y, z);
 }
 
 }

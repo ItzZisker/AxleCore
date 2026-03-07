@@ -7,21 +7,23 @@
 namespace axle::gfx {
 
 enum ImageFormat {
-    R8 = 0,       // 1 channel, 8-bit
-    RG8 = 1,      // 2 channels, 8-bit
-    RGB8 = 2,     // 3 channels, 8-bit
-    RGBA8 = 3,    // 4 channels, 8-bit
+    Unknown = 0,  // Unsupported
 
-    R16 = 0,       // 1 channel, 16-bit
-    RG16 = 1,      // 2 channels, 16-bit
-    RGB16 = 2,     // 3 channels, 16-bit
-    RGBA16 = 3,    // 4 channels, 16-bit
+    R8 = 1,       // 1 channel, 8-bit
+    RG8 = 2,      // 2 channels, 8-bit
+    RGB8 = 3,     // 3 channels, 8-bit
+    RGBA8 = 4,    // 4 channels, 8-bit
+
+    R16 = 5,       // 1 channel, 16-bit
+    RG16 = 6,      // 2 channels, 16-bit
+    RGB16 = 7,     // 3 channels, 16-bit
+    RGBA16 = 8,    // 4 channels, 16-bit
 
     // Below is definition of EXR/HDR formats. High dynamic-range colors often used for textures such as BRDF_LUT in which color precision matters for later calculations
-    R32F = 8,     // 1 channel, 32-bit float
-    RG32F = 9,    // 2 channels, 32-bit float
-    RGB32F = 10,  // 3 channels, 32-bit float
-    RGBA32F = 11, // 4 channels, 32-bit float
+    R32F = 9,     // 1 channel, 32-bit float
+    RG32F = 10,    // 2 channels, 32-bit float
+    RGB32F = 11,  // 3 channels, 32-bit float
+    RGBA32F = 12, // 4 channels, 32-bit float
 };
 
 enum ImageFormatInternal {

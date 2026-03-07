@@ -6,23 +6,28 @@ using namespace axle::utils;
 namespace axle::data
 {
 
-AX_DECLR_EXRR_FUNC(bool, ReadBool, DataDeserializer *buffer) {
-    if (!buffer) return RExError<bool>("null buffer");
-    return buffer->ReadByte();
+utils::ExResult<bool> ReadBool(IDataStream& buffer) {
+    bool b0;
+    auto res = buffer.Read(&b0, 1);
+    if (res.has_value()) {
+        return b0;
+    } else {
+        auto err = res.error();
+        return utils::ExError(err.code, err.msg);
+    }
 }
 
-AX_DECLR_EXRR_FUNC(uint64_t, ReadVarUInt64, DataDeserializer* buffer) {
-    if (!buffer)
-        return RExError<uint64_t>("null buffer");
-
+utils::ExResult<uint64_t> ReadVarUInt(IDataStream& buffer) {
     uint64_t result = 0;
     int shift = 0;
 
     for (int i = 0; i < 10; ++i) { // max 10 bytes for uint64
-        if (buffer->IsEndOfStream())
-            return RExError<uint64_t>("EndOfStream");
+        if (buffer.EndOfStream())
+            return ExError{"EndOfStream"};
 
-        uint8_t byte = buffer->ReadByte();
+        uint8_t byte{0};
+        auto res = buffer.Read(&byte, 1);
+        if (!res.has_value()) return res.error();
         result |= uint64_t(byte & 0x7F) << shift;
 
         if ((byte & 0x80) == 0)
@@ -30,101 +35,85 @@ AX_DECLR_EXRR_FUNC(uint64_t, ReadVarUInt64, DataDeserializer* buffer) {
 
         shift += 7;
     }
-    return RExError<uint64_t>("VarUInt64 overflow");
+    return ExError{"VarUInt overflow"};
 }
 
-AX_DECLR_EXRR_FUNC(int64_t, ReadVarInt64, DataDeserializer* buffer) {
-    if (!buffer)
-        return RExError<int64_t>("null buffer");
-
-    auto uxResult = ReadVarUInt64(buffer);
+utils::ExResult<int64_t> ReadVarInt(IDataStream& buffer) {
+    auto uxResult = ReadVarUInt(buffer);
     if (!uxResult.has_value())
-        return RExError<int64_t>(uxResult.error());
+        return ExError{uxResult.error()};
 
     uint64_t ux = uxResult.value();
     int64_t value = (ux >> 1) ^ -static_cast<int64_t>(ux & 1);
     return value;
 }
 
-AX_DECLR_EXRR_FUNC(std::string, ReadString, DataDeserializer* buffer, int maximumLength) {
-    if (!buffer)
-        return RExError<std::string>("null buffer");
+utils::ExResult<std::string> ReadString(IDataStream& buffer, uint32_t maxLength) {
+    if (maxLength <= 0)
+        return ExError{"invalid maximumLength"};
 
-    if (maximumLength <= 0)
-        return RExError<std::string>("invalid maximumLength");
-
-    auto lenResult = ReadVarUInt64(buffer);
+    auto lenResult = ReadVarUInt(buffer);
     if (!lenResult.has_value())
-        return RExError<std::string>(lenResult.error());
+        return ExError{lenResult.error()};
 
     uint64_t length = lenResult.value();
 
-    if (length > static_cast<uint64_t>(maximumLength))
-        return RExError<std::string>("String length exceeds maximum");
+    if (length > static_cast<uint64_t>(maxLength))
+        return ExError{"String length exceeds maximum"};
 
-    if (buffer->GetReadPos() + length > buffer->GetLength())
-        return RExError<std::string>("EndOfStream");
+    if (buffer.GetReadIndex() + length > buffer.GetLength())
+        return ExError{"EndOfStream"};
 
     std::string result;
     result.reserve(length);
 
     for (uint64_t i = 0; i < length; ++i) {
-        result.push_back(static_cast<char>(buffer->ReadByte()));
+        uint8_t byte{0};
+        auto res = buffer.Read(&byte, 1);
+        if (!res.has_value()) return res.error();
+        result[i] = static_cast<char>(byte);
     }
     return result;
 }
 
-AX_DECLR_EXRR_FUNC(void, WriteBool, DataSerializer* buffer, bool value) {
-    if (!buffer)
-        return RExError<void>("null buffer");
-
+utils::ExError WriteBool(IDataStream& buffer, bool value) {
     uint8_t *bytes = {0};
     bytes[0] = (char) (value ? 1 : 0);
-    buffer->Write(bytes, 1);
-    return {};
+    auto res = buffer.Write(bytes, 1);
+    if (!res.has_value()) return res.error();
+    return utils::ExError::NoError();
 }
 
-AX_DECLR_EXRR_FUNC(void, WriteVarUInt64, DataSerializer* buffer, uint64_t value) {
-    if (!buffer)
-        return RExError<void>("null buffer");
-
+utils::ExError WriteVarUInt(IDataStream& buffer, uint64_t value) {
     do {
         uint8_t byte = static_cast<uint8_t>(value & 0x7F);
         value >>= 7;
-        if (value != 0)
+        if (value != 0) {
             byte |= 0x80;
+        }
         uint8_t *b1 = {0};
         b1[0] = (char) (b1 ? 1 : 0);
-        buffer->Write(b1, 1);
+        auto res = buffer.Write(b1, 1);
+        if (!res.has_value()) return res.error();
     } while (value != 0);
 
-    return {};
+    return utils::ExError::NoError();
 }
 
-AX_DECLR_EXRR_FUNC(void, WriteVarInt64, DataSerializer* buffer, int64_t value) {
-    if (!buffer)
-        return RExError<void>("null buffer");
-
-    uint64_t zigzag =
-        (static_cast<uint64_t>(value) << 1) ^
-        static_cast<uint64_t>(value >> 63);
-
-    return WriteVarUInt64(buffer, zigzag);
+utils::ExError WriteVarInt(IDataStream& buffer, int64_t value) {
+    uint64_t zigzag = (static_cast<uint64_t>(value) << 1) ^ static_cast<uint64_t>(value >> 63);
+    return WriteVarUInt(buffer, zigzag);
 }
 
-AX_DECLR_EXRR_FUNC(void, WriteString, DataSerializer* buffer, const std::string& value) {
-    if (!buffer)
-        return RExError<void>("null buffer");
+utils::ExError WriteString(IDataStream& buffer, const std::string& value) {
+    auto lenErr = WriteVarUInt(buffer, value.size());
+    if (!lenErr.IsNoError()) return lenErr;
 
-    auto lenResult = WriteVarUInt64(buffer, value.size());
-    if (!lenResult.has_value())
-        return lenResult;
-
-    buffer->Write(
+    buffer.Write(
         reinterpret_cast<const unsigned char*>(value.data()),
         value.size()
     );
-    return {};
+    return utils::ExError::NoError();
 }
 
 }

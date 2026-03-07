@@ -61,6 +61,14 @@ ALAudioStreamVorbis* ALAudioStreamVorbisSource::Detach() {
     return temp;
 }
 
+bool ALAudioStreamVorbisSource::IsLooping() const {
+    return m_Looping;
+}
+
+void ALAudioStreamVorbisSource::SetLooping(bool loop) {
+    m_Looping = loop;
+}
+
 void ALAudioStreamVorbisSource::Tick(float dT) {
     if (!IsAttached() || !IsPlaying()) return;
     m_Stream->Tick(dT);

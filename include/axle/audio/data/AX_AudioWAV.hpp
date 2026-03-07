@@ -1,6 +1,9 @@
 #pragma once
 
-#include "axle/data/AX_DataDeserializer.hpp"
+#include "axle/data/AX_IDataStream.hpp"
+
+#include "axle/utils/AX_Expected.hpp"
+#include "axle/utils/AX_Span.hpp"
 
 #include <AL/al.h>
 
@@ -31,12 +34,8 @@ struct WAVAudio {
     std::vector<char> samples;
 };
 
-WAVAudio WAV_LoadFile(const std::filesystem::path& path);
-WAVAudio WAV_LoadFileBytes(data::DataDeserializer& buffer);
-WAVAudio WAV_LoadFileBytes(const uint8_t* bytes, int length);
-
-bool WAV_isValidFileBytes(data::DataDeserializer& buffer);
-bool WAV_isValidFileBytes(const uint8_t* bytes, int length);
-bool WAV_isValidFile(const std::filesystem::path& path);
+utils::ExResult<WAVAudio> WAV_LoadFile(const std::filesystem::path& path);
+utils::ExResult<WAVAudio> WAV_LoadFileBytes(data::IDataStream& buffer);
+utils::ExResult<WAVAudio> WAV_LoadFileBytes(utils::Span<uint8_t> bufferView);
 
 }

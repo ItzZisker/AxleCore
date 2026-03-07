@@ -2,113 +2,72 @@
 
 #include "axle/graphics/AX_Graphics.hpp"
 
+#include "axle/data/AX_DataStreamImplBuffer.hpp"
+
+#include "axle/utils/AX_Expected.hpp"
+
 #include <vector>
+#include <mutex>
 
 namespace axle::gfx {
 
-enum class GLCommandType {
-    SetViewport,
-    SetScissor,
-    BeginRenderPass,
-    EndRenderPass,
-    BindRenderPipeline,
-    BindComputePipeline,
-    BindVertexBuffer,
-    BindIndexBuffer,
-    BindIndirectBuffer,
-    BindResourceSet,
-    Draw,
-    DrawInstanced,
-    DrawIndexed,
-    DrawIndexedInstanced,
-    DrawIndirect,
-    DrawIndirectIndexed
-};
+const uint16_t CMDL_BEGIN = 1111;
 
-struct GLCommand {
-    GLCommandType type;
-    std::vector<std::size_t> args; // generic payload
+const uint16_t CMD_HEADER = 1441;
+const uint16_t CMD_FOOTER = 1771;
+
+const uint16_t CMDL_END = 1991;
+
+class GLCommandGuard {
+private:
+    std::mutex& m_CmdListMutex;
+public:
+    const SharedPtr<data::BufferDataStream> m_Buffer{nullptr};
+
+    explicit GLCommandGuard(std::mutex& cmdListMutex, SharedPtr<data::BufferDataStream> commandBuffer);
+    ~GLCommandGuard();
+
+    GLCommandGuard(const GLCommandGuard&) = delete;
+    GLCommandGuard& operator=(const GLCommandGuard&) = delete;
+
+    GLCommandGuard(GLCommandGuard&&) = delete;
+    GLCommandGuard& operator=(GLCommandGuard&&) = delete;
 };
 
 class GLCommandList final : public ICommandList {
+private:
+    SharedPtr<data::BufferDataStream> m_CommandBuffer{nullptr};
+    std::mutex m_Mutex;
 public:
     GLCommandList();
 
-    void Begin() override;
-    void End() override;
+    utils::ExError Begin() override;
+    utils::ExError End() override;
 
-    void SetViewport(
-        float x,
-        float y,
-        float width,
-        float height,
-        float minDepth = 0.0f,
-        float maxDepth = 1.0f
-    ) override;
+    utils::ExError SetViewport(const CommandSetViewport&) override;
+    utils::ExError SetScissor(const CommandSetScissor&) override;
 
-    void SetScissor(
-        int32_t x,
-        int32_t y,
-        uint32_t width,
-        uint32_t height
-    ) override;
+    utils::ExError BeginRenderPass(const CommandBeginRenderPass&) override;
+    utils::ExError EndRenderPass(const CommandEndRenderPass&) override;
 
-    void BeginRenderPass(
-        const RenderPassHandle& pass,
-        const FramebufferHandle& framebuffer,
-        const RenderPassClear& clear = {}
-    ) override;
+    utils::ExError BindRenderPipeline(const CommandBindRenderPipeline&) override;
+    utils::ExError BindComputePipeline(const CommandBindComputePipeline&) override;
 
-    void EndRenderPass() override;
+    utils::ExError BindVertexBuffer(const CommandBindVertexBuffer&) override;
+    utils::ExError BindIndexBuffer(const CommandBindIndexBuffer&) override;
+    utils::ExError BindIndirectBuffer(const CommandBindIndirectBuffer&) override;
+    utils::ExError BindResourceSet(const CommandBindResourceSet&) override;
 
-    void BindRenderPipeline(const RenderPipelineHandle& pipeline) override;
-    void BindComputePipeline(const ComputePipelineHandle& pipeline) override;
+    utils::ExError Draw(const CommandDraw&) override;
+    utils::ExError DrawInstanced(const CommandDrawInstanced&) override;
+    utils::ExError DrawIndexed(const CommandDrawIndexed&) override;
+    utils::ExError DrawIndexedInstanced(const CommandDrawIndexedInstanced&) override;
+    utils::ExError DrawIndirect(const CommandDrawIndirect&) override;
+    utils::ExError DrawIndirectIndexed(const CommandDrawIndirectIndexed&) override;
+protected:
+    GLCommandGuard CommandGuard() { return GLCommandGuard(m_Mutex, m_CommandBuffer); }
 
-    void BindVertexBuffer(const BufferHandle& buffer) override;
-    void BindIndexBuffer(const BufferHandle& buffer) override;
-    void BindIndirectBuffer(const BufferHandle& buffer) override;
-
-    void BindResourceSet(const ResourceSetHandle& res) override;
-
-    void Draw(
-        uint32_t vertexCount,
-        uint32_t firstVertex = 0
-    ) override;
-
-    void DrawInstanced(
-        uint32_t vertexCount,
-        uint32_t instanceCount,
-        uint32_t firstVertex = 0
-    ) override;
-
-    void DrawIndexed(
-        uint32_t indexCount,
-        uint32_t firstIndex = 0
-    ) override;
-
-    void DrawIndexedInstanced(
-        uint32_t indexCount,
-        uint32_t instanceCount,
-        uint32_t firstIndex = 0
-    ) override;
-
-    void DrawIndirect(
-        uint32_t offset,
-        uint32_t count,
-        uint32_t stride
-    ) override;
-
-    void DrawIndirectIndexed(
-        uint32_t offset,
-        uint32_t count,
-        uint32_t stride
-    ) override;
-
-    const std::vector<GLCommand>& Commands() const {
-        return m_Commands;
-    }
-private:
-    std::vector<GLCommand> m_Commands;
+    friend class GLGraphicsBackend;
 };
 
 } // namespace axle::gfx

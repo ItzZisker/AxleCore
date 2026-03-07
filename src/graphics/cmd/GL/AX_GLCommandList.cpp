@@ -3,180 +3,114 @@
 #include "axle/graphics/cmd/GL/AX_GLCommandList.hpp"
 #include "axle/graphics/AX_Graphics.hpp"
 
+#include <mutex>
+#include <bit>
+
 namespace axle::gfx {
 
-// TODO: Verify arguments
-
-GLCommandList::GLCommandList() {}
-
-void GLCommandList::Begin() {
-    m_Commands.clear();
+GLCommandGuard::GLCommandGuard(std::mutex& cmdListMutex, SharedPtr<data::BufferDataStream> commandBuffer) 
+    : m_CmdListMutex(cmdListMutex), m_Buffer(commandBuffer) {
+    m_CmdListMutex.lock();
 }
 
-void GLCommandList::End() {}
-
-void GLCommandList::SetViewport(
-    float x,
-    float y,
-    float width,
-    float height,
-    float minDepth,
-    float maxDepth
-) {
-    m_Commands.push_back({GLCommandType::SetViewport, {
-        (size_t)x,
-        (size_t)y,
-        (size_t)width,
-        (size_t)height,
-        (size_t)minDepth,
-        (size_t)maxDepth
-    }});
+GLCommandGuard::~GLCommandGuard() {
+    m_CmdListMutex.unlock();
 }
 
-void GLCommandList::SetScissor(
-    int32_t x,
-    int32_t y,
-    uint32_t width,
-    uint32_t height
-) {
-    m_Commands.push_back({GLCommandType::SetScissor, {
-        (size_t)x,
-        (size_t)y,
-        (size_t)width,
-        (size_t)height
-    }});
+GLCommandList::GLCommandList() {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_CommandBuffer = std::make_shared<data::BufferDataStream>(512);
+    m_CommandBuffer->Open().ThrowIfValid();
 }
 
-void GLCommandList::BeginRenderPass(
-    const RenderPassHandle& pass,
-    const FramebufferHandle& framebuffer,
-    const RenderPassClear& clear
-) {
-    m_Commands.push_back({GLCommandType::BeginRenderPass, {
-        pass.index,
-        pass.generation,
-        framebuffer.index,
-        framebuffer.generation,
-        (size_t)clear.clearColor[0],
-        (size_t)clear.clearColor[1],
-        (size_t)clear.clearColor[2],
-        (size_t)clear.clearDepth,
-        (size_t)clear.clearStencil
-    }});
+utils::ExError GLCommandList::Begin() {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    AX_PROPAGATE_ERROR(m_CommandBuffer->SeekWrite(0));
+    AX_PROPAGATE_RESULT_ERROR(m_CommandBuffer->Write((uint8_t)0, m_CommandBuffer->GetLength()));
+    AX_PROPAGATE_ERROR(m_CommandBuffer->SeekWrite(0));
+    AX_PROPAGATE_RESULT_ERROR(m_CommandBuffer->Write(&CMDL_BEGIN, 2));
+    return utils::ExError::NoError();
 }
 
-void GLCommandList::EndRenderPass() {
-    m_Commands.push_back({GLCommandType::EndRenderPass, {} });
+utils::ExError GLCommandList::End() {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    AX_PROPAGATE_ERROR(m_CommandBuffer->SeekRead(0));
+    AX_PROPAGATE_RESULT_ERROR(m_CommandBuffer->Write(&CMDL_END, 2));
+    return utils::ExError::NoError();
 }
 
-void GLCommandList::BindRenderPipeline(const RenderPipelineHandle& pipeline) {
-    m_Commands.push_back({GLCommandType::BindRenderPipeline, {
-        pipeline.index,
-        pipeline.generation
-    }});
+template<typename CommandStruct>
+utils::ExError RecordCommand(std::mutex& mutex, SharedPtr<data::BufferDataStream> commandBuffer, CommandType type, const CommandStruct& strc) {
+    std::lock_guard<std::mutex> lock(mutex);
+    AX_PROPAGATE_RESULT_ERROR(commandBuffer->Write(&CMD_HEADER, 2));
+    AX_PROPAGATE_RESULT_ERROR(commandBuffer->Write(&type, 4));
+    AX_PROPAGATE_RESULT_ERROR(commandBuffer->Write(&strc, sizeof(strc)));
+    AX_PROPAGATE_RESULT_ERROR(commandBuffer->Write(&CMD_FOOTER, 2));
+    return utils::ExError::NoError();
 }
 
-void GLCommandList::BindComputePipeline(const ComputePipelineHandle& pipeline) {
-    m_Commands.push_back({GLCommandType::BindComputePipeline, {
-        pipeline.index,
-        pipeline.generation
-    }});
+utils::ExError GLCommandList::SetViewport(const CommandSetViewport& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::SetViewport, cmd);
 }
 
-void GLCommandList::BindVertexBuffer(const BufferHandle& buffer) {
-    m_Commands.push_back({GLCommandType::BindVertexBuffer, {
-        buffer.index,
-        buffer.generation
-    }});
+utils::ExError GLCommandList::SetScissor(const CommandSetScissor& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::SetScissor, cmd);
 }
 
-void GLCommandList::BindIndexBuffer(const BufferHandle& buffer) {
-    m_Commands.push_back({GLCommandType::BindIndexBuffer, {
-        buffer.index,
-        buffer.generation
-    }});
+utils::ExError GLCommandList::BeginRenderPass(const CommandBeginRenderPass& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::BeginRenderPass, cmd);
 }
 
-void GLCommandList::BindIndirectBuffer(const BufferHandle& buffer) {
-    m_Commands.push_back({GLCommandType::BindIndirectBuffer, {
-        buffer.index,
-        buffer.generation
-    }});
+utils::ExError GLCommandList::EndRenderPass(const CommandEndRenderPass& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::EndRenderPass, cmd);
 }
 
-void GLCommandList::BindResourceSet(const ResourceSetHandle& res) {
-    m_Commands.push_back({GLCommandType::BindResourceSet, {
-        res.index,
-        res.generation
-    }});
+utils::ExError GLCommandList::BindRenderPipeline(const CommandBindRenderPipeline& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::BindRenderPipeline, cmd);
 }
 
-void GLCommandList::Draw(
-    uint32_t vertexCount,
-    uint32_t firstVertex
-) {
-    m_Commands.push_back({GLCommandType::Draw, {
-        vertexCount,
-        firstVertex
-    }});
+utils::ExError GLCommandList::BindComputePipeline(const CommandBindComputePipeline& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::BindComputePipeline, cmd);
 }
 
-void GLCommandList::DrawInstanced(
-    uint32_t vertexCount,
-    uint32_t instanceCount,
-    uint32_t firstVertex
-) {
-    m_Commands.push_back({GLCommandType::DrawInstanced, {
-        vertexCount,
-        instanceCount,
-        firstVertex
-    }});
+utils::ExError GLCommandList::BindVertexBuffer(const CommandBindVertexBuffer& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::BindVertexBuffer, cmd);
 }
 
-void GLCommandList::DrawIndexed(
-    uint32_t indexCount,
-    uint32_t firstIndex
-) {
-    m_Commands.push_back({GLCommandType::DrawIndexed, {
-        indexCount,
-        firstIndex
-    }});
+utils::ExError GLCommandList::BindIndexBuffer(const CommandBindIndexBuffer& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::BindIndexBuffer, cmd);
 }
 
-void GLCommandList::DrawIndexedInstanced(
-    uint32_t indexCount,
-    uint32_t instanceCount,
-    uint32_t firstIndex
-) {
-    m_Commands.push_back({GLCommandType::DrawIndexedInstanced, {
-        indexCount,
-        instanceCount,
-        firstIndex
-    }});
+utils::ExError GLCommandList::BindIndirectBuffer(const CommandBindIndirectBuffer& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::BindIndirectBuffer, cmd);
 }
 
-void GLCommandList::DrawIndirect(
-    uint32_t offset,
-    uint32_t count,
-    uint32_t stride
-) {
-    m_Commands.push_back({GLCommandType::DrawIndirect, {
-        offset,
-        count,
-        stride
-    }});
+utils::ExError GLCommandList::BindResourceSet(const CommandBindResourceSet& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::BindResourceSet, cmd);
 }
 
-void GLCommandList::DrawIndirectIndexed(
-    uint32_t offset,
-    uint32_t count,
-    uint32_t stride
-) {
-    m_Commands.push_back({GLCommandType::DrawIndirectIndexed, {
-        offset,
-        count,
-        stride
-    }});
+utils::ExError GLCommandList::Draw(const CommandDraw& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::Draw, cmd);
+}
+
+utils::ExError GLCommandList::DrawInstanced(const CommandDrawInstanced& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::DrawInstanced, cmd);
+}
+
+utils::ExError GLCommandList::DrawIndexed(const CommandDrawIndexed& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::DrawIndexed, cmd);
+}
+
+utils::ExError GLCommandList::DrawIndexedInstanced(const CommandDrawIndexedInstanced& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::DrawIndexedInstanced, cmd);
+}
+
+utils::ExError GLCommandList::DrawIndirect(const CommandDrawIndirect& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::DrawIndirect, cmd);
+}
+
+utils::ExError GLCommandList::DrawIndirectIndexed(const CommandDrawIndirectIndexed& cmd) {
+    return RecordCommand(m_Mutex, m_CommandBuffer, CommandType::DrawIndirectIndexed, cmd);
 }
 
 }

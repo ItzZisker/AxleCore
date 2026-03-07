@@ -5,19 +5,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#ifdef AX_DEBUG
-#define wglMakeCurrent(hdc, hglrc) \
-    [&](){ \
-        auto result = ::wglMakeCurrent(hdc, hglrc); \
-        std::cout << "wglMakeCurrent called with HDC=" << hdc << " HGLRC=" << hglrc \
-                  << ", result=" << result \
-                  << ", curHDC=" << ::wglGetCurrentDC() \
-                  << ", curHGLRC=" << ::wglGetCurrentContext() \
-                  << ", GetLastError=" << GetLastError() << "\n"; \
-        return result; \
-    }()
-#endif
-
 #include <glad/gl.h>
 
 #include <memory>
@@ -64,8 +51,9 @@ bool RenderContextGLWin32::Init(SharedPtr<IWindow> window) {
     pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
     pfd.iPixelType = PFD_TYPE_RGBA;
     pfd.cColorBits = (BYTE)m_Handle->surfaceInfo.colorBits;
+    pfd.cAlphaBits = (BYTE)m_Handle->surfaceInfo.alphaBits;
     pfd.cDepthBits = (BYTE)m_Handle->surfaceInfo.depthBits;
-    pfd.cStencilBits = (BYTE)m_Handle->surfaceInfo.stenctilBits;
+    pfd.cStencilBits = (BYTE)m_Handle->surfaceInfo.stencilBits;
     pfd.iLayerType = PFD_MAIN_PLANE;
 
     int pixelFormat = ChoosePixelFormat((HDC)m_hdc, &pfd);
@@ -146,8 +134,12 @@ bool RenderContextGLWin32::Init(SharedPtr<IWindow> window) {
     m_Handle->glCtx.GetIntegerv(GL_MAJOR_VERSION, &major);
     m_Handle->glCtx.GetIntegerv(GL_MINOR_VERSION, &minor);
 
-    if (major < 3 || (major == 3 && minor < 3))
+    if (major < 3 || (major == 3 && minor < 3)) {
+        m_Handle->hglrc = nullptr;
+        m_Handle->glCtx = {nullptr};
+        wglDeleteContext(realContext);
         return false;
+    }
 
     m_Initialized = true;
     return true;
@@ -171,8 +163,8 @@ void RenderContextGLWin32::SetVSync(bool enabled) {
     if (!m_Func_wglSwapIntervalEXT) {
         m_Func_wglSwapIntervalEXT = wglGetProcAddress("wglSwapIntervalEXT");
     }
-    auto wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC) m_Func_wglSwapIntervalEXT;
-    if (wglSwapIntervalEXT) {
+    if (m_Func_wglSwapIntervalEXT) {
+        auto wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC) m_Func_wglSwapIntervalEXT;
         wglSwapIntervalEXT(enabled ? 1 : 0);
     }
 }

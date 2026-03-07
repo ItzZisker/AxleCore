@@ -50,13 +50,8 @@ void ThreadCycler::Stop(bool join) {
         m_Thread.join();
 }
 
-void ThreadCycler::ValidateThread() {
-    if (!m_Running.load()) {
-        throw std::runtime_error("AX Exception: ContextThread not running!");
-    }
-    if (std::this_thread::get_id() != m_Thread.get_id()) {
-        throw std::runtime_error("AX Exception: ContextThread Validation Error");
-    }
+bool ThreadCycler::ValidateThread() {
+    return m_Running.load() && std::this_thread::get_id() == m_Thread.get_id();
 }
 
 void ThreadCycler::EnqueueTask(std::function<void()> func) {
@@ -144,41 +139,88 @@ void ThreadCycler::DoCycle() {
     }
 }
 
-bool ThreadContextGeneric::StartCycle(
+utils::ExError ThreadContextGeneric::StartCycle(
     int64_t sleepMS,
     std::function<SharedPtr<EmptyStruct>()> initFunc,
     std::function<void(EmptyStruct& gctx)> constWork
 ) {
     auto constWk = [this, constWork = constWork](){ if (m_Ctx) constWork(*m_Ctx.get()); };
-    return Start(sleepMS, std::move(initFunc), std::move(constWk));
+    return StartSyncd(sleepMS, std::move(initFunc), std::move(constWk));
 }
 
-bool ThreadContextWnd::StartApp(CtxCreatorFunc initFunc, int64_t sleepMS) {
+utils::ExError ThreadContextWnd::StartApp(CtxCreatorFunc initFunc, int64_t sleepMS) {
     auto constWk = [this](){ if (m_Ctx) m_Ctx->PollEvents(); };
-    return Start(sleepMS, std::move(initFunc), std::move(constWk));
+    return StartSyncd(sleepMS, std::move(initFunc), std::move(constWk));
 }
 
-bool ThreadContextGfx::StartGfx(CtxCreatorFunc initFunc, float frameCap, bool autoPresent) {
+void ThreadContextWnd::SignalWindow() {
+    m_Ctx->RequestWakeEventloop();
+}
+
+utils::ExError ThreadContextGfx::StartGfx(CtxCreatorFunc initFunc, float frameCap, bool autoPresent) {
     m_IsAutoPresent.store(autoPresent);
+    m_FrameCap.store(frameCap);
+    
     using namespace std::chrono;
-    auto clock = SharedPtr<steady_clock>();
-    auto constWk = [this, clock](){
+
+    auto clock = std::make_shared<steady_clock>();
+    auto constWk = [this, clock]() {
         if (!m_Ctx) return;
-        auto time_now = clock->now();
-        auto img = m_Ctx->AcquireNextImage();
-        if (img.has_value()) {
-            m_Ctx->Present(img.value());
-        } else {
-            std::cerr << "AX Error (AutoPresent); Cannot present next image: " << img.error().msg << std::endl;
+
+        using namespace std::chrono;
+
+        static thread_local auto frameStart = clock->now();
+
+        if (m_IsAutoPresent.load(std::memory_order_relaxed)) {
+            auto img = m_Ctx->AcquireNextImage();
+
+            if (img.has_value()) {
+                auto perr = m_Ctx->Present(img.value());
+                if (!perr.IsNoError()) std::cerr << "AX Error (AutoPresent): " << perr.msg << std::endl;
+            } else {
+                std::cerr << "AX Error (AcquireNextImage): " << img.error().msg << std::endl;
+            }
         }
-        float frameCap = m_FrameCap.load(std::memory_order_relaxed);
+
+        auto now = clock->now();
+        auto delta = now - frameStart;
+
+        float frameCap = m_FrameCap.load();
+
         if (frameCap > 0.0f) {
-            auto delta = duration_cast<milliseconds>(clock->now() - time_now);
-            m_LastFrameTime.store(delta.count() / 1000.0f, std::memory_order_relaxed);
-            std::this_thread::sleep_for(ChMillis(std::max((int64_t)(frameCap * 1000) - delta.count(), (int64_t)0)));
+            auto targetFrame = nanoseconds((int64_t)((1.0 / frameCap) * 1e9));
+            auto targetTime = frameStart + targetFrame;
+
+            while (true) {
+                auto now = clock->now();
+                auto remaining = targetTime - now;
+
+                if (remaining <= nanoseconds(0))
+                    break;
+
+                if (remaining > milliseconds(2)) {
+                    std::this_thread::sleep_for(milliseconds(1));
+                } else if (remaining > microseconds(100)) {
+                    std::this_thread::yield();
+                } else {
+                    while (clock->now() < targetTime)
+                        _mm_pause();
+                    break;
+                }
+            }
+
+            now = clock->now();
+            delta = now - frameStart;
         }
+        frameStart = clock->now();
+
+        float deltaF = duration<float>(delta).count();
+
+        m_LastFrameTime.store(deltaF);
+        m_AccumulatedTime.fetch_add(deltaF);
     };
-    return Start(0, std::move(initFunc), std::move(constWk));
+
+    return StartSyncd(0, std::move(initFunc), std::move(constWk));
 }
 
 }

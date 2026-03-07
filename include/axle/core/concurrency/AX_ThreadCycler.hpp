@@ -3,7 +3,7 @@
 #include "axle/core/window/AX_IWindow.hpp"
 #include "axle/core/concurrency/AX_TaskQueue.hpp"
 
-#include "axle/graphics/AX_Graphics.hpp"
+#include "axle/graphics/cmd/AX_IGraphicsBackend.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
@@ -14,6 +14,8 @@
 #include <mutex>
 
 namespace axle::core {
+
+using WorkHandle = uint32_t;
 
 struct WorkSlot {
     VoidJob job{};
@@ -43,7 +45,7 @@ protected:
 public:
     virtual ~ThreadCycler();
 
-    void ValidateThread();
+    bool ValidateThread();
 
     void Start(int64_t sleepMS);
     void Stop(bool join = true);
@@ -85,25 +87,28 @@ protected:
 public:
     using CtxCreatorFunc = std::function<utils::ExResult<SharedPtr<T>>()>;
 
-    bool Start(
+    utils::ExError StartSyncd(
         int64_t sleepMS,
-        CtxCreatorFunc creatorFunc,
+        CtxCreatorFunc creator,
         std::function<void()> constWork = [](){}
     ) {
         ThreadCycler::Start(sleepMS);
-        CtxCreatorFunc wrapped = [this, &creatorFunc]() {
+        ThreadCycler::AwaitStart();
+
+        CtxCreatorFunc wrapped = [this, &creator]() {
             std::lock_guard<std::mutex> lock(m_CtxMutex);
-            return creatorFunc();
+            return creator();
         };
+
         auto res = EnqueueFuture(std::move(wrapped)).get();
         if (!res.has_value()) {
-            std::cerr << res.error().msg << std::endl;
             Stop(true);
-            return false;
+            return res.error().msg;
         }
         m_Ctx = res.value();
+    
         MoveWorkToEnd(m_ConstWorkHandle = CreateWork(constWork));
-        return true;
+        return utils::ExError::NoError();
     }
 
     SharedPtr<T> GetContext() {
@@ -116,7 +121,7 @@ class ThreadContextGeneric : public ThreadContext<EmptyStruct> {
 protected:
     std::function<void(EmptyStruct& gctx)> m_SubCycle;
 public:
-    bool StartCycle(
+    utils::ExError StartCycle(
         int64_t sleepMS,
         std::function<SharedPtr<EmptyStruct>()> initFunc,
         std::function<void(EmptyStruct& gctx)> subCycle
@@ -126,19 +131,26 @@ public:
 
 class ThreadContextWnd : public ThreadContext<core::IWindow> {
 public:
-    bool StartApp(CtxCreatorFunc initFunc, int64_t sleepMS = 10);
+    utils::ExError StartApp(CtxCreatorFunc initFunc, int64_t sleepMS = 0);
+    void SignalWindow();
 };
 
 class ThreadContextGfx : public ThreadContext<gfx::IGraphicsBackend> {
 private:
     std::atomic_bool m_IsAutoPresent{false};
+
+    std::atomic<float> m_AccumulatedTime{0.0f};
+
     std::atomic<float> m_LastFrameTime{0.0f};
     std::atomic<float> m_FrameCap{0.0f};
 public:
-    bool StartGfx(CtxCreatorFunc initFunc, float frameCap = 0.0f, bool autoPresent = false);
+    utils::ExError StartGfx(CtxCreatorFunc initFunc, float frameCap = 0.0f, bool autoPresent = false);
 
     bool IsAutoPresent() const { return m_IsAutoPresent.load(); };
+
+    float GetFrameCap() const { return m_FrameCap.load(std::memory_order_relaxed); }
     float GetLastFrameTime() const { return m_LastFrameTime.load(std::memory_order_relaxed); }
+    float GetAccumulatedTime() const { return m_AccumulatedTime.load(std::memory_order_relaxed); }
 
     void SetAutoPresent(bool autoPresent) { m_IsAutoPresent.store(autoPresent); }
     void CapFrames(float maxFPS = 0.0f) { m_FrameCap.store(maxFPS); }

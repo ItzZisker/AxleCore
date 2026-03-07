@@ -1,6 +1,9 @@
 #pragma once
 
-#include "axle/data/AX_DataDeserializer.hpp"
+#include "axle/data/AX_IDataStream.hpp"
+
+#include "axle/utils/AX_Expected.hpp"
+#include "axle/utils/AX_Span.hpp"
 
 #include <filesystem>
 #include <vector>
@@ -26,12 +29,8 @@ struct ASTCImage {
     std::vector<uint8_t> data;
 };
 
-ASTCImage ASTC_LoadFile(const std::filesystem::path& path);
-ASTCImage ASTC_LoadFileBytes(data::DataDeserializer *buffer);
-ASTCImage ASTC_LoadFileBytes(const uint8_t* bytes, int length);
-
-bool ASTC_isValidFileBytes(data::DataDeserializer *buffer);
-bool ASTC_isValidFileBytes(const uint8_t* bytes, int length);
-bool ASTC_isValidFile(const std::filesystem::path& path);
+utils::ExResult<ASTCImage> ASTC_LoadFile(const std::filesystem::path& path);
+utils::ExResult<ASTCImage> ASTC_LoadFileBytes(data::IDataStream& buffer);
+utils::ExResult<ASTCImage> ASTC_LoadFileBytes(utils::Span<uint8_t> bufferView);
 
 }

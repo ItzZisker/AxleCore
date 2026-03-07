@@ -11,6 +11,7 @@
 #endif
 #endif
 
+using vHANDLE    = void*;
 using vHINSTANCE = void*;
 using vHWND      = void*;
 
@@ -23,7 +24,7 @@ namespace axle::core {
 
 class WindowWin32 : public IWindow {
 public:
-    WindowWin32(const WindowSpec& spec, uint32_t maxSharedEvents = 32);
+    WindowWin32(const WindowSpec& spec, uint32_t maxSharedEvents = 128);
     ~WindowWin32() override;
 
     void Launch() override;
@@ -33,19 +34,23 @@ public:
     void SetTitle(const std::string& title) override;
     void SetResizable(bool enabled) override;
     void SetCursorMode(WndCursorMode mode) override;
+    void SetAlpha(float alpha) override;
+
+    void RequestWakeEventloop() override;
+    void RequestQuit() override;
 
     void* GetNativeWindowHandle() override {  return m_Hwnd; };
-
     WindowType GetType() const override { return WindowType::Win32; }
 private:
     std::mutex m_HandleMutex;
 
-    bool m_Grabbed = false;
-    bool m_Focused = false;
-    bool m_MouseOnEdge = false;
+    bool m_Grabbed{false};
+    bool m_Focused{false};
+    bool m_MouseOnEdge{false};
 
-    vHWND m_Hwnd = nullptr;
-    vHINSTANCE m_Instance = nullptr;
+    vHWND       m_Hwnd{nullptr};
+    vHANDLE     m_TaskEvent{nullptr};
+    vHINSTANCE  m_Instance{nullptr};
 
     static vLRESULT AX_CALLBACK WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam);
 };
