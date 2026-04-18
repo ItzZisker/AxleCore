@@ -26,15 +26,17 @@ WindowWin32::~WindowWin32() {
     g_App = nullptr;
 }
 
-void WindowWin32::Launch() {
-    if (m_Instance) return;
+utils::ExError WindowWin32::Launch() {
+    if (m_Instance) {
+        return {"Already launched Window"};
+    }
     m_Instance = GetModuleHandle(nullptr);
 
     // Register window class
     WNDCLASS wc = {};
     wc.lpfnWndProc = (WNDPROC)WindowWin32::WndProc;
     wc.hInstance = (HINSTANCE)m_Instance;
-    wc.lpszClassName = "AX Application";
+    wc.lpszClassName = m_State.m_ClassName.c_str();
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClass(&wc);
 
@@ -44,12 +46,14 @@ void WindowWin32::Launch() {
     RECT rect = { 0, 0, (LONG)m_State.GetWidth(), (LONG)m_State.GetHeight() };
     AdjustWindowRect(&rect, style, FALSE);
 
+    m_LpClassName = wc.lpszClassName;
     m_Hwnd = CreateWindowEx(
-        WS_EX_LAYERED,
+        m_State.GetAlphaMode() != WndAlphaMode::None ? WS_EX_LAYERED : 0,
         wc.lpszClassName,
         m_State.GetTitle().c_str(),
         style,
-        CW_USEDEFAULT, CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
         rect.right - rect.left,
         rect.bottom - rect.top,
         nullptr,
@@ -57,7 +61,11 @@ void WindowWin32::Launch() {
         (HINSTANCE)m_Instance,
         nullptr
     );
-    if (m_State.m_WaitForNextEvent) {
+    if (!m_Hwnd) {
+        auto errorCode = GetLastError();
+        return {"Failed To Create Window: Error " + std::format("{:x}", errorCode)};
+    }
+    if (m_State.IsAwaitingNextEvent()) {
         m_TaskEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     }
     RAWINPUTDEVICE devices[2];
@@ -73,21 +81,30 @@ void WindowWin32::Launch() {
     devices[1].hwndTarget  = (HWND)m_Hwnd;
 
     RegisterRawInputDevices(devices, 2, sizeof(RAWINPUTDEVICE));
-    SetAlpha(m_State.GetAlpha());
 
-    if (!m_Hwnd) {
-        MessageBox(nullptr, "Failed To Create Window", "Error", MB_OK);
-        exit(1);
+    switch (m_State.GetAlphaMode()) {
+        case WndAlphaMode::Constant:
+            SetAlphaConstant(m_State.GetAlphaConstant());
+        break;
+        case WndAlphaMode::Color:
+            float rgb[3];
+            m_State.GetAlphaColor(rgb);
+            SetAlphaColor(rgb);
+        break;
     }
 
     ShowWindow((HWND)m_Hwnd, SW_SHOW);
     m_State.SetRunning(true);
+
+    return utils::ExError::NoError();
 }
 
 void WindowWin32::Shutdown() {
     if (m_Hwnd) {
         DestroyWindow((HWND)m_Hwnd);
+        UnregisterClass(m_LpClassName.c_str(), (HINSTANCE)m_Instance);
         m_Hwnd = nullptr;
+        m_LpClassName = "";
     }
     m_State.SetRunning(false);
 }
@@ -107,10 +124,18 @@ void WindowWin32::PollEvents() {
     }
 }
 
-void WindowWin32::SetAlpha(float alpha) {
+void WindowWin32::SetAlphaConstant(float alpha) {
+    if (m_State.m_AlphaMode != WndAlphaMode::Constant) return;
     BYTE _alpha = (BYTE)(alpha * 255);
     SetLayeredWindowAttributes((HWND)m_Hwnd, 0, _alpha, LWA_ALPHA);
-    m_State.SetAlpha(_alpha / 255.0f);
+    m_State.SetAlphaConstant(_alpha / 255.0f);
+}
+
+void WindowWin32::SetAlphaColor(float *rgb) {
+    if (m_State.m_AlphaMode != WndAlphaMode::Color) return;
+    COLORREF transparent = RGB((BYTE)(rgb[0] * 255), (BYTE)(rgb[1] * 255), (BYTE)(rgb[2] * 255));
+    SetLayeredWindowAttributes((HWND)m_Hwnd, transparent, 0, LWA_COLORKEY);
+    m_State.SetAlphaColor(rgb);
 }
 
 void WindowWin32::RequestWakeEventloop() {
@@ -168,7 +193,7 @@ void WindowWin32::RequestQuit() {
 
 WndKey ToWndKey(const RAWKEYBOARD& kb) {
     const bool e0 = (kb.Flags & RI_KEY_E0) != 0;
-    const bool e1 = (kb.Flags & RI_KEY_E1) != 0;
+    // const bool e1 = (kb.Flags & RI_KEY_E1) != 0;
 
     switch (kb.VKey) {
         case VK_SHIFT:   return (kb.MakeCode == 0x36) ? WndKey::kRightShift : WndKey::kLeftShift;

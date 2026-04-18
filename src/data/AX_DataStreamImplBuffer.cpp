@@ -72,10 +72,10 @@ bool BufferDataStream::EndOfStream() const {
 
 utils::ExResult<std::size_t> BufferDataStream::Read(void* out, std::size_t size) {
     if (!m_Opened) return utils::ExError{"Stream is not open"};
-    if (EndOfStream()) return utils::ExError{-5, "EndOfStream"};
+    if (EndOfStream()) return utils::ExError{-5, "Unexpected EOF"};
 
     size = std::clamp(size, (std::size_t) 0, m_BufferView.size() - m_ReadIndex);
-    if (size == 0) return utils::ExError{-5, "EndOfStream"};
+    if (size == 0) return utils::ExError{-5, "Unexpected EOF"};
     
     std::memcpy(out, m_BufferView.handle() + m_ReadIndex, size);
     m_ReadIndex += size;
@@ -85,10 +85,10 @@ utils::ExResult<std::size_t> BufferDataStream::Read(void* out, std::size_t size)
 
 utils::ExResult<std::size_t> BufferDataStream::Write(const void* in, std::size_t size) {
     if (!m_Opened) return utils::ExError{"Stream is not open"};
-    if (EndOfStream()) return utils::ExError(-5, "EndOfStream");
+    if (EndOfStream()) return utils::ExError(-5, "Unexpected EOF");
     
     size = std::clamp(size, (std::size_t) 0, m_BufferView.size() - m_WriteIndex);
-    if (size == 0) return utils::ExError{-5, "EndOfStream"};
+    if (size == 0) return utils::ExError{-5, "Unexpected EOF"};
 
     if (m_BufferHeld.data() == m_BufferView.handle() &&
         m_WriteIndex + size > m_BufferHeld.size()) {
@@ -104,7 +104,7 @@ utils::ExResult<std::size_t> BufferDataStream::Write(const void* in, std::size_t
 
 utils::ExResult<std::size_t> BufferDataStream::Write(uint8_t byte, std::size_t repeat) {
     if (!m_Opened) return utils::ExError{"Stream is not open"};
-    if (EndOfStream()) return utils::ExError("EndOfStream");
+    if (EndOfStream()) return utils::ExError("Unexpected EOF");
     if (repeat == 0) return utils::ExError::NoError();
 
     std::vector<uint8_t> bytes(repeat, byte);
@@ -113,12 +113,12 @@ utils::ExResult<std::size_t> BufferDataStream::Write(uint8_t byte, std::size_t r
 
 utils::ExError BufferDataStream::PeekBytes(void* out, uint64_t pos, std::size_t size) {
     if (!m_Opened) return {"Stream is not open"};
-    if (EndOfStream()) return utils::ExError{"EndOfStream"};
+    if (EndOfStream()) return utils::ExError{"Unexpected EOF"};
     
     pos = std::clamp(pos, uint64_t(0), m_BufferView.size());
     size = std::clamp(size, (std::size_t) 0, m_BufferView.size() - pos);
 
-    if (size == 0) return utils::ExError{"Unexpected EndOfStream"};
+    if (size == 0) return utils::ExError{"Unexpected EOF"};
     
     std::memcpy(out, m_BufferView.handle() + pos, size);
     return utils::ExError::NoError();

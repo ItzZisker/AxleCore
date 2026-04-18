@@ -12,9 +12,7 @@
 
 namespace axle::audio {
 
-ALAudioBuffer::ALAudioBuffer() :
-    m_bufferID(0), m_format(0), m_frequency(0), m_size(0),
-    m_looping(false), m_pitch(1.0f), m_gain(1.0f) {
+ALAudioBuffer::ALAudioBuffer() : m_bufferID(0), m_format(0), m_frequency(0), m_size(0) {
     alGenBuffers(1, &m_bufferID);
 }
 
@@ -27,9 +25,6 @@ ALAudioBuffer::ALAudioBuffer(ALAudioBuffer &&other) noexcept {
     m_format = other.m_format;
     m_frequency = other.m_frequency;
     m_size = other.m_size;
-    m_looping = other.m_looping;
-    m_pitch = other.m_pitch;
-    m_gain = other.m_gain;
 
     other.m_bufferID = 0;
 }
@@ -41,30 +36,31 @@ ALAudioBuffer &ALAudioBuffer::operator=(ALAudioBuffer &&other) noexcept {
     m_format = other.m_format;
     m_frequency = other.m_frequency;
     m_size = other.m_size;
-    m_looping = other.m_looping;
-    m_pitch = other.m_pitch;
-    m_gain = other.m_gain;
 
     other.m_bufferID = 0;
     return *this;
 }
 
-bool ALAudioBuffer::Load(const void *data, size_t size, ALenum format, ALsizei freq) {
+utils::ExError ALAudioBuffer::Load(const void *data, size_t size, ALenum format, ALsizei freq) {
     ClearBuffer();
+
     m_format = format;
     m_frequency = freq;
     m_size = static_cast<ALsizei>(size);
     alBufferData(m_bufferID, format, data, m_size, freq);
+
     ALint channels;
     alGetBufferi(m_bufferID, AL_CHANNELS, &channels);
 
     ALint bufferSize = 0;
     alGetBufferi(m_bufferID, AL_SIZE, &bufferSize);
 
-    return bufferSize > 0;
+    return bufferSize <= 0 ?
+        utils::ExError{-1, "bufferSize <= 0"} :
+        utils::ExError::NoError();
 }
 
-bool ALAudioBuffer::Load(const WAVAudio& wav) {
+utils::ExError ALAudioBuffer::Load(const WAVAudio& wav) {
     return ALAudioBuffer::Load(
         wav.samples.data(),
         wav.samples.size(),
@@ -86,30 +82,6 @@ void ALAudioBuffer::BindToSource(ALAudioSource &source) const {
 
 void ALAudioBuffer::DetachFromSource(ALAudioSource &source) const {
     alSourcei(source.GetSourceID(), AL_BUFFER, 0);
-}
-
-void ALAudioBuffer::SetLooping(bool loop) {
-    m_looping = loop;
-}
-
-bool ALAudioBuffer::IsLooping() const {
-    return m_looping;
-}
-
-void ALAudioBuffer::SetPitch(float pitch) {
-    m_pitch = pitch;
-}
-
-float ALAudioBuffer::GetPitch() const {
-    return m_pitch;
-}
-
-void ALAudioBuffer::SetGain(float gain) {
-    m_gain = gain;
-}
-
-float ALAudioBuffer::GetGain() const {
-    return m_gain;
 }
 
 bool ALAudioBuffer::IsFormatSupported(ALenum format) {

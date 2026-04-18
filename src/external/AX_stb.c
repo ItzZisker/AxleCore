@@ -8,3 +8,6 @@
 #define STB_VORBIS_IMPLEMENTATION
 #include "stb_vorbis.c"
 #endif
+
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"

@@ -1,7 +1,6 @@
 #pragma once
 
-#include "axle/core/ctx/AX_IRenderContext.hpp"
-
+#include "axle/graphics/ctx/AX_IRenderContext.hpp"
 #include "axle/graphics/cmd/AX_ICommandList.hpp"
 #include "axle/graphics/AX_GraphicsParams.hpp"
 
@@ -14,7 +13,7 @@ class IGraphicsBackend {
 public:
     virtual ~IGraphicsBackend() = default;
 
-    virtual SharedPtr<core::IRenderContext> GetContext() const = 0;
+    virtual SharedPtr<gfx::IRenderContext> GetContext() const = 0;
 
     virtual bool SupportsCap(GraphicsCapEnum cap) = 0;
     virtual const GraphicsCaps& GetCaps() const = 0;

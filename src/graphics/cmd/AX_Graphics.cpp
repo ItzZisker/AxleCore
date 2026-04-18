@@ -171,7 +171,7 @@ Future<utils::ExError> Graphics::Present(uint32_t imageIndex) {
 
 SharedPtr<ICommandList> Graphics::PrepCommandList() {
     switch (m_GfxType) {
-        case core::GfxType::GL330:
+        case GfxType::GL330:
 #ifdef __AX_GRAPHICS_GL__
             return std::make_shared<GLCommandList>();
 #endif

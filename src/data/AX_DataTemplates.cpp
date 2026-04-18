@@ -13,7 +13,11 @@ utils::ExResult<bool> ReadBool(IDataStream& buffer) {
         return b0;
     } else {
         auto err = res.error();
-        return utils::ExError(err.code, err.msg);
+        if (err.IsMessageOwned()) {
+            return utils::ExError(err.GetCode(), std::string(err.GetMessage()));
+        } else {
+            return utils::ExError(err.GetCode(), err.GetMessage());
+        }
     }
 }
 
@@ -23,7 +27,7 @@ utils::ExResult<uint64_t> ReadVarUInt(IDataStream& buffer) {
 
     for (int i = 0; i < 10; ++i) { // max 10 bytes for uint64
         if (buffer.EndOfStream())
-            return ExError{"EndOfStream"};
+            return ExError{"Unexpected EOF"};
 
         uint8_t byte{0};
         auto res = buffer.Read(&byte, 1);
@@ -50,7 +54,7 @@ utils::ExResult<int64_t> ReadVarInt(IDataStream& buffer) {
 
 utils::ExResult<std::string> ReadString(IDataStream& buffer, uint32_t maxLength) {
     if (maxLength <= 0)
-        return ExError{"invalid maximumLength"};
+        return ExError{"Invalid maximumLength"};
 
     auto lenResult = ReadVarUInt(buffer);
     if (!lenResult.has_value())
@@ -62,7 +66,7 @@ utils::ExResult<std::string> ReadString(IDataStream& buffer, uint32_t maxLength)
         return ExError{"String length exceeds maximum"};
 
     if (buffer.GetReadIndex() + length > buffer.GetLength())
-        return ExError{"EndOfStream"};
+        return ExError{"Unexpected EOF"};
 
     std::string result;
     result.reserve(length);

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "axle/core/window/AX_IWindow.hpp"
-#include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
 
+#include "axle/graphics/ctx/AX_IRenderContext.hpp"
 #include "axle/graphics/AX_Graphics.hpp"
 
 #include "axle/utils/AX_Types.hpp"
@@ -15,10 +15,11 @@ namespace axle::core
 
 struct ApplicationSpec {
     WindowSpec wndspec{};
-    ChMillis fixedWndSleep = ChMillis(0);
+    ChNanos fixedWndRate = ChNanos(0);
     ChMillis fixedTickRate = ChMillis(50);
     bool enforceGfxType{false};
-    GfxType enforcedGfxType{GfxType::VK};
+    gfx::GfxType enforcedGfxType{gfx::GfxType::VK};
+    gfx::SurfaceDesc surfaceDesc{};
 };
 
 class Application {

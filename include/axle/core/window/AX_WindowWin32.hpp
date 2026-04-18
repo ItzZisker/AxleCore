@@ -3,6 +3,8 @@
 #if defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include "AX_IWindow.hpp"
 
+#include "axle/utils/AX_Expected.hpp"
+
 #ifndef AX_CALLBACK
 #if defined(_ARM_)
 #define AX_CALLBACK
@@ -27,20 +29,24 @@ public:
     WindowWin32(const WindowSpec& spec, uint32_t maxSharedEvents = 128);
     ~WindowWin32() override;
 
-    void Launch() override;
+    utils::ExError Launch() override;
+
     void Shutdown() override;
     void PollEvents() override;
 
     void SetTitle(const std::string& title) override;
     void SetResizable(bool enabled) override;
     void SetCursorMode(WndCursorMode mode) override;
-    void SetAlpha(float alpha) override;
+    void SetAlphaConstant(float alpha) override;
+    void SetAlphaColor(float *rgb) override;
 
     void RequestWakeEventloop() override;
     void RequestQuit() override;
 
     void* GetNativeWindowHandle() override {  return m_Hwnd; };
     WindowType GetType() const override { return WindowType::Win32; }
+
+    static vLRESULT AX_CALLBACK WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam);
 private:
     std::mutex m_HandleMutex;
 
@@ -48,11 +54,11 @@ private:
     bool m_Focused{false};
     bool m_MouseOnEdge{false};
 
+    std::string m_LpClassName{""};
+
     vHWND       m_Hwnd{nullptr};
     vHANDLE     m_TaskEvent{nullptr};
     vHINSTANCE  m_Instance{nullptr};
-
-    static vLRESULT AX_CALLBACK WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vLPARAM lParam);
 };
 
 }

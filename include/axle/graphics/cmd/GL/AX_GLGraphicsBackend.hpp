@@ -4,9 +4,11 @@
 
 #include "AX_GLCommandList.hpp"
 
-#include "axle/core/ctx/AX_IRenderContext.hpp"
+#include "axle/graphics/ctx/AX_IRenderContext.hpp"
 #include "axle/graphics/AX_Graphics.hpp"
+
 #include "axle/utils/AX_Expected.hpp"
+#include "axle/utils/AX_MagicPool.hpp"
 
 #include <slang.h>
 #include <slang-com-ptr.h>
@@ -45,6 +47,7 @@ inline const char* GLErrorToString(GLenum err) {
                     << " at " << __FILE__                   \
                     << ":" << __LINE__                      \
                     << std::endl;                           \
+            throw std::runtime_error("GL Error");           \
         }                                                   \
     } while (0)
 #else
@@ -94,17 +97,14 @@ struct GLCommandBinding {
     }
 };
 
-struct GLInternal {
-    uint32_t index{0};
-    uint32_t generation{1};
-    bool alive{false};
-};
+template <typename T_Extern>
+struct GLInternal : public utils::MagicInternal<T_Extern> {};
 
-struct GLProgram : public GLInternal {
+struct GLProgram : public GLInternal<ShaderHandle> {
     GLuint id{0};
 };
 
-struct GLBuffer : public GLInternal {
+struct GLBuffer : public GLInternal<BufferHandle> {
     GLuint id{0};
     BufferUsage usage;
     size_t size{0};
@@ -127,28 +127,28 @@ struct VAOKeyLookup {
     }
 };
 
-struct GLRenderPipeline : public GLInternal {
+struct GLRenderPipeline : public GLInternal<RenderPipelineHandle> {
     RenderPipelineDesc desc;
     std::unordered_map<VAOKey, GLuint, VAOKeyLookup> vaoCache{};
 };
 
-struct GLComputePipeline : public GLInternal {
+struct GLComputePipeline : public GLInternal<ComputePipelineHandle> {
     ShaderHandle program;
     ComputePipelineDesc desc;
 };
 
-struct GLTexture : public GLInternal {
+struct GLTexture : public GLInternal<TextureHandle> {
     GLuint id{0};
     GLuint resolveId{0};
     TextureDesc desc;
 };
 
-struct GLRenderPass : public GLInternal {
+struct GLRenderPass : public GLInternal<RenderPassHandle> {
     RenderPassDesc desc;
     GLCommandBinding<FramebufferHandle> fbInUse{};
 };
 
-struct GLFramebuffer : public GLInternal {
+struct GLFramebuffer : public GLInternal<FramebufferHandle> {
     GLuint fbo{0};
     
     bool hasDepth{false};
@@ -173,7 +173,7 @@ struct GLSwapchain {
     FramebufferHandle backbuffer{};
 };
 
-struct GLResourceSet : public GLInternal {
+struct GLResourceSet : public GLInternal<ResourceSetHandle> {
     std::vector<Binding> bindings;
     uint32_t layoutID{0};
     uint32_t version{1};
@@ -207,18 +207,14 @@ struct GLStateCache {
 
 /*
     TODO:
-    - Pass IGraphicsBackend to ThreadContextGfx instead of IRenderContext, and use IGraphicsBackend->Present() to Swap buffers, so its backend-managed
-    - Make IGraphicsBackend->VSyncToggleSwapchain() to toggle vsync for swapchains by UI event (must be called via main thread, just like ResizeSwapchain())
-    - Once done, draw Rainbow RGB scroll and verify if its working or nah.
     - Make ThreadContextAudio for supporting audio stream ticking, decoding and playing sound ques asynch.
-    - Remove every piece of unhandled exception thrown in code, specially in DataSerializers and Audio code (mostly Old Codes have that)
     - Implement logger like spdlog, based on previous java codes of MiddleWare Console, (Flushing, Compiled Patterns, ANSI) and log Vulkan/GL errors through that or engine-related stuff
 */
 
 class GLGraphicsBackend final : public IGraphicsBackend {
 private:
     SurfaceInfo m_SurfaceInfo{};
-    SharedPtr<core::IRenderContext> m_Context{nullptr};
+    SharedPtr<gfx::IRenderContext> m_Context{nullptr};
     GladGLContext* m_GL{nullptr};
 
     GraphicsCaps m_Capabilities{};
@@ -229,10 +225,10 @@ private:
     utils::ExResult<GLuint> CreateVertexArray(GLRenderPipeline& pipeline);
     utils::ExError PrepVertexArray(GLRenderPipeline& pipeline);
 public:
-    GLGraphicsBackend(core::IRenderContext* context);
+    GLGraphicsBackend(gfx::IRenderContext* context);
     ~GLGraphicsBackend() override;
 
-    SharedPtr<core::IRenderContext> GetContext() const { return m_Context; }
+    SharedPtr<gfx::IRenderContext> GetContext() const { return m_Context; }
 
     bool IsES() const { return !m_IsCore; }
     bool IsCore() const { return m_IsCore; }
@@ -280,74 +276,15 @@ public:
     utils::ExResult<uint32_t> AcquireNextImage() override;
     utils::ExResult<FramebufferHandle> GetSwapchainFramebuffer(uint32_t imageIndex) override;
     utils::ExError Present(uint32_t imageIndex) override;
-
-    template <typename T>
-    requires std::is_base_of_v<GLInternal, T>
-    inline T& ReserveHandle(
-        std::vector<T>& handles,
-        std::vector<uint32_t>& frees
-    ) {
-        uint32_t index;
-        if (!frees.empty()) {
-            index = frees.back();
-            frees.pop_back();
-        } else {
-            index = static_cast<uint32_t>(handles.size());
-            handles.emplace_back();
-            handles.back().index = index;
-        }
-        return handles[index];
-    }
-
-    template <typename TI>
-    requires std::is_base_of_v<GLInternal, TI>
-    bool IsValidHandle(std::vector<TI>& handles,
-        uint32_t handleIndex,
-        uint32_t handleGeneration
-    ) const {
-        if (handleIndex >= handles.size()) {
-            return false;
-        } else {
-            const auto& internal = handles[handleIndex];
-            return internal.alive && internal.generation == handleGeneration;
-        }
-    }
-
-    template <typename T, typename TI>
-    requires std::is_base_of_v<GLInternal, TI>
-    bool IsValidHandle(std::vector<TI>& handles, const ExternalHandle<T>& handle) const {
-        return IsValidHandle(handles, handle.index, handle.generation);
-    }
-
-    template <typename T>
-    bool IsEqualHandles(const ExternalHandle<T>& handle0, const ExternalHandle<T>& handle1) const {
-        return handle0.index == handle1.index && handle0.generation == handle1.generation;
-    }
-
-    template <typename T>
-    void PostDeleteHandle(GLInternal& internal, const ExternalHandle<T>& handle, std::vector<uint32_t>& frees) const {
-        internal.alive = false;
-        internal.generation++;
-        frees.push_back(handle.index);
-    }
 private:
-    std::vector<GLBuffer>           m_Buffers{};
-    std::vector<GLTexture>          m_Textures{};
-    std::vector<GLProgram>          m_Programs{};
-    std::vector<GLRenderPipeline>   m_RenderPipelines{};
-    std::vector<GLComputePipeline>  m_ComputePipelines{};
-    std::vector<GLFramebuffer>      m_Framebuffers{};
-    std::vector<GLRenderPass>       m_RenderPasses{};
-    std::vector<GLResourceSet>      m_ResourceSets{};
-
-    std::vector<uint32_t>   m_FreeBuffers{};
-    std::vector<uint32_t>   m_FreeTextures{};
-    std::vector<uint32_t>   m_FreePrograms{};
-    std::vector<uint32_t>   m_FreeRenderPipelines{};
-    std::vector<uint32_t>   m_FreeComputePipelines{};
-    std::vector<uint32_t>   m_FreeFramebuffers{};
-    std::vector<uint32_t>   m_FreeRenderPasses{};
-    std::vector<uint32_t>   m_FreeResourceSets{};
+    utils::MagicPool<GLBuffer>           m_Buffers{};
+    utils::MagicPool<GLTexture>          m_Textures{};
+    utils::MagicPool<GLProgram>          m_Programs{};
+    utils::MagicPool<GLRenderPipeline>   m_RenderPipelines{};
+    utils::MagicPool<GLComputePipeline>  m_ComputePipelines{};
+    utils::MagicPool<GLFramebuffer>      m_Framebuffers{};
+    utils::MagicPool<GLRenderPass>       m_RenderPasses{};
+    utils::MagicPool<GLResourceSet>      m_ResourceSets{};
 
     GLCommandBinding<RenderPassHandle>       m_CurrentRenderPass{};
     GLCommandBinding<RenderPipelineHandle>   m_CurrentRenderPipeline{};

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
-#include "axle/core/ctx/AX_IRenderContext.hpp"
 
+#include "axle/graphics/ctx/AX_IRenderContext.hpp"
 #include "axle/graphics/cmd/AX_IGraphicsBackend.hpp"
 #include "axle/graphics/cmd/AX_ICommandList.hpp"
 
@@ -18,7 +18,7 @@ private:
     SharedPtr<core::ThreadContextGfx> m_GfxThread{nullptr};
     SharedPtr<IGraphicsBackend> m_GfxBackend{nullptr};
 
-    core::GfxType m_GfxType{core::GfxType::GL330};
+    GfxType m_GfxType{GfxType::GL330};
 
     std::mutex m_GfxCapsMutex{};
 public:

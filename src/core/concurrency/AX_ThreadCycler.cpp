@@ -1,6 +1,8 @@
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
-#include "axle/core/concurrency/AX_TaskQueue.hpp"
+
 #include "axle/utils/AX_Types.hpp"
+#include "axle/utils/AX_Universal.hpp"
+#include "axle/utils/AX_ResTimer.hpp"
 
 #include <atomic>
 #include <functional>
@@ -16,14 +18,13 @@ ThreadCycler::~ThreadCycler() {
     Stop();
 }
 
-void ThreadCycler::Start(int64_t sleepMS) {
-    std::lock_guard lock(m_LifeCycleMutex);
+void ThreadCycler::Start() {
+    std::lock_guard<std::mutex> lock(m_LifeCycleMutex);
     if (m_Running.load()) return;
     m_Running.store(true);
-    m_SleepMS = sleepMS;
     m_Thread = std::thread([this]() {
         {
-            std::lock_guard lock(m_StateMutex);
+            std::lock_guard<std::mutex> lock(m_StateMutex);
             m_Started = true;
         }
         m_StateCV.notify_all();
@@ -31,7 +32,7 @@ void ThreadCycler::Start(int64_t sleepMS) {
         DoCycle();
 
         {
-            std::lock_guard lock(m_StateMutex);
+            std::lock_guard<std::mutex> lock(m_StateMutex);
             m_Stopped = true;
         }
         m_StateCV.notify_all();
@@ -39,9 +40,9 @@ void ThreadCycler::Start(int64_t sleepMS) {
 }
 
 void ThreadCycler::Stop(bool join) {
-    std::lock_guard lock(m_LifeCycleMutex);
+    std::lock_guard<std::mutex> lock(m_LifeCycleMutex);
     {
-        std::lock_guard lock(m_StateMutex);
+        std::lock_guard<std::mutex> _lock(m_StateMutex);
         if (!m_Running.load()) return;
         m_Running.store(false);
         if (m_Stopped) return;
@@ -50,59 +51,41 @@ void ThreadCycler::Stop(bool join) {
         m_Thread.join();
 }
 
+ThreadId ThreadCycler::GetThreadId() {
+    return m_Thread.get_id();
+}
+
 bool ThreadCycler::ValidateThread() {
     return m_Running.load() && std::this_thread::get_id() == m_Thread.get_id();
 }
 
 void ThreadCycler::EnqueueTask(std::function<void()> func) {
     std::lock_guard<std::mutex> lock(m_CycleMutex);
-    m_CycleTasks.Enqueue(std::move(func));
+    m_CycleTasks.push_back(std::move(func));
 }
 
-WorkHandle ThreadCycler::CreateWork(VoidJob job, WorkHandle after) {
-    std::lock_guard lock(m_WorkMutex);
-
-    WorkHandle h;
-    if (!m_WorkFree.empty()) {
-        h = m_WorkFree.back();
-        m_WorkFree.pop_back();
-        m_WorkSlots[h] = { std::move(job), true };
-    } else {
-        h = static_cast<WorkHandle>(m_WorkSlots.size());
-        m_WorkSlots.push_back({ std::move(job), true });
-    }
-
-    if (after == UINT32_MAX) {
-        m_WorkOrder.push_back(h);
-    } else {
-        auto it = std::find(m_WorkOrder.begin(), m_WorkOrder.end(), after);
-        m_WorkOrder.insert(it == m_WorkOrder.end() ? m_WorkOrder.end() : std::next(it), h);
-    }
-    return h;
+WorkHandle ThreadCycler::CreateWork(VoidJob job, WorkId after) {
+    std::lock_guard<std::mutex> lock(m_CycleMutex);
+    auto res = m_CycleWorks.Reserve(after);
+    res->job = job;
+    res->Sign();
+    return res->External();
 }
 
 void ThreadCycler::RemoveWork(WorkHandle wh) {
-    std::lock_guard lock(m_WorkMutex);
-
-    if (wh >= m_WorkSlots.size() || !m_WorkSlots[wh].alive)
-        return;
-
-    m_WorkSlots[wh].alive = false;
-    m_WorkSlots[wh].job = nullptr;
-    m_WorkFree.push_back(wh);
-
-    auto it = std::remove(m_WorkOrder.begin(), m_WorkOrder.end(), wh);
-    m_WorkOrder.erase(it, m_WorkOrder.end());
+    std::lock_guard<std::mutex> lock(m_CycleMutex);
+    m_CycleWorks.Delete(wh);
 }
 
 void ThreadCycler::MoveWorkToEnd(WorkHandle wh) {
-    std::lock_guard lock(m_WorkMutex);
+    std::lock_guard<std::mutex> lock(m_CycleMutex);
+    m_CycleWorks.ModifyOrder([whCpy = wh](std::vector<utils::MagicId>& order) {
+        auto it = std::find(order.begin(), order.end(), whCpy.index);
+        if (it == order.end()) return;
 
-    auto it = std::find(m_WorkOrder.begin(), m_WorkOrder.end(), wh);
-    if (it == m_WorkOrder.end()) return;
-
-    m_WorkOrder.erase(it);
-    m_WorkOrder.push_back(wh);
+        order.erase(it);
+        order.push_back(whCpy.index);
+    });
 }
 
 void ThreadCycler::AwaitStart() {
@@ -110,47 +93,91 @@ void ThreadCycler::AwaitStart() {
     m_StateCV.wait(lock, [&] { return m_Started; });
 }
 
+ChNanos ThreadCycler::GetLastCycleTimeBegin() {
+    std::lock_guard<std::mutex> lock(m_CycleTimeMutex);
+    return m_LastCycleTimeBegin.time_since_epoch();
+}
+
+ChNanos ThreadCycler::GetLastCycleTimeEnd() {
+    std::lock_guard<std::mutex> lock(m_CycleTimeMutex);
+    return m_LastCycleTimeEnd.time_since_epoch();
+}
+
+ChNanos ThreadCycler::GetLastCycleTime() {
+    std::lock_guard<std::mutex> lock(m_CycleTimeMutex);
+    return m_LastCycleTimeEnd - m_LastCycleTimeBegin;
+}
+
+ChNanos ThreadCycler::GetCycleTimeCap() {
+    std::lock_guard<std::mutex> lock(m_CycleTimeMutex);
+    return m_CycleTimeCap;
+}
+
+void ThreadCycler::SetCycleTimeCap(ChNanos nano_seconds) {
+    std::lock_guard<std::mutex> lock(m_CycleTimeMutex);
+    m_CycleTimeCap = nano_seconds;
+}
+
 void ThreadCycler::DoCycle() {
     std::deque<VoidJob> localTasks;
 
-    std::vector<WorkHandle> localOrder;
-    std::vector<WorkSlot> localSlots;
+    std::vector<WorkSlot> localWorkSlots;
+    std::vector<WorkId> localWorkOrder;
+
+    using namespace std::chrono;
+
+    auto cycleBegin = steady_clock::now(), cycleEnd = steady_clock::now();
 
     while (m_Running.load(std::memory_order_relaxed)) {
         {
             std::lock_guard<std::mutex> lock(m_CycleMutex);
-            localTasks = m_CycleTasks.MoveJobs();
-        }
-        {
-            std::lock_guard lock(m_WorkMutex);
-            localOrder = m_WorkOrder;
-            localSlots = m_WorkSlots;
+            localTasks = m_CycleTasks;
+            m_CycleTasks.clear();
+
+            const auto& workSlots = m_CycleWorks.GetInternal();
+            const auto& workOrder = m_CycleWorks.GetOrder();
+            localWorkSlots = workSlots;
+            localWorkOrder = workOrder;
         }
 
+        cycleBegin = steady_clock::now();
         for (auto& job : localTasks) {
             job();
         }
-        for (WorkHandle& h : localOrder) {
-            const WorkSlot& slot = localSlots[h];
-            if (slot.alive && slot.job) slot.job();
+        for (const WorkId& hId : localWorkOrder) {
+            localWorkSlots[hId].job();
+        }
+        cycleEnd = steady_clock::now();
+
+        auto cycleTimeCap{ChNanos(0)};
+        {
+            std::lock_guard<std::mutex> lock(m_CycleTimeMutex);
+            cycleTimeCap = m_CycleTimeCap;
         }
 
-        if (m_SleepMS > 0) std::this_thread::sleep_for(std::chrono::milliseconds(m_SleepMS));
+        auto targetTime = cycleBegin + cycleTimeCap;
+        utils::Uni_NanoSleep(targetTime - steady_clock::now());
+
+        {
+            std::lock_guard<std::mutex> lock(m_CycleTimeMutex);
+
+            m_LastCycleTimeBegin = cycleBegin;
+            m_LastCycleTimeEnd = steady_clock::now();
+        }
     }
 }
 
 utils::ExError ThreadContextGeneric::StartCycle(
-    int64_t sleepMS,
     std::function<SharedPtr<EmptyStruct>()> initFunc,
     std::function<void(EmptyStruct& gctx)> constWork
 ) {
     auto constWk = [this, constWork = constWork](){ if (m_Ctx) constWork(*m_Ctx.get()); };
-    return StartSyncd(sleepMS, std::move(initFunc), std::move(constWk));
+    return StartSyncd(std::move(initFunc), std::move(constWk));
 }
 
-utils::ExError ThreadContextWnd::StartApp(CtxCreatorFunc initFunc, int64_t sleepMS) {
+utils::ExError ThreadContextWnd::StartApp(CtxCreatorFunc initFunc) {
     auto constWk = [this](){ if (m_Ctx) m_Ctx->PollEvents(); };
-    return StartSyncd(sleepMS, std::move(initFunc), std::move(constWk));
+    return StartSyncd(std::move(initFunc), std::move(constWk));
 }
 
 void ThreadContextWnd::SignalWindow() {
@@ -163,26 +190,25 @@ utils::ExError ThreadContextGfx::StartGfx(CtxCreatorFunc initFunc, float frameCa
     
     using namespace std::chrono;
 
-    auto clock = std::make_shared<steady_clock>();
-    auto constWk = [this, clock]() {
+    auto constWk = [this]() {
         if (!m_Ctx) return;
 
         using namespace std::chrono;
 
-        static thread_local auto frameStart = clock->now();
+        static thread_local auto frameStart = steady_clock::now();
 
         if (m_IsAutoPresent.load(std::memory_order_relaxed)) {
             auto img = m_Ctx->AcquireNextImage();
 
             if (img.has_value()) {
                 auto perr = m_Ctx->Present(img.value());
-                if (!perr.IsNoError()) std::cerr << "AX Error (AutoPresent): " << perr.msg << std::endl;
+                if (!perr.IsNoError()) std::cerr << "AX Error (AutoPresent): " << perr.GetMessage() << std::endl;
             } else {
-                std::cerr << "AX Error (AcquireNextImage): " << img.error().msg << std::endl;
+                std::cerr << "AX Error (AcquireNextImage): " << img.error().GetMessage() << std::endl;
             }
         }
 
-        auto now = clock->now();
+        auto now = steady_clock::now();
         auto delta = now - frameStart;
 
         float frameCap = m_FrameCap.load();
@@ -191,36 +217,20 @@ utils::ExError ThreadContextGfx::StartGfx(CtxCreatorFunc initFunc, float frameCa
             auto targetFrame = nanoseconds((int64_t)((1.0 / frameCap) * 1e9));
             auto targetTime = frameStart + targetFrame;
 
-            while (true) {
-                auto now = clock->now();
-                auto remaining = targetTime - now;
+            utils::Uni_NanoSleep(targetTime - steady_clock::now());
 
-                if (remaining <= nanoseconds(0))
-                    break;
-
-                if (remaining > milliseconds(2)) {
-                    std::this_thread::sleep_for(milliseconds(1));
-                } else if (remaining > microseconds(100)) {
-                    std::this_thread::yield();
-                } else {
-                    while (clock->now() < targetTime)
-                        _mm_pause();
-                    break;
-                }
-            }
-
-            now = clock->now();
+            now = steady_clock::now();
             delta = now - frameStart;
         }
-        frameStart = clock->now();
+        frameStart = steady_clock::now();
 
         float deltaF = duration<float>(delta).count();
 
-        m_LastFrameTime.store(deltaF);
+        m_FrameTime.store(deltaF);
         m_AccumulatedTime.fetch_add(deltaF);
     };
 
-    return StartSyncd(0, std::move(initFunc), std::move(constWk));
+    return StartSyncd(std::move(initFunc), std::move(constWk));
 }
 
 }

@@ -1,0 +1,38 @@
+
+
+Widget:
+    Layout: Rect(def: {window-rect}; OR inherits from parent)
+    EnforceTopPriority: bool(def: false) # Enforces widget always stays above on all widgets no matter what priority've been set
+    Priority: uint(def: 0; OR updated based on activity by UI Manager) # Stays below/above which widgets?; controlled by UIManager
+    DefaultSubWidgetConfigs:
+        PlaneConfig: PlaneConfig(def: {}; OR inherits from parent)
+        TextConfig: TextConfig(def: {}; OR ``)
+        RadioConfig: RadioConfig(def: {}; OR ``)
+        TextBoxConfig: TextBoxConfig(def: {}; OR ``)
+        ButtonConfig: ButtonConfig(def: {}; OR ``)
+
+Extends_Widget:
+    Plane:
+        RoundedCorners:        
+            Enabled: bool(def: false; OR inherits from parent)
+            Multiplier: uint(def: 1; OR ``)
+        Borders:
+            Enabled: bool(def: false; OR ``)
+            Thickness: uint(def: 1; OR ``)
+        BgColor: RGB(def: {0.1, 0.1, 0.1}; OR ``)
+        Gradient:
+            ColorFrom: RGB(def: {0.1, 0.1, 0.5}; OR ``)
+            ColorTo: RGB(def: {0.1, 0.1, 0.65}; OR ``)
+            Angle: float(def: 45.0; OR ``) # in degrees
+    Text:
+        Alignment: EnumAlignment(def: FirstTopLeft; OR inherits from parent)
+        FontSize: uint(def: DPI-based; OR ``)
+        Bold: bool(def: false; OR ``)
+        Underlined:
+            - Scale: uint(def: 1; OR ``)
+            - ScaleX: uint(def: 1; OR ``)
+            - ScaleY: uint(def: 1; OR ``)
+            - AdjustmentX: uint(def: 0 -> adjusted automatically based on font; OR ``)
+            - AdjustmentY: uint(def: 0 -> adjusted automatically based on font; OR ``)
+        
+        

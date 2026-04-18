@@ -1,5 +1,8 @@
 #pragma once
 
+#include "axle/utils/AX_Span.hpp"
+#include "axle/utils/AX_MagicPool.hpp"
+
 #include "slang.h"
 
 #include <cstdint>
@@ -7,30 +10,27 @@
 #include <array>
 
 #define AX_HEX_RGB(hex) \
-    ((float)((hex >> 16) & 0xFF) / 255.0f), \
-    ((float)((hex >> 8)  & 0xFF) / 255.0f), \
-    ((float)((hex)       & 0xFF) / 255.0f), \
+    ((float)((((uint32_t)hex) >> 16) & 0xFF) / 255.0f), \
+    ((float)((((uint32_t)hex) >> 8)  & 0xFF) / 255.0f), \
+    ((float)((((uint32_t)hex))       & 0xFF) / 255.0f), \
     1.0f
 
 #define AX_HEX_RGBA(hex) \
-    ((float)((hex >> 24) & 0xFF) / 255.0f), \
-    ((float)((hex >> 16) & 0xFF) / 255.0f), \
-    ((float)((hex >> 8)  & 0xFF) / 255.0f), \
-    ((float)((hex)       & 0xFF) / 255.0f)
+    ((float)((((uint32_t)(hex)) >> 24) & 0xFF) / 255.0f), \
+    ((float)((((uint32_t)(hex)) >> 16) & 0xFF) / 255.0f), \
+    ((float)((((uint32_t)(hex)) >> 8)  & 0xFF) / 255.0f), \
+    ((float)(((uint32_t)(hex))        & 0xFF) / 255.0f)
 
 #define AX_HEX_RGB_A(hex, alpha) \
-    ((float)((hex >> 16) & 0xFF) / 255.0f), \
-    ((float)((hex >> 8)  & 0xFF) / 255.0f), \
-    ((float)((hex)       & 0xFF) / 255.0f), \
+    ((float)((((uint32_t)hex) >> 16) & 0xFF) / 255.0f), \
+    ((float)((((uint32_t)hex) >> 8)  & 0xFF) / 255.0f), \
+    ((float)((((uint32_t)hex))       & 0xFF) / 255.0f), \
     (alpha)
 
 namespace axle::gfx {
 
 template<typename Tag>
-struct ExternalHandle {
-    uint32_t index;
-    uint32_t generation;
-};
+struct ExternalHandle : public utils::MagicHandleTagged<Tag> {};
 
 enum class BufferUsage {
     Vertex,
@@ -237,7 +237,7 @@ struct TextureDesc {
     TextureSubDesc subDesc{};
 
     // Optional texture data
-    std::vector<uint8_t> pixelsByLayers{}; // 2D pixels data, aligned 2D arrays pixels data, aligned 3D pixels data
+    utils::CowSpan<uint8_t> pixelsByLayers{}; // 2D pixels data, aligned 2D arrays pixels data, aligned 3D pixels data
     std::array<std::vector<uint8_t>, 6> pixelsByCubemap{}; // cubemap pixels data
 };
 
@@ -286,11 +286,11 @@ struct ShaderEntryPoint {
 
 struct ShaderDesc {
     const char* sourcePath; // .slang file
-    std::vector<ShaderEntryPoint> entryPoints;
+    utils::CowSpan<ShaderEntryPoint> entryPoints;
 
     // Optional compile defines
-    std::vector<const char*> defines{};
-    std::vector<std::pair<const char*, const char*>> variables{};
+    utils::CowSpan<const char*> defines{};
+    utils::CowSpan<std::pair<const char*, const char*>> variables{};
 };
 
 struct ShaderTag {};
@@ -313,6 +313,20 @@ struct ResourceHandle {
         : kind(ResourceKind::Buffer), index(h.index), generation(h.generation) {}
     ResourceHandle(TextureHandle h)
         : kind(ResourceKind::Texture), index(h.index), generation(h.generation) {}
+
+    BufferHandle AsBuffer() {
+        BufferHandle res;
+        res.index = index;
+        res.generation = generation;
+        return res;
+    }
+
+    TextureHandle AsTexture() {
+        TextureHandle res;
+        res.index = index;
+        res.generation = generation;
+        return res;
+    }
 };
 
 enum class ResourceState {
@@ -372,7 +386,7 @@ struct AttachmentDesc {
 };
 
 struct RenderPassDesc {
-    std::vector<AttachmentDesc> colorAttachments;
+    utils::CowSpan<AttachmentDesc> colorAttachments;
     AttachmentDesc depthStencilAttachment;
     bool hasDepth{false};
     bool hasStencil{false};
@@ -391,7 +405,7 @@ using RenderPassHandle = ExternalHandle<RenderPassTag>;
 
 struct FramebufferDesc {
     RenderPassHandle renderPass; // guides behavior (load/store, resolve, sampleCount)
-    std::vector<TextureHandle> colorAttachments;
+    utils::CowSpan<TextureHandle> colorAttachments;
 
     bool hasDepth{false};
     bool hasStencil{false};
@@ -576,7 +590,7 @@ struct VertexAttribute {
 
 struct VertexLayout {
     uint32_t stride;
-    std::vector<VertexAttribute> attributes;
+    utils::CowSpan<VertexAttribute> attributes;
 };
 
 struct RenderPipelineDesc {
@@ -622,7 +636,7 @@ struct Binding {
 };
 
 struct ResourceSetDesc {
-    std::vector<Binding> bindings{};
+    utils::CowSpan<Binding> bindings{};
 
     uint32_t layoutID{0}; // layout compatibility id
     uint32_t setIndex{0}; // descriptor set index

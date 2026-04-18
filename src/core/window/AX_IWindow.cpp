@@ -5,11 +5,13 @@
 namespace axle::core {
 
 DiscreteState::DiscreteState(WindowSpec spec, uint32_t maxEventsQueue)
-    : m_MaxEventQueueCapacity(maxEventsQueue),
+    : m_ClassName(spec.className), m_MaxEventQueueCapacity(maxEventsQueue),
       m_Width(spec.width), m_Height(spec.height),
       m_IsResizable(spec.resizable), m_Title(spec.title),
+      m_AlphaMode(spec.alphaMode), m_Alpha(spec.alphaModeConstant),
       m_WaitForNextEvent(spec.waitForNextEvent)
 {
+    std::memcpy(m_AlphaColor, spec.alphaModeColor, 3 * sizeof(float));
     for (std::size_t i{0}; i < std::size_t(WndMB::__End__); i++) m_MouseButtonsDown[i] = 0;
     for (std::size_t i{0}; i < std::size_t(WndKey::__End__); i++) m_KeysDown[i] = 0;
 }
@@ -70,14 +72,29 @@ bool DiscreteState::IsQuitting() const {
     return m_ShouldQuit;
 }
 
+bool DiscreteState::IsAwaitingNextEvent() const {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    return m_WaitForNextEvent;
+}
+
 WndCursorMode DiscreteState::GetCursorMode() const {
     std::lock_guard<std::mutex> lock(m_Mutex);
     return m_CursorMode;
 }
 
-float DiscreteState::GetAlpha() const {
+WndAlphaMode DiscreteState::GetAlphaMode() const {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    return m_AlphaMode;
+}
+
+float DiscreteState::GetAlphaConstant() const {
     std::lock_guard<std::mutex> lock(m_Mutex);
     return m_Alpha;
+}
+
+void DiscreteState::GetAlphaColor(float *rgb) const {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    std::memcpy(rgb, m_AlphaColor, 3 * sizeof(float));
 }
 
 uint32_t DiscreteState::GetWidth() const {
@@ -93,6 +110,11 @@ uint32_t DiscreteState::GetHeight() const {
 uint32_t DiscreteState::GetMaxEventQueueCapacity() const {
     std::lock_guard<std::mutex> lock(m_Mutex);
     return m_MaxEventQueueCapacity;
+}
+
+std::string DiscreteState::GetClassName() const {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    return m_ClassName;
 }
 
 std::string DiscreteState::GetTitle() const {
@@ -141,9 +163,14 @@ void DiscreteState::SetCursorMode(WndCursorMode mode) {
     m_CursorMode = mode;
 }
 
-void DiscreteState::SetAlpha(float alpha) {
+void DiscreteState::SetAlphaConstant(float alpha) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     m_Alpha = alpha;
+}
+
+void DiscreteState::SetAlphaColor(float *rgb) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    std::memcpy(m_AlphaColor, rgb, 3 * sizeof(float));
 }
 
 void DiscreteState::SetMouseX(float mouseX) {

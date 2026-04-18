@@ -1,6 +1,7 @@
 #include "axle/core/app/AX_Application.hpp"
-#include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/core/window/AX_IWindow.hpp"
+
+#include "axle/graphics/ctx/AX_IRenderContext.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
@@ -13,7 +14,7 @@
 #include "axle/core/window/AX_WindowWin32.hpp"
 
 #ifdef __AX_GRAPHICS_GL__
-#include "axle/core/ctx/GL/AX_RenderContextGLWin32.hpp"
+#include "axle/graphics/ctx/GL/AX_RenderContextGLWin32.hpp"
 #endif
 #endif
 
@@ -36,6 +37,7 @@ utils::ExError Application::InitCurrent(
 ) {
     using namespace axle::utils;
 
+    // m_WndThread->SetCycleTimeCap(spec.fixedWndRate);
     utils::ExError wndRes = m_WndThread->StartApp([wndspec = std::move(spec.wndspec)]() -> ExResult<SharedPtr<IWindow>> {
         IWindow* wndPtr{nullptr};
 #if defined(__AX_PLATFORM_WIN32__)
@@ -45,9 +47,9 @@ utils::ExError Application::InitCurrent(
 #else
         return ExError("AX Error: IWindow::ChooseType() Failed -> Platform Unsupported!");
 #endif
-        wndPtr->Launch();
+        AX_PROPAGATE_ERROR(wndPtr->Launch());
         return SharedPtr<IWindow>(wndPtr);
-    }, spec.fixedWndSleep.count());
+    });
     if (wndRes.IsValid()) {
         return wndRes;
     }
@@ -57,9 +59,9 @@ utils::ExError Application::InitCurrent(
     auto wndCtx = m_WndThread->GetContext();
 
     utils::ExError gfxRes = m_GfxThread->StartGfx([wndCtx, spec = std::move(spec)]() -> ExResult<SharedPtr<gfx::IGraphicsBackend>> {
-        IRenderContext* ctxPtr{nullptr};
-        int32_t combinedTypes = IRenderContext::CombinedTypes();
-        auto& sortedTypesByOS = IRenderContext::SortedTypesByPlatform();
+        gfx::IRenderContext* ctxPtr{nullptr};
+        int32_t combinedTypes = gfx::IRenderContext::CombinedTypes();
+        auto& sortedTypesByOS = gfx::IRenderContext::SortedTypesByPlatform();
         bool enforced = false;
         if (spec.enforceGfxType) {
             auto enforcedType = spec.enforcedGfxType;
@@ -69,41 +71,39 @@ utils::ExError Application::InitCurrent(
             enforced = spec.enforceGfxType;
             combinedTypes = (int)enforcedType;
         }
-        if (combinedTypes & (int)GfxType::VK) {
+        if (combinedTypes & (int)gfx::GfxType::VK) {
 #ifdef __AX_GRAPHICS_VK
-            //ctxPtr = new VKRenderContext();
+            //ctxPtr = new gfx::VKRenderContext();
             //ctxPtr.TryInit();
 #else
             goto _bkPreDX11;
 #endif
         }
         _bkPreDX11:
-        if (combinedTypes & (int)GfxType::DX11) {
+        if (combinedTypes & (int)gfx::GfxType::DX11) {
 #ifdef __AX_GRAPHICS_DX11
             // TODO
-            //ctxPtr = new DX11RenderContext();
+            //ctxPtr = new gfx::DX11RenderContext();
             //ctxPtr.TryInit();
 #else
             goto _bkPreGL330;
 #endif
         }
         _bkPreGL330:
-        if (combinedTypes & (int)GfxType::GL330) {
+        if (combinedTypes & (int)gfx::GfxType::GL330) {
 #ifdef __AX_GRAPHICS_GL__
 #if defined(__AX_PLATFORM_WIN32__)
-            ctxPtr = new RenderContextGLWin32();
+            ctxPtr = new gfx::RenderContextGLWin32();
 #elif defined(__AX_PLATFORM_X11__)
-            ctxPtr = new RenderContextGLX11();
+            ctxPtr = new gfx::RenderContextGLX11();
 #else
             return ExError("AX Error: IWindow::ChooseType() Failed -> Platform Unsupported!");
 #endif
 #endif
         }
-        if (!ctxPtr->Init(wndCtx)) {
-            return ExError("AX Error: Couldn't Create enforced-GL Context");
-        }
+        AX_PROPAGATE_ERROR(ctxPtr->Init(wndCtx, spec.surfaceDesc));
         switch (ctxPtr->GetType()) {
-            case GfxType::GL330: return {std::make_shared<gfx::GLGraphicsBackend>(ctxPtr)};
+            case gfx::GfxType::GL330: return {std::make_shared<gfx::GLGraphicsBackend>(ctxPtr)};
             default: ExError("Unsupported GfxType");
         }
     });
@@ -125,9 +125,9 @@ utils::ExError Application::InitCurrent(
     auto lastTime = steady_clock::now();
     while (!state.IsQuitting()) {
         auto now = steady_clock::now();
-        auto delta = duration_cast<milliseconds>(now - lastTime);
+        auto delta = duration_cast<ChMillis>(now - lastTime);
         lastTime = now;
-        updateFunc(delta.count() / 1000.0f, *this, miscData);
+        updateFunc(float(delta.count() / 1e9), *this, miscData);
         if (tickRate.count() > 0) {
             std::this_thread::sleep_for(ChMillis(std::max(tickRate.count() - delta.count(), (int64_t)0)));
         }

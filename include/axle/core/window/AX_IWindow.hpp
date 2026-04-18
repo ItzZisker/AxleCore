@@ -4,9 +4,20 @@
 #include <mutex>
 #include <string>
 
+#include "axle/utils/AX_Expected.hpp"
+
 // IMPORTANT!
-// We have to implement joystick calliberation/choose or anything support later; 
+// We have to implement joystick calliberation/choose or anything support later;
 // evdev/libinput/idk for linux & DirectInput/XInput for windows, for android (yeah we're cooked) & for Mac, I have no idea (we are super-cooked).
+
+namespace axle::gfx
+{
+    class IRenderContext;
+
+    class RenderContextGLWin32;
+    class RenderContextGLX11;
+    class RenderContextD3D11Win32;
+};
 
 namespace axle::core
 {
@@ -154,12 +165,30 @@ enum class WndCursorMode {
     Locked // centered & raw mouse movement
 };
 
+enum class WndAlphaMode {
+    None,
+    Constant,
+    Color,
+};
+
+enum class WndEdgesMode {
+    Popup,
+    Bordered
+};
+
 struct WindowSpec {
+    std::string className{"Ax App"};
     std::string title{"AX App"};
+
     uint32_t width{1024};
     uint32_t height{768};
+
+    WndEdgesMode edgesMode{WndEdgesMode::Bordered};
+    WndAlphaMode alphaMode{WndAlphaMode::None};
+    float alphaModeConstant{1.0f};
+    float alphaModeColor[3] = {0.0f, 0.0f, 0.0f};
+
     bool resizable{true};
-    float alpha{1.0f};
     bool waitForNextEvent{true};
 };
 
@@ -195,10 +224,13 @@ public:
     bool IsRunning() const;
     bool IsResizable() const;
     bool IsQuitting() const;
+    bool IsAwaitingNextEvent() const;
 
     WndCursorMode GetCursorMode() const;
+    WndAlphaMode GetAlphaMode() const;
+    float GetAlphaConstant() const;
+    void GetAlphaColor(float *rgbOut) const;
 
-    float GetAlpha() const;
     uint32_t GetWidth() const;
     uint32_t GetHeight() const;
     uint32_t GetMaxEventQueueCapacity() const;
@@ -213,6 +245,7 @@ public:
     bool IsKeyPressed(WndKey key) const;
     bool IsMouseButtonPressed(WndMB mb) const;
 
+    std::string GetClassName() const;
     std::string GetTitle() const;
 
     std::deque<WndEvent> TakeEvents();
@@ -222,7 +255,8 @@ protected:
     void SetTitle(const std::string& title);
     void SetSize(uint32_t width, uint32_t height);
     void SetCursorMode(WndCursorMode mode);
-    void SetAlpha(float alpha);
+    void SetAlphaConstant(float alpha);
+    void SetAlphaColor(float *rgb);
 
     void SetMouseX(float mouseX);
     void SetMouseY(float mouseY);
@@ -260,8 +294,12 @@ private:
     bool m_IsResizable{false};
     bool m_ShouldQuit{false};
 
+    std::string m_ClassName{"Pylo App"};
     std::string m_Title{"Pylo App"};
+
     float m_Alpha{1.0f};
+    float m_AlphaColor[3] = {0.0f, 0.0f, 0.0f};
+    WndAlphaMode m_AlphaMode{WndAlphaMode::None};
 
     mutable std::mutex m_Mutex;
 };
@@ -278,16 +316,16 @@ public:
     IWindow& operator=(const IWindow&&) = delete;
 
     virtual ~IWindow() = default;
+    virtual utils::ExError Launch() = 0;
 
-    virtual void Launch() = 0;
     virtual void Shutdown() = 0;
-
     virtual void PollEvents() = 0;
 
     virtual void SetTitle(const std::string& title) = 0;
     virtual void SetResizable(bool enabled) = 0;
     virtual void SetCursorMode(WndCursorMode mode) = 0;
-    virtual void SetAlpha(float alpha) = 0;
+    virtual void SetAlphaConstant(float alpha) = 0;
+    virtual void SetAlphaColor(float *rgb) = 0;
 
     virtual void RequestWakeEventloop() = 0;
     virtual void RequestQuit() { m_State.RequestQuit(); }
@@ -298,11 +336,11 @@ public:
     // Backend-specific pointer access (GL/DX/VK surfaces, handles, etc)
     virtual void* GetNativeWindowHandle() = 0;
 protected:
-    friend class IRenderContext;
+    friend class gfx::IRenderContext;
 
-    friend class RenderContextGLWin32;
-    friend class RenderContextGLX11;
-    friend class RenderContextD3D11Win32;
+    friend class gfx::RenderContextGLWin32;
+    friend class gfx::RenderContextGLX11;
+    friend class gfx::RenderContextD3D11Win32;
 
     std::mutex m_HandleMutex;
 

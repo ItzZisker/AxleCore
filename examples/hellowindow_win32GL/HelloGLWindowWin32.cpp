@@ -4,7 +4,6 @@
 #include "axle/core/app/AX_Application.hpp"
 
 // Render Context
-#include "axle/core/ctx/AX_IRenderContext.hpp"
 #include "axle/utils/AX_Types.hpp"
 
 // ALSoft Audio
@@ -21,8 +20,16 @@
 
 // Graphics
 #include "axle/graphics/AX_Graphics.hpp"
+// Graphics RenderContext
+#include "axle/graphics/ctx/AX_IRenderContext.hpp"
 // Graphics Scene
 #include "axle/graphics/scene/AX_Camera.hpp"
+// Graphics RenderLayer management (Sprites begin/draw/end call manager)
+#include "axle/graphics/layer/AX_RenderLayer.hpp"
+// Fonts
+#include "axle/graphics/text/AX_BitmapFont.hpp"
+
+#include "stb_image_write.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -41,26 +48,336 @@ using namespace axle;
 using namespace axle::utils;
 
 /*
-    Official Calls Based off:
-    - GL Core v330
-    - GL ES 3.0 Shaders 
-    + Optional Compute Shaders for further realistic effects like Dynamic HDR Exposure, etc.
-    - (D3D12 / Vulkan) Code Structure
-    TODO:
-    - [ ] Make AudioStream Survive Tough conditions, context access locks & etc. (AKA not running out of queue easily or loops in last queued audio atleast!)
-    - [*] Gameloop freezes on Stop() at certain conditions (Unknown). added cout for further investigation, deadlock probably.
-    - [*] GS Commands for Vertex/Index/Stencil-Depth-Attachment/Texture/Texture-Sampler Buffers.
-    - [*] SLang Shading language Implementation -> Replace Variables -> Compile To SPIR-V -> GLSL/HLSL/VK
-    - [ ] Scene3D Implementation with Classic Forward Renderer then Clustered-Forward Renderer
-    - [ ] Vulkan/DX11 GS Command Implementations.
-    - [-] Add IRenderContext#HasSupport(An enum or some key/value definition) for verifying if host supports certain graphics properties specific for some tasks.
-        Tip: We could also add CertainMethod#Requirements() or Extensions, etc. any name, just to identify which method requires which extension.
+    Engine Foundation Specification
+
+    Graphics Targets:
+    - OpenGL Core 3.3 (primary)
+    - OpenGL ES 3.0 shader compatibility
+    - Future-ready architecture for Vulkan / D3D12
+    - Optional compute shaders (HDR exposure, GPU particles, etc.)
+
+    ============================================================
+    CORE SYSTEMS
+    ============================================================
+
+    - [ ] Logging System
+        -> [ ] BungeeCord-style minimalistic ANSI logger
+        -> [ ] Pattern-ready formatting
+        -> [ ] Timestamp support
+        -> [ ] Auto-rotating log files
+        -> [ ] Enumerated log levels
+        -> [ ] Lock-free queue logging
+        -> [ ] Reuse implementation from: /home/kalix/IdeaProjects/DockerClient
+
+    - [ ] Memory System
+        -> [ ] Linear allocator
+        -> [ ] Pool allocator
+        -> [ ] Frame allocator
+        -> [ ] Debug allocation tracking
+        -> [ ] GPU staging allocators
+
+    - [ ] Time System
+        -> [ ] High precision clock
+        -> [ ] Fixed timestep simulation
+        -> [ ] Variable render timestep
+        -> [ ] Frame pacing utilities
+
+    - [ ] Crash & Diagnostics
+        -> [ ] Crash handler
+        -> [ ] Stacktrace capture
+        -> [ ] Minidump generation (platform dependent)
+
+    ============================================================
+    MULTITHREADING / JOB SYSTEM
+    ============================================================
+
+    - [*] ThreadCyclers
+        -> [*] Context-ready worker threads
+        -> [*] Task queues
+        -> [*] Sort-aware work handles
+        -> [*] Synchronized execution
+
+    - [ ] JobSystem
+        -> [ ] Fixed worker thread pool
+        -> [ ] Work-stealing job queues
+        -> [ ] JobHandle / Fence
+        -> [ ] Dependency system
+        -> [ ] ParallelFor utilities
+
+    - [ ] Executors
+        -> [ ] Fixed number of threads
+        -> [ ] condition_variable scheduling
+        -> [ ] NanoSleep precision waits
+        -> [ ] async result propagation
+
+    - [ ] AxTasks
+        -> [ ] Built on ThreadCyclers
+        -> [ ] Task handles
+        -> [ ] Task manager
+        -> [ ] Tick-based scheduling
+        -> [ ] High precision NanoSleep internally
+
+    ============================================================
+    PLATFORM LAYER
+    ============================================================
+
+    - [ ] Monitor / Display Backend
+        -> [ ] Win32 (first)
+        -> [ ] Xlib / X11
+        -> [ ] Cocoa
+
+    - [ ] Window System
+        -> [ ] WindowSpec descriptor
+        -> [ ] Monitor selection
+        -> [ ] Window modes:
+                -> [ ] Windowed
+                -> [ ] Borderless
+                -> [ ] Fullscreen
+        -> [ ] Alpha modes
+        -> [ ] Popup / overlay windows
+        -> [ ] Test all behaviors
+
+    - [ ] Application Layer
+        -> [ ] core::Application main entry
+        -> [ ] Layer / LayerStack architecture
+        -> [ ] Respect main-thread UI constraints
+        -> [ ] Mobile / Web / TV ready structure
+
+    ============================================================
+    INPUT SYSTEM
+    ============================================================
+
+    - [ ] Raw input backend (mouse / keyboard)
+    - [ ] Touch input support
+    - [ ] Drag system for core::DiscreteState
+    - [ ] Input abstraction layer
+        -> [ ] Actions
+        -> [ ] Axes
+        -> [ ] Gamepads
+        -> [ ] Device mapping
+
+    ============================================================
+    FILESYSTEM & ASSET PIPELINE
+    ============================================================
+
+    - [ ] Virtual File System (VFS)
+        -> [ ] Mount points
+        -> [ ] Directory + archive support
+        -> [ ] Memory streams
+
+    - [ ] FileDataStream
+    - [ ] BufferDataStream
+
+    - [ ] AssetLoader
+        -> [ ] Supported formats:
+            -> [ ] glTF
+            -> [ ] OBJ
+            -> [ ] FBX
+
+        Responsibilities:
+
+        -> Parse glTF JSON
+        -> Map binary buffers (.bin) to BufferDataStream
+        -> Load resources independently:
+            - vertices
+            - indices
+            - textures
+            - animations
+            - skeleton data
+
+        -> Texture formats
+            * BCn / DXT
+            * S3TC
+            * ASTC
+            * Basis Universal
+
+        -> AssetPool (shared resources)
+            NOTE:
+            "Model" is only a logical grouping.
+            Real resources are shared meshes.
+
+        -> ModelHandle
+            Contains:
+                ModelID
+                ModelName
+                ModelExtension
+
+        -> Scene hierarchy
+            Instantiate Node structures
+            Link nodes respecting hierarchy
+
+        -> MeshInstances
+            Shared mesh with different transforms
+
+        -> MeshUploader
+            Queued GPU uploads
+            Render-thread execution
+            Async error handling
+
+    - [ ] Asset Hot Reload
+        -> File watching
+        -> Reload shaders / textures
+
+    ============================================================
+    RENDERING ARCHITECTURE
+    ============================================================
+
+    - [ ] GraphicsCapabilities
+        -> Query host GPU features
+        -> Extension detection
+        -> Limit querying
+
+    - [*] Graphics Command Interface
+        GS Commands for:
+            - Vertex buffers
+            - Index buffers
+            - Textures
+            - Samplers
+            - Depth / Stencil attachments
+
+    - [ ] GPU Resource Manager
+        -> Deferred destruction
+        -> Frame fences
+        -> Resource lifetime tracking
+
+    - [ ] RenderCommandBuffer
+        -> Multi-threaded command recording
+        -> Render-thread submission
+        -> State sorting
+
+    ============================================================
+    SHADER SYSTEM
+    ============================================================
+
+    - [ ] Shader pipeline
+
+        Preferred pipeline:
+
+            GLSL
+              ↓
+            glslang
+              ↓
+            SPIR-V
+              ↓
+            SPIRV-Cross
+              ↓
+            GLSL / HLSL backends
+
+        Reason:
+            Slang has heavy dependencies and portability issues.
+
+    - [ ] Shader reflection
+    - [ ] Pipeline caching
+    - [ ] Descriptor layout generation
+
+    ============================================================
+    RENDER PROCEDURE (CORE RENDER ABSTRACTION)
+    ============================================================
+
+    - [ ] RenderProcedure
+
+        Features:
+
+        -> Validate GPU feature support
+        -> Accept mesh input (vertex + index)
+        -> Use ShaderHandle(s)
+        -> Attach ResourceSetHandle(s)
+        -> Output to attachments:
+            - swapchain
+            - backbuffer
+            - textures
+
+    ============================================================
+    RENDERING TEST PIPELINE
+    ============================================================
+
+    Validate RenderProcedure with real scenes:
+
+    - [ ] Blinn-Phong renderer
+        Test scene:
+            * Sponza
+            * Damaged helmet
+
+    - [ ] PBR renderer
+
+    - [ ] Shadow system
+        -> Depth map generation
+        -> Attach as ResourceSet
+
+    - [ ] GPU particle system
+        -> Instanced draw
+        -> UBO instance matrices
+        -> Time-driven animation
+
+    - [ ] Grass renderer
+        -> Batched instancing
+        -> Wind animation
+
+    - [ ] Clustered Forward renderer
+
+    - [ ] Deferred renderer
+        -> GBuffer resources
+
+    - [ ] Clustered Deferred renderer
+
+    ============================================================
+    BATCHING SYSTEMS
+    ============================================================
+
+    - [ ] BatchUtils
+
+        -> Text batching
+        -> Mesh batching
+        -> Texture atlas batching
+
+    - [ ] Batched rendering pipeline
+        Input:
+            AssetLoader AssetPool
+        Output:
+            Optimized draw submission
+
+    ============================================================
+    AUDIO
+    ============================================================
+
+    - [*] AudioStream stability
+        -> Prevent queue starvation
+        -> Loop fallback if buffer underruns
+        -> Context-safe streaming
+
+    ============================================================
+    DEBUGGING / PROFILING
+    ============================================================
+
+    - [ ] CPU profiler zones
+    - [ ] GPU timers
+    - [ ] Frame timeline
+    - [ ] DebugDraw system
+        -> lines
+        -> boxes
+        -> spheres
+        -> frustums
+
+    ============================================================
+    KNOWN ISSUES
+    ============================================================
+
+    - [*] Gameloop freeze on Stop()
+        Possible deadlock
+        Investigate thread shutdown ordering
 */
 
-struct MatrixUBO {
-    glm::mat4 MVP[3];
 
-    MatrixUBO() {
+struct Uniforms {
+    glm::mat4 MVP[3];
+    glm::vec3 lightDir{glm::normalize(glm::vec3{-1.5f, -1.0f, -1.0f})};
+    float lightShininess{8.0f};
+    glm::vec3 lightColor{glm::vec3(1.0f, 1.0f, 1.0f)};
+    float _pad0;
+    glm::vec3 cameraPos{0.0f, 0.0f, 0.0f};
+    float _pad1;
+
+    Uniforms() {
         MVP[0] = glm::mat4(1.0f);
         MVP[1] = glm::lookAt(
             glm::vec3(2.5f, 2.5f, 2.5f),
@@ -74,7 +391,7 @@ struct MatrixUBO {
             100.0f
         );
     }
-    MatrixUBO(scene::Camera& camera, core::DiscreteState& state) {
+    Uniforms(scene::Camera& camera, core::DiscreteState& state) {
         float fwidth = float(state.GetWidth());
         float fheight = float(state.GetHeight());
 
@@ -84,20 +401,22 @@ struct MatrixUBO {
         MVP[0] = glm::mat4(1.0f);
         MVP[1] = camera.GetViewMatrix();
         MVP[2] = glm::perspective(glm::radians(70.0f), fwidth / fheight, 0.1f, 100.0f);
+
+        cameraPos = camera.GetPosition();
     }
 };
 
 struct UBOState {
-    MatrixUBO matrices;
+    Uniforms uniforms;
     bool reqUpdateUBO{true};
 
-    MatrixUBO& Peek() {
+    Uniforms& Peek() {
         reqUpdateUBO = false;
-        return matrices;
+        return uniforms;
     }
     void Update(scene::Camera& camera, core::DiscreteState& state) {
         reqUpdateUBO = true;
-        matrices = MatrixUBO(camera, state);
+        uniforms = Uniforms(camera, state);
     }
 };
 
@@ -155,13 +474,14 @@ void UpdateWnd(WindowData& wndData) {
     auto wndctx = wndData.wndThread->GetContext();
     float accTime = wndData.accTimeAtomic->load(std::memory_order_relaxed);
 
-    // wndctx->SetAlpha(0.75f + 0.25f * std::sin(0.65f * accTime));
+    //wndctx->SetAlphaConstant(0.75f + 0.25f * std::sin(0.65f * accTime));
 }
 
 struct RenderData {
     SharedPtr<core::ThreadContextWnd> wndThread;
     SharedPtr<core::ThreadContextGfx> gfxThread;
     SharedPtr<gfx::ICommandList> cmdList;
+    SharedPtr<gfx::RenderLayer> renderLayers;
 
     gfx::RenderPassHandle defPass{};
     gfx::RenderPipelineHandle cubePipeline{};
@@ -181,19 +501,10 @@ struct RenderData {
     uint32_t lastWidth{0}, lastHeight{0};
 };
 
-void UpdateRender(RenderData& rdrData) {
-    auto gfxThread = rdrData.gfxThread;
-    auto gbgfx = gfxThread->GetContext();
+void UpdateCube(core::ThreadContextGfx* gfxThread, float dT, void* userPtr) {
+    auto& rdrData = *(RenderData*)userPtr;
 
-    float dT = gfxThread->GetLastFrameTime();
-    gfx::RenderPassClear clearArgs{};
-    clearArgs.clearDepth = 1.0f;
-    clearArgs.clearStencil = 0;
-    clearArgs.clearColor[0] = clearArgs.clearColor[1] = clearArgs.clearColor[2] = 0.1f;
-    clearArgs.clearColor[3] = 1.0f;
-    // clearArgs.clearColor[0] = 0.5f + 0.5f * std::sin(accTime);
-    // clearArgs.clearColor[1] = 0.5f + 0.5f * std::sin(accTime + 2.094f);
-    // clearArgs.clearColor[2] = 0.5f + 0.5f * std::sin(accTime + 4.188f);
+    auto gbgfx = gfxThread->GetContext();
 
     auto wndThread = rdrData.wndThread;
     auto wndCtx = wndThread->GetContext();
@@ -287,9 +598,14 @@ void UpdateRender(RenderData& rdrData) {
     }
 
     if (rdrData.uboState->reqUpdateUBO) {
-        auto& mvp = rdrData.uboState->Peek();
-        gbgfx->UpdateBuffer(rdrData.cubeUniformBuffer, 0, sizeof(MatrixUBO), &mvp).ThrowIfValid();
+        auto& uniforms = rdrData.uboState->Peek();
+        gbgfx->UpdateBuffer(rdrData.cubeUniformBuffer, 0, sizeof(Uniforms), &uniforms).ThrowIfValid();
     }
+}
+
+void DrawCube(core::ThreadContextGfx* gfxThread, float dT, void* userPtr) {
+    auto gbgfx = gfxThread->GetContext();
+    auto& rdrData = *(RenderData*) userPtr;
 
     uint32_t imgIndex = ExpectOrThrow(gbgfx->AcquireNextImage());
 
@@ -305,6 +621,16 @@ void UpdateRender(RenderData& rdrData) {
 
         cmdList->SetViewport({0.0f, 0.0f, float(rdrData.lastWidth), float(rdrData.lastHeight)});
     }
+    
+    gfx::RenderPassClear clearArgs{};
+    clearArgs.clearDepth = 1.0f;
+    clearArgs.clearStencil = 0;
+    clearArgs.clearColor[0] = clearArgs.clearColor[1] = clearArgs.clearColor[2] = 0.1f;
+    clearArgs.clearColor[3] = 1.0f;
+    // clearArgs.clearColor[0] = 0.5f + 0.5f * std::sin(accTime);
+    // clearArgs.clearColor[1] = 0.5f + 0.5f * std::sin(accTime + 2.094f);
+    // clearArgs.clearColor[2] = 0.5f + 0.5f * std::sin(accTime + 4.188f);
+
     cmdList->BeginRenderPass({rdrData.defPass, ExpectOrThrow(gbgfx->GetSwapchainFramebuffer(imgIndex)), clearArgs});
     cmdList->BindRenderPipeline({rdrData.cubePipeline});
     cmdList->BindVertexBuffer({rdrData.cubeVertexBuffer});
@@ -319,6 +645,7 @@ void UpdateRender(RenderData& rdrData) {
 
 void InitRender(RenderData& rdrData) {
     auto gbgfx = rdrData.gfxThread->GetContext();
+    auto layers = rdrData.renderLayers;
 
     gfx::DefaultRenderPassDesc drpdesc{};
     drpdesc.colorOps.load = gfx::LoadOp::Clear;
@@ -342,7 +669,7 @@ void InitRender(RenderData& rdrData) {
 
     gfx::ShaderDesc shaderCubeDesc;
     shaderCubeDesc.sourcePath = "cube.slang";
-    shaderCubeDesc.entryPoints = {shaderVertexEntry, shaderFragmentEntry};
+    shaderCubeDesc.entryPoints = {std::vector<gfx::ShaderEntryPoint>{shaderVertexEntry, shaderFragmentEntry}};
 
     auto shaderCube = ExpectOrThrow(gbgfx->CreateProgram(shaderCubeDesc));
 
@@ -356,15 +683,17 @@ void InitRender(RenderData& rdrData) {
     const uint32_t FLOAT_SIZE = sizeof(float); // 4 bytes
 
     // 1. Position (float3, location 0)
-    layout.attributes.push_back({0, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
+    std::vector<gfx::VertexAttribute> attributes;
+    attributes.push_back({0, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
     currentOffset += FLOAT_SIZE * 3;
     // 2. Normal (float3, location 1)
-    layout.attributes.push_back({1, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
+    attributes.push_back({1, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
     currentOffset += FLOAT_SIZE * 3;
     // 3. TexCoord (float2, location 2)
-    layout.attributes.push_back({2, 2, 0, currentOffset, FLOAT_SIZE * 2, typeDesc, false});
+    attributes.push_back({2, 2, 0, currentOffset, FLOAT_SIZE * 2, typeDesc, false});
     currentOffset += FLOAT_SIZE * 2;
 
+    layout.attributes = utils::CowSpan{attributes};
     layout.stride = currentOffset; 
 
     gfx::RenderPipelineDesc psoDesc{};
@@ -396,7 +725,7 @@ void InitRender(RenderData& rdrData) {
     gbgfx->UpdateBuffer(rdrData.cubeIndexBuffer, 0, cubeEboDesc.size, cubeIndices.data()).ThrowIfValid();
 
     gfx::BufferDesc cubeUboDesc{};
-    cubeUboDesc.size = 3 * 4 * 4 * sizeof(float);
+    cubeUboDesc.size = sizeof(Uniforms);
     cubeUboDesc.usage = gfx::BufferUsage::Uniform;
     cubeUboDesc.access = gfx::BufferAccess::Dynamic;
     cubeEboDesc.cpuVisible = true;
@@ -408,8 +737,17 @@ void InitRender(RenderData& rdrData) {
     cubeUboBinding.range = cubeUboDesc.size;
 
     gfx::ResourceSetDesc cubeResourceSetDesc{};
-    cubeResourceSetDesc.bindings = {cubeUboBinding};
+    cubeResourceSetDesc.bindings = {std::vector<gfx::Binding>{cubeUboBinding}};
     rdrData.cubeResourceSet = ExpectOrThrow(gbgfx->CreateResourceSet(cubeResourceSetDesc));
+
+    gfx::RLDesc rlDesc = {
+        .updateFunc = UpdateCube,
+        .drawFunc = DrawCube,
+        .stage = gfx::RLStage::Normal,
+        .sortKey = 0
+    };
+    layers->CreateLayer(rlDesc);
+    layers->RegisterWork(ExpectOrThrow(gbgfx->GetSwapchainFramebuffer(0)), rdrData.gfxThread);
 }
 
 struct AppData {
@@ -436,7 +774,23 @@ void InitMain(core::Application& app, void* userPtr) {
     auto gfxThread = app.GetGraphicsThread();
 
     gfxThread->SetAutoPresent(true);
-    gfxThread->CapFrames(1000.0f);
+    gfxThread->SetFrameCap(1000.0f);
+
+    // gfx::BitmapFont fonts;
+    // std::cout << "1\n";
+    // fonts.LoadFont("comic.ttf");
+    // std::cout << "2\n";
+    // fonts.GenerateGlyphs({0, 128});
+    // std::cout << "3\n";
+    // fonts.TransformToPages();
+    // std::cout << "4\n";
+
+    // std::cout << "5\n";
+    // const auto& page = utils::ExpectOrThrow(fonts.GetPage('A'));
+    // stbi_write_png("atlas.png", page.width, page.height, 4, (const uint8_t*)page.buffer.data(), 0);
+    // std::cout << "6\n";
+
+    // throw std::runtime_error("break");
 
     auto gfx = app.GetGraphics();
     gfx->SetVSync(false);
@@ -448,11 +802,10 @@ void InitMain(core::Application& app, void* userPtr) {
     appData->cmdList = cmdList;
 
     SharedPtr<RenderData> rdrData = std::make_shared<RenderData>(wndThread, gfxThread, cmdList);
+    auto layers = std::make_shared<gfx::RenderLayer>(rdrData);
+    rdrData->renderLayers = layers;
     gfxThread->EnqueueFuture([rdrData]() mutable {
         InitRender(*rdrData);
-    }).get();
-    gfxThread->CreateWork([rdrData]() mutable {
-        UpdateRender(*rdrData);
     });
 
     SharedPtr<WindowData> wndData = std::make_shared<WindowData>(wndThread, accTimeAtomic);
@@ -464,6 +817,7 @@ void InitMain(core::Application& app, void* userPtr) {
     appData->musicStream.Open().ThrowIfValid();
 
     appData->music.Play(&appData->musicStream);
+    appData->music.SetGain(0.5f);
     appData->music.SetLooping(true);
 #endif
 }
@@ -472,9 +826,7 @@ int main() {
 #if defined(__AX_PLATFORM_WIN32__) && defined(__AX_GRAPHICS_GL__)
 
 #ifdef __AX_AUDIO_ALSOFT__
-    if (!audio::alc::CreateContext(nullptr)) {
-        std::cerr << "Failed to create Audio Context\n";
-    }
+    audio::alc::CreateContext(nullptr).ThrowIfValid();
 
     audio::ALAudioStreamVorbisPlayer music(4);
     music.ApplyToSources([](audio::ALAudioStreamVorbisSource& src){
@@ -488,9 +840,8 @@ int main() {
     audio::ALAudioStreamVorbis stream(ogg);
 
     auto wav = ExpectOrThrow(audio::WAV_LoadFile("test_mono.wav"));
-    if (!buff.Load(wav)) {
-        std::cerr << "Failed to load test_mono.wav audio onto ALAudioBuffer\n";
-    }
+    buff.Load(wav).ThrowIfValid();
+
     //soundCues.Play(buff);
 #endif
     using namespace axle::gfx;
@@ -501,17 +852,33 @@ int main() {
             .title = "Test",
             .width = 800,
             .height = 600,
+            .alphaMode = core::WndAlphaMode::None,
+            .alphaModeColor = {0.1f, 0.1f, 0.1f},
             .resizable = true
         },
         .fixedTickRate = ChMillis(1),
         .enforceGfxType = true,
-        .enforcedGfxType = core::GfxType::GL330,
+        .enforcedGfxType = gfx::GfxType::GL330,
+        .surfaceDesc {
+            .colors = gfx::SurfaceColors::R8G8B8A8_Unorm,
+            .samples = gfx::SurfaceSamples::MSAA_4
+        }
     };
     AppData userData {
         .music = music,
         .musicStream = stream
     };
-    return app.InitCurrent(spec, InitMain, UpdateMain, &userData).code;
+
+    auto err = app.InitCurrent(spec, InitMain, UpdateMain, &userData);
+
+    if (err.IsValid()) {
+        std::cout << "Error: " << err.GetMessage() << std::endl;
+        std::cout << "Press any key to continue..." << std::endl;
+        char junk[1];
+        std::cin.getline(junk, 1);
+    }
+
+    return err.GetCode();
 #else
     std::cerr << "Host is either not Win32 or doesn't support GL 330!\n";
     return -1;

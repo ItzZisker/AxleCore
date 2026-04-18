@@ -1,5 +1,8 @@
 #pragma once
 
+#include "axle/utils/AX_Types.hpp"
+#include "axle/utils/AX_Span.hpp"
+
 #include <string>
 #include <variant>
 #include <utility>
@@ -34,16 +37,29 @@ do {                                    \
 namespace axle::utils
 {
 
-struct ExError {
-    int code{-1};
-    std::string msg{"Unknown error"};
+class ExError {
+private:
+    bool m_Owned{false};
+    int m_Code{-1};
+    SharedPtr<std::string> m_MsgOwned{nullptr};
+    std::string_view m_MsgView{"Unknown error"};
+public:
+    ExError(int code, std::string_view msg) : m_Code(code), m_MsgView(msg) {}
+    ExError(std::string_view msg) : m_MsgView(msg) {}
 
-    ExError(std::string msg) : msg(msg) {}
-    ExError(int code, std::string msg) : code(code), msg(msg) {}
+    ExError(int code, const char* msg) : m_Code(code), m_MsgView(msg) {}
+    ExError(const char* msg) : m_MsgView(msg) {}
 
-    bool IsNoError() const { return code == 0; }
+    ExError(int code, std::string msgOwn) : m_Code(code), m_Owned(true) { m_MsgOwned = std::make_shared<std::string>(msgOwn); }
+    ExError(std::string msgOwn) : ExError(-1, msgOwn) {}
+
+    int GetCode() const { return m_Code; }
+    std::string_view GetMessage() const { return m_Owned ? std::string_view(*m_MsgOwned.get()) : m_MsgView; }
+
+    bool IsMessageOwned() const { return m_Owned; }
+    bool IsNoError() const { return m_Code == 0; }
     bool IsValid() const { return !IsNoError(); }
-    void ThrowIfValid() const { if (IsValid()) throw std::runtime_error(msg); }
+    void ThrowIfValid() const { if (IsValid()) throw std::runtime_error(GetMessage().data()); }
 
     static ExError NoError() { return {0, "No error"}; }
 };
@@ -179,7 +195,7 @@ template<typename T>
 inline T ExpectOrThrow(ExResult<T>&& r) {
     if (!r.has_value()) {
         const ExError& e = r.error();
-        throw std::runtime_error(e.msg);
+        throw std::runtime_error(e.GetMessage().data());
     }
     return std::move(r.value());
 }
@@ -188,7 +204,7 @@ template<typename T>
 inline T ExpectOrThrow(const ExResult<T>& r) {
     if (!r.has_value()) {
         const ExError& e = r.error();
-        throw std::runtime_error(e.msg);
+        throw std::runtime_error(e.GetMessage().data());
     }
     return r.value();
 }

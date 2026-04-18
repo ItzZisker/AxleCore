@@ -39,7 +39,7 @@ ALAudioSource& ALAudioSource::operator=(ALAudioSource&& other) noexcept {
 
 void ALAudioSource::BypassHRTF() {
     if (alIsExtensionPresent("AL_SOFT_direct_channels_remix")) {
-        ALuint channels = 2;
+        // ALuint channels = 2;
         ALuint mapping[2] = { AL_FRONT_LEFT, AL_FRONT_RIGHT };
 
         alSourceiv(m_sourceID, AL_DIRECT_CHANNELS_SOFT, (ALint*)mapping);

@@ -13,6 +13,14 @@ include(FetchContent)
 #     URL https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.gz
 # )
 # FetchContent_MakeAvailable(freetype)
+set(freetype_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/freetype-src")
+set(freetype_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/freetype-build")
+
+add_library(freetyped STATIC IMPORTED)
+
+set_target_properties(freetyped PROPERTIES
+    IMPORTED_LOCATION "${freetype_BUILD_DIR}/Debug/freetyped.lib"
+)
 
 # set(CMAKE_POLICY_VERSION_MINIMUM ${CMAKE_POLICY_VERSION_MINIMUM_PREV})
 # unset(CMAKE_POLICY_VERSION_MINIMUM_PREV)

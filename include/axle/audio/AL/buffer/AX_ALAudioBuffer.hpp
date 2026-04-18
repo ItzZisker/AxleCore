@@ -1,6 +1,7 @@
 #pragma once
 
 #include "axle/audio/data/AX_AudioWAV.hpp"
+#include "axle/utils/AX_Expected.hpp"
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -28,8 +29,8 @@ public:
     ALAudioBuffer(ALAudioBuffer&& other) noexcept;
     ALAudioBuffer& operator=(ALAudioBuffer&& other) noexcept;
 
-    bool Load(const void* data, size_t size, ALenum format, ALsizei freq);
-    bool Load(const WAVAudio& wav);
+    utils::ExError Load(const void* data, size_t size, ALenum format, ALsizei freq);
+    utils::ExError Load(const WAVAudio& wav);
     void Unload();
 
     ALuint GetBufferID() const { return m_bufferID; }
@@ -57,10 +58,6 @@ private:
     ALenum m_format{}; // Audio format (AL_FORMAT_MONO16, etc.)
     ALsizei m_frequency{}; // Sample rate
     ALsizei m_size{}; // Size in bytes
-
-    bool m_looping{};
-    float m_pitch{1.0f};
-    float m_gain{1.0f};
 
     void ClearBuffer();
 };

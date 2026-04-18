@@ -23,6 +23,8 @@ endif()
 
 # === Audio Source Files ===
 set(AUDIO_SRC
+    src/audio/cmd/AL/AX_ALAudioBackend.cpp
+
 	src/audio/AL/AX_ALAudioContext.cpp
 	src/audio/AL/AX_ALAudioListener.cpp
 	src/audio/AL/AX_ALAudioSource.cpp
@@ -41,6 +43,37 @@ set(AUDIO_SRC
 	src/audio/AX_AudioUtils.cpp
 )
 
+set(GFX_SRC
+    src/graphics/ctx/DX11/AX_RenderContextDX11Win32.cpp
+    src/graphics/ctx/GL/AX_RenderContextGLWin32.cpp
+    src/graphics/ctx/GL/AX_RenderContextGLX11.cpp
+
+    src/graphics/layer/AX_RenderLayer.cpp
+
+    src/graphics/cmd/AX_Graphics.cpp
+    src/graphics/cmd/GL/AX_GLCommandList.cpp
+    src/graphics/cmd/GL/AX_GLGraphicsBackend.cpp
+    
+	src/graphics/base/material/AX_Material.cpp
+    src/graphics/base/material/AX_MaterialMetadata.cpp
+	
+    src/graphics/base/texture/AX_Texture.cpp
+    src/graphics/base/texture/AX_TextureSTB.cpp
+    src/graphics/base/texture/AX_TextureBRDFLUT.cpp
+    src/graphics/base/texture/AX_TextureDXT.cpp
+    src/graphics/base/texture/AX_TextureASTC.cpp
+
+    src/graphics/scene/AX_Camera.cpp
+
+    src/graphics/text/AX_BitmapFont.cpp
+)
+
+set(UTILS_SRC
+    src/utils/AX_Coordination.cpp
+    src/utils/AX_Universal.cpp
+    src/utils/AX_ResTimer.cpp
+)
+
 # === Source files ===
 set(PROJECT_SRC
     src/external/AX_stb.c
@@ -48,15 +81,14 @@ set(PROJECT_SRC
     src/core/app/AX_Application.cpp
 
     src/core/concurrency/AX_ThreadCycler.cpp
-    src/core/concurrency/AX_TaskQueue.cpp
     # src/core/concurrency/AX_Future.cpp
     # src/core/concurrency/AX_MainThread.cpp
     # src/core/concurrency/AX_TaskQueueRunnable.cpp
 
-    src/core/ctx/DX11/AX_RenderContextDX11Win32.cpp
-
-    src/core/ctx/GL/AX_RenderContextGLWin32.cpp
-    src/core/ctx/GL/AX_RenderContextGLX11.cpp
+    src/core/alloc/AX_DebugAllocator.cpp
+    src/core/alloc/AX_FrameAllocator.cpp
+    src/core/alloc/AX_LinearAllocator.cpp
+    src/core/alloc/AX_PoolAllocator.cpp
 
     src/core/window/AX_IWindow.cpp
     src/core/window/AX_WindowWin32.cpp
@@ -72,24 +104,8 @@ set(PROJECT_SRC
     # src/assets/AX_AssetPacker.cpp
 	
     ${AUDIO_SRC}
-
-    src/graphics/cmd/AX_Graphics.cpp
-    
-    src/graphics/cmd/GL/AX_GLCommandList.cpp
-    src/graphics/cmd/GL/AX_GLGraphicsBackend.cpp
-    
-	src/graphics/base/material/AX_Material.cpp
-    src/graphics/base/material/AX_MaterialMetadata.cpp
-	
-    src/graphics/base/texture/AX_Texture.cpp
-    src/graphics/base/texture/AX_TextureSTB.cpp
-    src/graphics/base/texture/AX_TextureBRDFLUT.cpp
-    src/graphics/base/texture/AX_TextureDXT.cpp
-    src/graphics/base/texture/AX_TextureASTC.cpp
-
-    src/graphics/scene/AX_Camera.cpp
-
-    src/utils/AX_Coordination.cpp
+    ${GFX_SRC}
+    ${UTILS_SRC}
 
     # external/glad/gles2.c
 )
@@ -101,6 +117,7 @@ if (UNIX AND AX_IMPL_LAYER_X11)
 endif()
 
 if (WIN32 AND AX_IMPL_LAYER_WIN32)
+    list(APPEND PROJECT_SRC external/glad/wgl.c)
     message(STATUS "Win32 Application Layer Support")
     add_compile_definitions(__AX_PLATFORM_WIN32__)
 endif()
@@ -200,6 +217,7 @@ if (AX_IMPL_BULLET3)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PUBLIC slang)
+target_link_libraries(${PROJECT_NAME} PUBLIC freetyped)
 
 # === Include directories ===
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -211,6 +229,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${imgui_SOURCE_DIR})
 target_include_directories(${PROJECT_NAME} PUBLIC ${imgui_SOURCE_DIR}/backends)
 target_include_directories(${PROJECT_NAME} PUBLIC ${stb_SOURCE_DIR})
 target_include_directories(${PROJECT_NAME} PUBLIC ${slang_SOURCE_DIR}/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${freetype_BUILD_DIR}/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${freetype_SOURCE_DIR}/include)
 
 if (AX_BUILD_EMWEB)
     include_directories(${PROJECT_NAME} PUBLIC ${EMSCRIPTEN_ROOT_PATH}/cache/sysroot/include)
