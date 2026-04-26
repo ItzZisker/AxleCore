@@ -8,31 +8,41 @@
 #include <utility>
 #include <stdexcept>
 
-#define AX_PROPAGATE_ERROR(statement)         \
-do {                                          \
-    ::axle::utils::ExError err = (statement); \
-    if (!err.IsNoError()) {                   \
-        return err;                           \
-    }                                         \
+#define AX_PROPAGATE_ERROR(statement)           \
+do {                                            \
+    ::axle::utils::ExError __err = (statement); \
+    if (!__err.IsNoError()) {                   \
+        return __err;                           \
+    }                                           \
 } while (0)
 
-#define AX_PROPAGATE_RESULT_ERROR(statement)  \
-do {                                          \
-    auto res = (statement);                   \
-    if (!res.has_value()) {                   \
-        return res.error();                   \
-    }                                         \
+#define AX_PROPAGATE_RESULT_ERROR(statement)    \
+do {                                            \
+    auto __res = (statement);                   \
+    if (!__res.has_value()) {                   \
+        return __res.error();                   \
+    }                                           \
 } while (0)
 
-#define AX_PROPAGATE_RESULT(statement)  \
-do {                                    \
-    auto res = (statement);             \
-    if (!res.has_value()) {             \
-        return res.error();             \
-    } else {                            \
-        return res.value();             \
-    }                                   \
+#define AX_PROPAGATE_RESULT(statement)    \
+do {                                      \
+    auto __res = (statement);             \
+    if (!__res.has_value()) {             \
+        return __res.error();             \
+    } else {                              \
+        return __res.value();             \
+    }                                     \
 } while (0)
+
+#define AX_DECL_OR_PROPAGATE(var, expr)  \
+    if (!expr.has_value())               \
+        return expr.error();             \
+    auto var = std::move(expr.value());
+
+#define AX_SET_OR_PROPAGATE(var, expr)   \
+    if (!expr.has_value())               \
+        return expr.error();             \
+    var = std::move(expr.value());
 
 namespace axle::utils
 {

@@ -19,12 +19,14 @@ ExternalProject_Add(
     PREFIX ${ASSIMP_PREFIX}
     STAMP_DIR ${ASSIMP_PREFIX}/assimp-stamp
     GIT_REPOSITORY https://github.com/assimp/assimp.git
-    GIT_TAG v6.0.2
+    GIT_TAG v6.0.4
     SOURCE_DIR ${ASSIMP_SRC_DIR}
     BINARY_DIR ${ASSIMP_BUILD_DIR}
     INSTALL_DIR ${ASSIMP_INSTALL_DIR}
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${ASSIMP_INSTALL_DIR}
+        -DASSIMP_BUILD_ASSIMP_VIEW=OFF
+        -DASSIMP_BUILD_ASSIMP_VIEWER=OFF
         -DASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT=ON
         -DASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT=ON
         -DASSIMP_BUILD_ASSIMP_TOOLS=ON
@@ -59,8 +61,27 @@ ExternalProject_Add(
 
 # Create imported target for linking
 add_library(Assimp STATIC IMPORTED GLOBAL)
+add_library(AssimpZlib STATIC IMPORTED GLOBAL)
 
-# TODO: Change these, map to .dylib, .so and .lib (WIN32 MSVC) and .dll.a (WIN32 Mingw)
-set_target_properties(Assimp PROPERTIES
-    IMPORTED_LOCATION ${ASSIMP_INSTALL_DIR}/lib/libassimp.a
-)
+if (WIN32)
+    if (MSVC)
+        set_target_properties(Assimp PROPERTIES
+            IMPORTED_LOCATION "${ASSIMP_INSTALL_DIR}/lib/assimp-vc143-mtd.lib"
+        )
+        set_target_properties(AssimpZlib PROPERTIES
+            IMPORTED_LOCATION "${ASSIMP_INSTALL_DIR}/lib/zlibstaticd.lib"
+        )
+    else()
+        set_target_properties(Assimp PROPERTIES
+            IMPORTED_LOCATION ${ASSIMP_INSTALL_DIR}/lib/libassimp.a
+        )
+    endif()
+elseif (APPLE)
+    set_target_properties(Assimp PROPERTIES
+        IMPORTED_LOCATION ${ASSIMP_INSTALL_DIR}/lib/libassimp.dylib
+    )
+elseif (UNIX)
+    set_target_properties(Assimp PROPERTIES
+        IMPORTED_LOCATION ${ASSIMP_INSTALL_DIR}/lib/libassimp.so
+    )
+endif()

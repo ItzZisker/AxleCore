@@ -36,8 +36,11 @@ BitmapFont::~BitmapFont() {
 }
 
 ExError BitmapFont::LoadFont(const std::filesystem::path& filename) {
-    if (!m_FTFaceInit) return {"an FT_Face already loaded"};
-    FT_Error err = FT_New_Face(m_FTLib, filename.string().c_str(), 0, &m_FTFace);
+    if (m_FTFaceInit) return {"an FT_Face already loaded"};
+    auto cppstr = filename.string();
+    auto cstr = cppstr.c_str();
+
+    FT_Error err = FT_New_Face(ExpectOrThrow(FT::Get()), cstr, 0, &m_FTFace);
     if (err) {
         return {"Failed to load font, Error: " + std::to_string(err)};
     } else {
@@ -52,19 +55,18 @@ ExError BitmapFont::SetGlyphSize(uint32_t fWidth, uint32_t fHeight) {
     return ExError::NoError();
 }
 
-const ExResult<CharacterAtlas>& BitmapFont::GetPage(wchar_t _char) {
-    for (auto& [_char, idx] : m_PageIndexByGlyph) {
-        std::wcout << "[" << _char << ", " << idx << "]\n";
-    }
-    auto it = m_PageIndexByGlyph.find(_char);
-    if (it == m_PageIndexByGlyph.end()) {
-        std::cout << "Page not found\n";
-        return ExError{"Page not found for char=" + std::to_string(_char)};
-    }
+const std::vector<CharacterAtlas>& BitmapFont::GetPages() {
+    return m_Pages.GetInternal();
+}
 
-    auto atlasIdx = it->second;
+CharacterAtlas* BitmapFont::GetPage(wchar_t _char) {
+    auto it = m_PageByGlyph.find(_char);
+    if (it == m_PageByGlyph.end()) {
+        return nullptr;
+    }
+    auto atlasHandle = it->second;
 
-    return m_Pages.GetRaw(atlasIdx);
+    return m_Pages.Get(atlasHandle);
 }
 
 ExError BitmapFont::GenerateGlyph(wchar_t _char) {
@@ -119,6 +121,28 @@ ExError BitmapFont::GenerateGlyphs(const Range<wchar_t>& charsRange) {
     }
 }
 
+ExError BitmapFont::GenerateGlyphs() {
+    if (!m_FTFaceInit) return {"No FT_Face (Font) loaded yet"};
+
+    FT_ULong charcode;
+    FT_UInt  glyph_index;
+
+    bool hasErrors{false};
+    std::stringstream errStream;
+
+    charcode = FT_Get_First_Char(m_FTFace, &glyph_index);
+    while (glyph_index != 0) {
+        auto err = BitmapFont::GenerateGlyph(charcode);
+        if (err.IsValid()) {
+            if (!hasErrors) errStream << "Failed to Load Glyphs:\n";
+            hasErrors = true;
+            errStream << err.GetMessage() << std::endl;
+        }
+        charcode = FT_Get_Next_Char(m_FTFace, charcode, &glyph_index);
+    }
+    return ExError::NoError();
+}
+
 bool BitmapFont::PackIntoBestFitAtlas(
     const std::vector<stbrp_rect>& inRects,
     uint32_t& outW, uint32_t& outH,
@@ -150,27 +174,27 @@ bool BitmapFont::PackIntoBestFitAtlas(
             return true;
         }
 
-        if (w < h)  w *= 2;
-        else        h *= 2;
+        if (w > h)  h += 10;
+        else        w += 10;
 
         if (w > 8192 || h > 8192)
             return false;
     }
 }
 
-ExError BitmapFont::TransformToPages() {
+ExError BitmapFont::TransformToPages(uint32_t pageSize) {
     if (m_Transformed) return {"Already transformed, use another instance of BitmapFont"};
 
     std::vector<std::vector<std::pair<wchar_t, CharGlyph>>> blocks;
 
     std::vector<std::pair<wchar_t, CharGlyph>> current;
-    current.reserve(512);
+    current.reserve(pageSize);
 
     for (auto &p : m_Glyphs) {
-        if (current.size() == 512) {
+        if (current.size() == pageSize) {
             blocks.push_back(std::move(current));
             current = {};
-            current.reserve(512);
+            current.reserve(pageSize);
         }
         current.push_back(p);
     }
@@ -179,6 +203,13 @@ ExError BitmapFont::TransformToPages() {
         blocks.push_back(std::move(current));
     
     for (auto& block : blocks) {
+        std::unordered_map<int, CharGlyph*> glyphLookup;
+        glyphLookup.reserve(block.size());
+
+        for (auto& [_char, glyph] : block) {
+            glyphLookup[(int)_char] = &glyph;
+        }
+
         uint32_t atlasW = 2048;
         uint32_t atlasH = 2048;
 
@@ -187,19 +218,18 @@ ExError BitmapFont::TransformToPages() {
 
         stbrp_init_target(&ctx, atlasW, atlasH, nodes.data(), nodes.size());
         
-        std::vector<stbrp_rect> rects, packed;
+        std::vector<stbrp_rect> rects;
         rects.reserve(block.size());
 
-        for (auto& [_char, glyph] : m_Glyphs) {
+        for (auto& [_char, glyph] : block) {
             rects.push_back({
-                .id = _char,
+                .id = (int)_char,
                 .w = glyph.size.x,
                 .h = glyph.size.y
             });   
         }
-
-        stbrp_pack_rects(&ctx, rects.data(), rects.size());
-
+        
+        std::vector<stbrp_rect> packed;
         if (!PackIntoBestFitAtlas(rects, atlasW, atlasH, packed)) {
             return {"Packing failed: atlas too large"};
         }
@@ -212,27 +242,27 @@ ExError BitmapFont::TransformToPages() {
         std::vector<uint8_t> atlasPixels(atlasW * atlasH, 0);
 
         for (auto &rect : packed) {
-            auto &glyph = m_Glyphs[rect.id];
+            auto* glyphP = glyphLookup[rect.id];
+            if (!glyphP) continue; // shouldn't happen
+            auto& glyph = *glyphP;
 
             for (int row = 0; row < glyph.size.y; row++) {
                 memcpy(&atlasPixels[(rect.y + row) * atlasW + rect.x],
                     &glyph.bitmap[row * glyph.size.x],
                     glyph.size.x);
             }
-            auto& original = m_Glyphs[rect.id];
-
-            m_PageIndexByGlyph.insert({(wchar_t)rect.id, page.index});
-
-            page.buffer = std::move(atlasPixels);
             page.glyphs.insert({rect.id,
                 AtlasGlyph {
                     .codepoint = (wchar_t)rect.id,
                     .pos = {rect.x, rect.y},
-                    .size = original.size,
-                    .metrics = original.metrics
+                    .size = glyph.size,
+                    .metrics = glyph.metrics
                 }
             });
+            m_PageByGlyph[(wchar_t)rect.id] = page.External();
         }
+        page.buffer = std::move(atlasPixels);
+        page.Sign();
     }
 
     m_Transformed = true;

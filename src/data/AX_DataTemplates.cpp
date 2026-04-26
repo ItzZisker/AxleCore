@@ -1,4 +1,6 @@
 #include "axle/data/AX_DataTemplates.hpp"
+#include "axle/data/AX_DataEndianness.hpp"
+
 #include "axle/utils/AX_Expected.hpp"
 
 using namespace axle::utils;
@@ -118,6 +120,102 @@ utils::ExError WriteString(IDataStream& buffer, const std::string& value) {
         value.size()
     );
     return utils::ExError::NoError();
+}
+
+utils::ExResult<glm::mat4> LE_ReadMat4(IDataStream& buffer) {
+    glm::mat4 mat;
+    for (int i{0}; i < 16; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Read<float>(buffer, &mat[i / 4][i % 4]));
+    return mat;
+}
+
+utils::ExResult<glm::mat3> LE_ReadMat3(IDataStream& buffer) {
+    glm::mat3 mat;
+    for (int i{0}; i < 9; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Read<float>(buffer, &mat[i / 3][i % 3]));
+    return mat;
+}
+
+utils::ExResult<glm::vec4> LE_ReadVec4(IDataStream& buffer) {
+    glm::vec4 vec;
+    for (int i{0}; i < 4; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Read<float>(buffer, &vec[i]));
+    return vec;
+}
+
+utils::ExResult<glm::vec3> LE_ReadVec3(IDataStream& buffer) {
+    glm::vec3 vec;
+    for (int i{0}; i < 3; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Read<float>(buffer, &vec[i]));
+    return vec;
+}
+
+utils::ExResult<glm::vec2> LE_ReadVec2(IDataStream& buffer) {
+    glm::vec2 vec;
+    for (int i{0}; i < 2; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Read<float>(buffer, &vec[i]));
+    return vec;
+}
+
+utils::ExResult<glm::ivec4> LE_ReadIVec4(IDataStream& buffer) {
+    glm::ivec4 vec;
+    for (int i{0}; i < 4; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Read<int32_t>(buffer, &vec[i]));
+    return vec;
+}
+
+utils::ExResult<glm::ivec3> LE_ReadIVec3(IDataStream& buffer) {
+    glm::ivec3 vec;
+    for (int i{0}; i < 3; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Read<int32_t>(buffer, &vec[i]));
+    return vec;
+}
+
+utils::ExResult<glm::ivec2> LE_ReadIVec2(IDataStream& buffer) {
+    glm::ivec2 vec;
+    for (int i{0}; i < 2; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Read<int32_t>(buffer, &vec[i]));
+    return vec;
+}
+
+utils::ExError LE_WriteMat4(IDataStream& buffer, const glm::mat4& value) {
+    for (int i{0}; i < 16; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Write(buffer, &value[i / 4][i % 4]));
+}
+
+utils::ExError LE_WriteMat3(IDataStream& buffer, const glm::mat3& value) {
+    for (int i{0}; i < 9; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Write(buffer, &value[i / 3][i % 3]));
+}
+
+utils::ExError LE_WriteVec4(IDataStream& buffer, const glm::vec4& value) {
+    for (int i{0}; i < 4; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Write(buffer, &value[i]));
+}
+
+utils::ExError LE_WriteVec3(IDataStream& buffer, const glm::vec3& value) {
+    for (int i{0}; i < 3; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Write(buffer, &value[i]));
+}
+
+utils::ExError LE_WriteVec2(IDataStream& buffer, const glm::vec2& value) {
+    for (int i{0}; i < 2; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Write(buffer, &value[i]));
+}
+
+utils::ExError LE_WriteIVec4(IDataStream& buffer, const glm::ivec4& value) {
+    for (int i{0}; i < 4; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Write(buffer, &value[i]));
+}
+
+utils::ExError LE_WriteIVec3(IDataStream& buffer, const glm::ivec3& value) {
+    for (int i{0}; i < 3; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Write(buffer, &value[i]));
+}
+
+utils::ExError LE_WriteIVec2(IDataStream& buffer, const glm::ivec2& value) {
+    for (int i{0}; i < 2; i++)
+        AX_PROPAGATE_RESULT_ERROR(data::LE_Write(buffer, &value[i]));
 }
 
 }

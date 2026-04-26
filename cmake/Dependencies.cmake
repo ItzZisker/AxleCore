@@ -1,18 +1,36 @@
 include(FetchContent)
 
-# # FreeType
-# set(CMAKE_POLICY_VERSION_MINIMUM_PREV ${CMAKE_POLICY_VERSION_MINIMUM})
-# set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+# Harfbuzz
+message(STATUS "Downloading Harfbuzz 14.1.0 ...")
+FetchContent_Declare(
+    Harfbuzz
+    GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz/
+    GIT_TAG 14.1.0
+)
+FetchContent_MakeAvailable(Harfbuzz)
 
-# set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
-# set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
-# set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+# # FreeType
+set(CMAKE_POLICY_VERSION_MINIMUM_PREV ${CMAKE_POLICY_VERSION_MINIMUM})
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
+set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+set(FT_REQUIRE_HARFBUZZ ON CACHE BOOL "" FORCE)
 
 # FetchContent_Declare(
 #     freetype
 #     URL https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.gz
 # )
 # FetchContent_MakeAvailable(freetype)
+
+message(STATUS "Downloading Freetype 2.14.3 ...")
+FetchContent_Declare(
+    freetype
+    URL http://127.0.0.1:8000/download/freetype-master.zip
+)
+FetchContent_MakeAvailable(freetype)
+
 set(freetype_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/freetype-src")
 set(freetype_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/freetype-build")
 

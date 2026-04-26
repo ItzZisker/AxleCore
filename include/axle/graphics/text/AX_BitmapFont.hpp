@@ -17,9 +17,6 @@
 #include <cstdint>
 #include <unordered_map>
 
-#define AX_FONT_BITMAP_PAGESIZE  512
-#define AX_FONT_BITMAP_PAGECOUNT 256
-
 #define AX_FONT_UNIVERSAL_CHARS "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
 
 namespace axle::gfx
@@ -61,9 +58,9 @@ private:
     utils::MagicPool<CharacterAtlas> m_Pages{};
 
     std::unordered_map<wchar_t, CharGlyph> m_Glyphs{};
-    std::unordered_map<wchar_t, utils::MagicId> m_PageIndexByGlyph{};
+    std::unordered_map<wchar_t, CharacterAtlasHandle> m_PageByGlyph{};
 
-    FT_Library m_FTLib{};
+    // FT_Library m_FTLib{};
     FT_Face m_FTFace{};
 
     bool m_FTFaceInit{false};
@@ -77,15 +74,17 @@ private:
 public:
     ~BitmapFont();
 
-    const utils::ExResult<CharacterAtlas>& GetPage(wchar_t _char);
+    const std::vector<CharacterAtlas>& GetPages();
+    CharacterAtlas* GetPage(wchar_t _char);
 
     utils::ExError LoadFont(const std::filesystem::path& filename);
     utils::ExError SetGlyphSize(uint32_t fWidth, uint32_t fHeight);
 
     utils::ExError GenerateGlyph(wchar_t _char);
     utils::ExError GenerateGlyphs(const utils::Range<wchar_t>& charsRange);
+    utils::ExError GenerateGlyphs();
 
-    utils::ExError TransformToPages();
+    utils::ExError TransformToPages(uint32_t pageSize = 512);
 };
 
 }

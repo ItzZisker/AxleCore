@@ -776,19 +776,29 @@ void InitMain(core::Application& app, void* userPtr) {
     gfxThread->SetAutoPresent(true);
     gfxThread->SetFrameCap(1000.0f);
 
-    // gfx::BitmapFont fonts;
-    // std::cout << "1\n";
-    // fonts.LoadFont("comic.ttf");
-    // std::cout << "2\n";
-    // fonts.GenerateGlyphs({0, 128});
-    // std::cout << "3\n";
-    // fonts.TransformToPages();
-    // std::cout << "4\n";
+    gfx::BitmapFont fonts;
+    std::cout << "1\n";
+    std::filesystem::path comic("icomoon.ttf");
+    fonts.LoadFont(comic).ThrowIfValid();
+    std::cout << "2\n";
+    fonts.SetGlyphSize(0, 48).ThrowIfValid();
+    fonts.GenerateGlyphs();
+    // for (auto& _c : AX_FONT_MULTIVERSAL_CHARS) {
+    //     fonts.GenerateGlyph(_c);
+    // }
+    std::cout << "3\n";
+    std::cout << "4 err=" << fonts.TransformToPages(4000).GetMessage() << std::endl;
+    std::cout << "4\n";
 
-    // std::cout << "5\n";
-    // const auto& page = utils::ExpectOrThrow(fonts.GetPage('A'));
-    // stbi_write_png("atlas.png", page.width, page.height, 4, (const uint8_t*)page.buffer.data(), 0);
-    // std::cout << "6\n";
+    std::cout << "5\n";
+    const auto& pages = fonts.GetPages();
+    for (size_t i{0}; i < pages.size(); i++) {
+        const auto& page = pages[i];
+        std::string filename = "atlas_" + std::to_string(i) + ".png";
+        stbi_write_png(filename.c_str(), page.width, page.height, 1, (const uint8_t*)page.buffer.data(), 0);
+    }
+    std::cout << "8\n";
+    std::cout << "9\n";
 
     // throw std::runtime_error("break");
 

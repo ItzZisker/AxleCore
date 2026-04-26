@@ -1,6 +1,6 @@
+#if defined(__AX_GRAPHICS_DX11__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include "axle/core/ctx/DX11/AX_RenderContextDX11Win32.hpp"
 
-#if defined(__AX_GRAPHICS_DX11__) && defined(_WIN32) && defined(__AX_PLATFORM_WIN32__)
 #include "AX_PCH.hpp"
 
 #define WIN32_LEAN_AND_MEAN

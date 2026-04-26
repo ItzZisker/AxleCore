@@ -27,4 +27,7 @@ public:
 
 void Uni_NanoSleep(ChNanos nanos);
 
+unsigned int Decode85Byte(char c);
+void Decode85(const unsigned char* src, unsigned char* dst, std::size_t size);
+
 }
