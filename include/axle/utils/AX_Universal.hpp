@@ -2,6 +2,11 @@
 
 #include "axle/utils/AX_Types.hpp"
 
+#ifdef __AX_ASSETS_ASSIMP__
+#include "glm/glm.hpp"
+#include <assimp/matrix4x4.h>
+#endif
+
 namespace axle::utils
 {
 
@@ -29,5 +34,9 @@ void Uni_NanoSleep(ChNanos nanos);
 
 unsigned int Decode85Byte(char c);
 void Decode85(const unsigned char* src, unsigned char* dst, std::size_t size);
+
+#ifdef __AX_ASSETS_ASSIMP__
+    glm::mat4 Assimp_ToGLM(const aiMatrix4x4& aiMat);
+#endif
 
 }

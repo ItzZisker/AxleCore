@@ -1,5 +1,7 @@
 #pragma once
 
+#include "axle/utils/AX_Span.hpp"
+
 #include <cstddef>
 #include <vector>
 #include <cstdint>
@@ -65,7 +67,7 @@ ImageFormat Img_GetImageFormat(int nrChannels, int bits, bool isHDR);
 
 struct Image {
     ImageFormat format = ImageFormat::RGB8;
-    std::vector<uint8_t> bytes;
+    utils::URaw bytes;
     int width, height;
 
     ImageFormatInfo GetInfo() const {

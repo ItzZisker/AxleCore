@@ -52,8 +52,12 @@ utils::ExResult<WAVAudio> WAV_LoadFileBytes(data::IDataStream& buffer) {
     wav.format = (wav.header.numChannels == 1 ?
                  (wav.header.bitsPerSample == 8 ? AL_FORMAT_MONO8 : AL_FORMAT_MONO16) :
                  (wav.header.bitsPerSample == 8 ? AL_FORMAT_STEREO8 : AL_FORMAT_STEREO16));
-    wav.samples.resize(dataSize);
-    AX_PROPAGATE_RESULT_ERROR(buffer.Read((uint8_t*) wav.samples.data(), dataSize));
+
+    std::vector<uint8_t> samples;
+    samples.resize(dataSize);
+    
+    AX_PROPAGATE_RESULT_ERROR(buffer.Read((uint8_t*) samples.data(), dataSize));
+    wav.samples = utils::URaw(std::move(samples));
 
     return wav;
 }

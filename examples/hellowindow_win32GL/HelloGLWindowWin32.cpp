@@ -774,11 +774,11 @@ void InitMain(core::Application& app, void* userPtr) {
     auto gfxThread = app.GetGraphicsThread();
 
     gfxThread->SetAutoPresent(true);
-    gfxThread->SetFrameCap(1000.0f);
+    // gfxThread->SetFrameCap(1000.0f);
 
     gfx::BitmapFont fonts;
     std::cout << "1\n";
-    std::filesystem::path comic("icomoon.ttf");
+    std::filesystem::path comic("arial.ttf");
     fonts.LoadFont(comic).ThrowIfValid();
     std::cout << "2\n";
     fonts.SetGlyphSize(0, 48).ThrowIfValid();
@@ -846,7 +846,7 @@ int main() {
     audio::ALAudioBufferPlayer soundCues(16);
     audio::ALAudioBuffer buff;
 
-    auto ogg = ExpectOrThrow(audio::OGG_LoadFile("man_behind_slaughter.ogg"));
+    auto ogg = ExpectOrThrow(audio::OGG_LoadFile("test.ogg"));
     audio::ALAudioStreamVorbis stream(ogg);
 
     auto wav = ExpectOrThrow(audio::WAV_LoadFile("test_mono.wav"));

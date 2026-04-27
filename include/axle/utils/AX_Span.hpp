@@ -35,6 +35,9 @@ private:
     std::size_t m_size;
 };
 
+using SRawView = utils::Span<int8_t>;
+using URawView = utils::Span<uint8_t>;
+
 template<typename T>
 class CowSpan {
 private:
@@ -98,5 +101,8 @@ public:
     const_iterator begin() const { return data(); }
     const_iterator end() const { return data() + size(); }
 };
+
+using SRaw = utils::CowSpan<int8_t>;
+using URaw = utils::CowSpan<uint8_t>;
 
 }

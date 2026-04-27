@@ -31,7 +31,7 @@ struct CharGlyphMetrics {
 
 struct CharGlyph {
     glm::ivec2 size;
-    std::vector<uint8_t> bitmap;
+    utils::URaw bitmap;
     CharGlyphMetrics metrics;
 };
 
@@ -50,7 +50,7 @@ struct CharacterAtlas : public utils::MagicInternal<CharacterAtlasHandle> {
     uint32_t height;
 
     std::unordered_map<wchar_t, AtlasGlyph> glyphs;
-    std::vector<uint8_t> buffer;
+    utils::URaw buffer;
 };
 
 class BitmapFont {

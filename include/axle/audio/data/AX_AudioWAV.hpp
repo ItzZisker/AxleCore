@@ -31,11 +31,11 @@ struct WAVHeader {
 struct WAVAudio {
     WAVHeader header;
     ALenum format;
-    std::vector<char> samples;
+    utils::URaw samples;
 };
 
 utils::ExResult<WAVAudio> WAV_LoadFile(const std::filesystem::path& path);
 utils::ExResult<WAVAudio> WAV_LoadFileBytes(data::IDataStream& buffer);
-utils::ExResult<WAVAudio> WAV_LoadFileBytes(utils::Span<uint8_t> bufferView);
+utils::ExResult<WAVAudio> WAV_LoadFileBytes(utils::URawView bufferView);
 
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AX_IDataStream.hpp"
+
 #include "axle/utils/AX_Span.hpp"
 #include "axle/utils/AX_Expected.hpp"
 
@@ -11,7 +12,7 @@ namespace axle::data {
 
 class BufferDataStream : public IDataStream {
 private:
-    utils::Span<uint8_t> m_BufferView{nullptr, 0};
+    utils::URawView m_BufferView{nullptr, 0};
     std::vector<uint8_t> m_BufferHeld;
 
     uint64_t m_ReadIndex = 0;
@@ -19,7 +20,7 @@ private:
 
     bool m_Opened{false};
 public:
-    BufferDataStream(utils::Span<uint8_t> bufferView); // Held an object view (Span) refers to data (no ownership)
+    BufferDataStream(utils::URawView bufferView); // Held an object view (Span) refers to data (no ownership)
     BufferDataStream(uint64_t length); // Creates and owns data itself
     ~BufferDataStream() override;
 

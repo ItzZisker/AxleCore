@@ -60,7 +60,7 @@
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "out/install/msvc/x64",
         "CMAKE_BUILD_TYPE": "Debug",
-        "AX_IMPL_ASSIMP": "OFF",
+        "AX_IMPL_ASSIMP": "ON",
         "AX_IMPL_BULLET3": "OFF",
         "AX_IMPL_LAYER_SDL3": "OFF",
         "AX_IMPL_LAYER_WIN32": "ON",
@@ -81,7 +81,7 @@
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "out/install/msvc/x64",
         "CMAKE_BUILD_TYPE": "Debug",
-        "AX_IMPL_ASSIMP": "OFF",
+        "AX_IMPL_ASSIMP": "ON",
         "AX_IMPL_BULLET3": "OFF",
         "AX_IMPL_LAYER_SDL3": "OFF",
         "AX_IMPL_LAYER_WIN32": "ON",

@@ -26,11 +26,11 @@ struct ASTCImage {
     int height;
     int depth;
     int blockX, blockY, blockZ;
-    std::vector<uint8_t> data;
+    utils::URaw data;
 };
 
 utils::ExResult<ASTCImage> ASTC_LoadFile(const std::filesystem::path& path);
 utils::ExResult<ASTCImage> ASTC_LoadFileBytes(data::IDataStream& buffer);
-utils::ExResult<ASTCImage> ASTC_LoadFileBytes(utils::Span<uint8_t> bufferView);
+utils::ExResult<ASTCImage> ASTC_LoadFileBytes(utils::URawView bufferView);
 
 }

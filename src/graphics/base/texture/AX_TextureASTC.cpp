@@ -27,8 +27,12 @@ utils::ExResult<ASTCImage> ASTC_LoadFileBytes(data::IDataStream& buffer) {
 
     // Read compressed data
     size_t dataSize = buffer.GetLength() - sizeof(ASTCHeader);
-    img.data.resize(dataSize);
-    AX_PROPAGATE_RESULT_ERROR(buffer.Read(img.data.data(), dataSize));
+
+    std::vector<uint8_t> buff;
+    buff.resize(dataSize);
+
+    AX_PROPAGATE_RESULT_ERROR(buffer.Read(buff.data(), dataSize));
+    img.data = {std::move(buff)};
 
     return img;
 }

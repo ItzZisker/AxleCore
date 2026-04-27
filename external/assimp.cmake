@@ -66,7 +66,7 @@ add_library(AssimpZlib STATIC IMPORTED GLOBAL)
 if (WIN32)
     if (MSVC)
         set_target_properties(Assimp PROPERTIES
-            IMPORTED_LOCATION "${ASSIMP_INSTALL_DIR}/lib/assimp-vc143-mtd.lib"
+            IMPORTED_LOCATION "${ASSIMP_INSTALL_DIR}/lib/assimp-vc145-mtd.lib"
         )
         set_target_properties(AssimpZlib PROPERTIES
             IMPORTED_LOCATION "${ASSIMP_INSTALL_DIR}/lib/zlibstaticd.lib"

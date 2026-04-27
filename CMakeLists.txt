@@ -99,6 +99,7 @@ set(PROJECT_SRC
     src/data/AX_DataTemplates.cpp
 
     src/assets/AX_AssetImporter.cpp
+    src/assets/AX_AssetSTLAssimpFileImporter.cpp
     # src/assets/AX_AssetExporter.cpp
     # src/assets/AX_AssetManager.cpp
     # src/assets/AX_AssetPacker.cpp
@@ -196,7 +197,7 @@ if (AX_IMPL_AUDIO_SOFTOPENAL)
     add_compile_definitions(__AX_AUDIO_ALSOFT__)
 endif()
 
-# if (AX_IMPL_ASSIMP)
+if (AX_IMPL_ASSIMP)
     message("-- Assimp support enabled.")
     set(AX_ASSIMP_LINK Assimp)
     set(AX_ASSIMPZ_LINK AssimpZlib)
@@ -205,8 +206,9 @@ endif()
         set(AX_ASSIMPZ_LINK -Wl,--whole-archive AssimpZlib -Wl,--no-whole-archive)
     endif()
     target_link_libraries(${PROJECT_NAME} PUBLIC ${AX_ASSIMP_LINK} ${X_ASSIMPZ_LINK})
+    target_include_directories(${PROJECT_NAME} PUBLIC ${ASSIMP_INSTALL_DIR}/include)
     add_compile_definitions(__AX_ASSETS_ASSIMP__)
-# endif()
+endif()
 
 if (AX_IMPL_BULLET3)
     message("-- Bullet3 support enabled.")

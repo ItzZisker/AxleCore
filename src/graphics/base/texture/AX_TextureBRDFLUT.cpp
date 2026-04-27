@@ -112,10 +112,13 @@ void BRDFLUT_Generate(Image& img, int samples, int size) {
 
     img.format = ImageFormat::RGB32F;
     img.width = img.height = size;
-    img.bytes.resize(img.GetSize());
+
+	std::vector<uint8_t> buff;
+	buff.resize(img.GetSize());
 
     // Each pixel has 3 floats → reinterpret as float*
-    float* data = reinterpret_cast<float*>(img.bytes.data());
+    float* data = reinterpret_cast<float*>(buff.data());
+	img.bytes = {std::move(buff)};
 
     for (int y = 0; y < img.height; ++y) {
         for (int x = 0; x < img.width; ++x) {

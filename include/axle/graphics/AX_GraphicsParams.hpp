@@ -237,8 +237,8 @@ struct TextureDesc {
     TextureSubDesc subDesc{};
 
     // Optional texture data
-    utils::CowSpan<uint8_t> pixelsByLayers{}; // 2D pixels data, aligned 2D arrays pixels data, aligned 3D pixels data
-    std::array<std::vector<uint8_t>, 6> pixelsByCubemap{}; // cubemap pixels data
+    utils::URaw pixelsByLayers{}; // 2D pixels data, aligned 2D arrays pixels data, aligned 3D pixels data
+    std::array<utils::URaw, 6> pixelsByCubemap{}; // cubemap pixels data
 };
 
 struct TextureTag {};

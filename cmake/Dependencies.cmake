@@ -2,21 +2,30 @@ include(FetchContent)
 
 # Harfbuzz
 message(STATUS "Downloading Harfbuzz 14.1.0 ...")
-FetchContent_Declare(
-    Harfbuzz
-    GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz/
-    GIT_TAG 14.1.0
+# FetchContent_Declare(
+#     Harfbuzz
+#     GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz/
+#     GIT_TAG 14.1.0
+# )
+# FetchContent_MakeAvailable(Harfbuzz)
+
+set(harfbuzz_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/harfbuzz-src")
+set(harfbuzz_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/harfbuzz-build")
+
+add_library(harfbuzz STATIC IMPORTED)
+
+set_target_properties(harfbuzz PROPERTIES
+    IMPORTED_LOCATION "${harfbuzz_BUILD_DIR}/Debug/harfbuzz.lib"
 )
-FetchContent_MakeAvailable(Harfbuzz)
 
 # # FreeType
-set(CMAKE_POLICY_VERSION_MINIMUM_PREV ${CMAKE_POLICY_VERSION_MINIMUM})
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+# set(CMAKE_POLICY_VERSION_MINIMUM_PREV ${CMAKE_POLICY_VERSION_MINIMUM})
+# set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
-set(FT_REQUIRE_HARFBUZZ ON CACHE BOOL "" FORCE)
+# set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+# set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+# set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+# set(FT_REQUIRE_HARFBUZZ ON CACHE BOOL "" FORCE)
 
 # FetchContent_Declare(
 #     freetype
@@ -24,12 +33,13 @@ set(FT_REQUIRE_HARFBUZZ ON CACHE BOOL "" FORCE)
 # )
 # FetchContent_MakeAvailable(freetype)
 
-message(STATUS "Downloading Freetype 2.14.3 ...")
-FetchContent_Declare(
-    freetype
-    URL http://127.0.0.1:8000/download/freetype-master.zip
-)
-FetchContent_MakeAvailable(freetype)
+# message(STATUS "Downloading Freetype 2.14.3 ...")
+# FetchContent_Declare(
+#     freetype
+#     GIT_REPOSITORY https://github.com/freetype/freetype
+#     GIT_TAG VER-2-14-3
+# )
+# FetchContent_MakeAvailable(freetype)
 
 set(freetype_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/freetype-src")
 set(freetype_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/freetype-build")
