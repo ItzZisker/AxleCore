@@ -14,7 +14,7 @@ namespace axle::assets
 
 class AssetSTLAssimpFileImporter : public IAssetImporter {
 public:
-    explicit AssetSTLAssimpFileImporter(const std::filesystem::path& path);
+    explicit AssetSTLAssimpFileImporter(uint32_t assetImportFlags, const std::filesystem::path& path);
 
     utils::ExResult<AssetImportResult> Import() override;
 
@@ -33,16 +33,31 @@ private:
         AssetImportResult& result
     );
 
-    uint32_t ProcessMesh(
+    void ProcessMesh(
         const aiMesh* mesh,
         const aiScene* scene,
-        AssetImportResult& result
+        AssetImportResult& result,
+        uint32_t& meshIdx,
+        uint32_t& buffIdx
     );
 
-    uint32_t ProcessMaterial(
+    void ProcessMaterial(
         const aiMaterial* material,
         const aiScene* scene,
-        AssetImportResult& result
+        AssetImportResult& result,
+        uint32_t& matIdx
+    );
+
+    void ProcessLights(
+        const aiScene* scene,
+        AssetImportResult& result,
+        uint32_t& lightIdx
+    );
+
+    void ProcessCameras(
+        const aiScene* scene,
+        AssetImportResult& result,
+        uint32_t& cameraIdx
     );
 };
 

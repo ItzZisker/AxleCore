@@ -18,6 +18,11 @@
 #include "axle/audio/AL/stream/AX_ALAudioStreamVorbisPlayer.hpp"
 #endif
 
+// Assimp Assets
+#ifdef __AX_ASSETS_ASSIMP__
+#include "axle/assets/AX_AssetSTLAssimpFileImporter.hpp"
+#endif
+
 // Graphics
 #include "axle/graphics/AX_Graphics.hpp"
 // Graphics RenderContext
@@ -853,6 +858,19 @@ int main() {
     buff.Load(wav).ThrowIfValid();
 
     //soundCues.Play(buff);
+#endif
+
+
+#ifdef __AX_ASSETS_ASSIMP__
+    using namespace axle::assets;
+
+    AssetSTLAssimpFileImporter importer((uint32_t)AssetImportFlag::CalcTangents, "sponza/Sponza.gltf");
+    auto result = importer.Import();
+
+    if (!result.has_value()) {
+        throw std::runtime_error("Error: " + std::string(result.error().GetMessage()));
+    }
+    auto import = result.value();
 #endif
     using namespace axle::gfx;
 

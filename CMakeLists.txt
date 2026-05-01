@@ -53,16 +53,10 @@ set(GFX_SRC
     src/graphics/cmd/AX_Graphics.cpp
     src/graphics/cmd/GL/AX_GLCommandList.cpp
     src/graphics/cmd/GL/AX_GLGraphicsBackend.cpp
-    
-	src/graphics/base/material/AX_Material.cpp
-    src/graphics/base/material/AX_MaterialMetadata.cpp
-	
-    src/graphics/base/texture/AX_Texture.cpp
-    src/graphics/base/texture/AX_TextureSTB.cpp
-    src/graphics/base/texture/AX_TextureBRDFLUT.cpp
-    src/graphics/base/texture/AX_TextureDXT.cpp
-    src/graphics/base/texture/AX_TextureASTC.cpp
 
+    src/graphics/image/AX_ImageLoader.cpp
+    src/graphics/image/AX_ImageBRDFLUT.cpp
+	
     src/graphics/scene/AX_Camera.cpp
 
     src/graphics/text/AX_BitmapFont.cpp

@@ -37,7 +37,7 @@ utils::ExResult<ASTCImage> ASTC_LoadFileBytes(data::IDataStream& buffer) {
     return img;
 }
 
-utils::ExResult<ASTCImage> ASTC_LoadFileBytes(utils::Span<uint8_t> bufferView) {
+utils::ExResult<ASTCImage> ASTC_LoadFileBytes(utils::URawView bufferView) {
     std::shared_ptr<data::BufferDataStream> stream = std::make_shared<data::BufferDataStream>(bufferView);
     AX_PROPAGATE_ERROR(stream->Open());
     return ASTC_LoadFileBytes(*stream);

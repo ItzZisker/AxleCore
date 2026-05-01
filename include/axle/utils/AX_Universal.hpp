@@ -30,6 +30,16 @@ public:
     }
 };
 
+class ScopeCall {
+private:
+    std::function<void()> m_Func;
+public:
+    ScopeCall(std::function<void()> func) : m_Func(func) {}
+    ~ScopeCall() { m_Func(); }
+
+    void Call() const { m_Func(); }
+};
+
 void Uni_NanoSleep(ChNanos nanos);
 
 unsigned int Decode85Byte(char c);

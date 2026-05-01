@@ -33,11 +33,83 @@ struct Node {
 enum class AssetBufferType {
     Vertex,
     Index,
-    Texture,
     SkinWeights,
     MorphTargetPosition,
     MorphTargetNormal
 };
+
+enum class VertexFormat {
+    Uv1, Uv1WTangents,
+    Uv2, Uv2WTangents,
+    Uv4, Uv4WTangents,
+    Uv8, Uv8WTangents,
+};
+
+struct VertexFormatDesc {
+    uint32_t stride;
+    uint32_t uvCount;
+    bool hasTangents;
+
+    // typed cast helper
+    void* (*Cast)(void* raw);
+};
+
+template <int UVCount, bool HasTangents>
+struct AssetVertex_T {
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec2 texCoords[UVCount];
+
+    std::conditional_t<HasTangents, glm::vec3, std::monostate> tangent;
+    std::conditional_t<HasTangents, glm::vec3, std::monostate> biTangent;
+};
+
+struct AssetVertexUv1       : public AssetVertex_T<1, false> {};
+struct AssetVertexUv1WTan   : public AssetVertex_T<1, true>  {};
+struct AssetVertexUv2       : public AssetVertex_T<2, false> {};
+struct AssetVertexUv2WTan   : public AssetVertex_T<2, true>  {};
+struct AssetVertexUv4       : public AssetVertex_T<4, false> {};
+struct AssetVertexUv4WTan   : public AssetVertex_T<4, true>  {};
+struct AssetVertexUv8       : public AssetVertex_T<8, false> {};
+struct AssetVertexUv8WTan   : public AssetVertex_T<8, true>  {};
+
+inline void* CastUv1(void* ptr)        { return reinterpret_cast<AssetVertexUv1*>(ptr); }
+inline void* CastUv1WTan(void* ptr)    { return reinterpret_cast<AssetVertexUv1WTan*>(ptr); }
+inline void* CastUv2(void* ptr)        { return reinterpret_cast<AssetVertexUv2*>(ptr); }
+inline void* CastUv2WTan(void* ptr)    { return reinterpret_cast<AssetVertexUv2WTan*>(ptr); }
+inline void* CastUv4(void* ptr)        { return reinterpret_cast<AssetVertexUv4*>(ptr); }
+inline void* CastUv4WTan(void* ptr)    { return reinterpret_cast<AssetVertexUv4WTan*>(ptr); }
+inline void* CastUv8(void* ptr)        { return reinterpret_cast<AssetVertexUv8*>(ptr); }
+inline void* CastUv8WTan(void* ptr)    { return reinterpret_cast<AssetVertexUv8WTan*>(ptr); }
+
+static const VertexFormatDesc VERTEX_FORMAT_LOOKUP[] = {
+    { sizeof(AssetVertexUv1),       1, false, &CastUv1       },
+    { sizeof(AssetVertexUv1WTan),   1, true,  &CastUv1WTan   },
+    { sizeof(AssetVertexUv2),       2, false, &CastUv2       },
+    { sizeof(AssetVertexUv2WTan),   2, true,  &CastUv2WTan   },
+    { sizeof(AssetVertexUv4),       4, false, &CastUv4       },
+    { sizeof(AssetVertexUv4WTan),   4, true,  &CastUv4WTan   },
+    { sizeof(AssetVertexUv8),       8, false, &CastUv8       },
+    { sizeof(AssetVertexUv8WTan),   8, true,  &CastUv8WTan   },
+};
+
+inline const VertexFormat GetVertexFormat(uint32_t uvCount, bool hasTangents) {
+    switch (uvCount) {
+        case 1: return hasTangents ? VertexFormat::Uv1WTangents : VertexFormat::Uv1;
+        case 2: return hasTangents ? VertexFormat::Uv2WTangents : VertexFormat::Uv2;
+        case 3:
+        case 4: return hasTangents ? VertexFormat::Uv4WTangents : VertexFormat::Uv4;
+        case 5:
+        case 6:
+        case 7:
+        case 8: return hasTangents ? VertexFormat::Uv8WTangents : VertexFormat::Uv8;
+    }
+    return VertexFormat::Uv1;
+}
+
+inline const VertexFormatDesc& GetVertexFormatDesc(VertexFormat fmt) {
+    return VERTEX_FORMAT_LOOKUP[static_cast<int>(fmt)];
+}
 
 enum class MetaType : uint32_t {
     Float    = 0x1,
@@ -54,7 +126,6 @@ public:
     Metadata(MetaType type, utils::SRaw raw);
 
     Value Get() const;
-
     utils::SRaw& Raw();
 private:
     const MetaType m_Type;
@@ -63,25 +134,23 @@ private:
 
 using MetadataMap = std::unordered_map<std::string, Metadata>;
 
-struct AssetBufferTag {};
-struct AssetBufferHandle : public utils::MagicHandleTagged<AssetBufferTag> {};
-
-struct AssetBuffer : public utils::MagicInternal<AssetBufferHandle> {
+struct AssetBuffer {
     AssetBufferType type;
     uint32_t stride{0};
     uint32_t count{0};
     MetadataMap metadata{};
     utils::URaw raw;   // raw byte buffer (unowned or cow'd)
+
+    inline data::BufferDataStream Stream() {
+        return data::BufferDataStream(utils::URawView(raw.data(), raw.size()));
+    }
 };
 
-struct AssetMaterialTag {};
-struct AssetMaterialHandle : public utils::MagicHandleTagged<AssetMaterialTag> {};
-
 struct PBRProps {
-    float metallic    {1.0f};
-    float roughness   {1.0f};
-    float normal      {1.0f};
-    float occlusion   {1.0f};
+    float metallicFactor    {1.0f};
+    float roughnessFactor   {1.0f};
+    float normalScale       {1.0f};
+    float occlusionStrength {1.0f};
     glm::vec4 emissiveColor = glm::vec4(1.0f);
     float transparencyFactor = 0.0f;
     float alphaTest = 0.0f;
@@ -96,7 +165,7 @@ struct MaterialProps {
     float F0{0.04f};
 
     bool isTransparent{false};
-    bool hasDisplacement{true};
+    bool hasDisplacement{false};
     bool hasRoughness{true};
 
     glm::vec4 baseColor{1.0f};
@@ -106,7 +175,8 @@ struct MaterialProps {
     PBRProps pbr{};
 };
 
-struct AssetMaterial : public utils::MagicInternal<AssetMaterialHandle> {
+struct AssetMaterial {
+    bool imported{false};
     std::string name;
     MaterialProps props;
     MetadataMap metadata;
@@ -119,15 +189,12 @@ struct SubMesh {
 };
 
 struct AssetMesh {
-    AssetBufferHandle vertices;
-    AssetBufferHandle indices;
-    AssetMaterialHandle material;
+    uint32_t vertexBufferIdx;
+    uint32_t indexBufferIdx;
+    uint32_t materialIdx;
 
     utils::CowSpan<SubMesh> parts;   // submeshes referencing materials
 };
-
-struct AssetShaderTag {};
-struct AssetShaderHandle : public utils::MagicHandleTagged<AssetShaderTag> {};
 
 enum class AssetShaderType {
     Slang,
@@ -232,8 +299,8 @@ enum class AssetCullMode {
 };
 
 struct PipelineAsset {
-    AssetShaderHandle vertex;
-    AssetShaderHandle fragment;
+    uint32_t vertexShaderIdx;
+    uint32_t fragmentShaderIdx;
 
     AssetBlendMode blend{AssetBlendMode::Opaque};
     AssetCullMode cull{AssetCullMode::Back};
@@ -264,12 +331,28 @@ struct AssetImportResult {
     MetadataMap metadata;
 };
 
+enum class AssetImportFlag : uint32_t {
+    IncludePBR   = (1 << 0),
+    CalcTangents = (1 << 1)
+};
+
+struct AssetImportDesc {
+    uint32_t flags{uint32_t(AssetImportFlag::CalcTangents)};
+    float opaquenessThreshold{0.05f};
+};
+
 class IAssetImporter {
+protected:
+    AssetImportDesc m_Desc;
 public:
+    IAssetImporter(const AssetImportDesc& desc) : m_Desc(desc) {}
     virtual ~IAssetImporter() = default;
 
-    virtual utils::ExResult<AssetImportResult> Import() = 0;
+    bool HasFlag(AssetImportFlag flag) const {
+        return m_Desc.flags & static_cast<uint32_t>(flag);
+    }
 
+    virtual utils::ExResult<AssetImportResult> Import() = 0;
     virtual std::string GetImporterName() const = 0;
 };
 
