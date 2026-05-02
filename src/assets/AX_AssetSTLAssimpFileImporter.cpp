@@ -6,8 +6,8 @@
 namespace axle::assets
 {
 
-AssetSTLAssimpFileImporter::AssetSTLAssimpFileImporter(uint32_t assetImportFlags, const std::filesystem::path& path)
-    : IAssetImporter(assetImportFlags), m_Path(path) {}
+AssetSTLAssimpFileImporter::AssetSTLAssimpFileImporter(const AssetImportDesc& desc, const std::filesystem::path& path)
+    : IAssetImporter(desc), m_Path(path) {}
 
 utils::ExResult<AssetImportResult> AssetSTLAssimpFileImporter::Import() {
     Assimp::Importer importer;
@@ -122,12 +122,15 @@ void AssetSTLAssimpFileImporter::ProcessMesh(
     indexBuf.count = indexBuffer.size();
     indexBuf.raw = {std::move(indexBuffer)};
 
-    result.buffers[buffIdx++] = std::move(vertexBuf);
-    result.buffers[buffIdx++] = std::move(indexBuf);
+    uint32_t vertBuffIdx, idxBuffIdx;
+
+    result.buffers[vertBuffIdx = buffIdx++] = std::move(vertexBuf);
+    result.buffers[idxBuffIdx = buffIdx++] = std::move(indexBuf);
 
     AssetMesh assetMesh;
-    assetMesh.vertices = vertexBuf.External();
-    assetMesh.indices = indexBuf.External();
+    assetMesh.vertexBufferIdx = vertBuffIdx;
+    assetMesh.indexBufferIdx = idxBuffIdx;
+    // Get MaterialIDx
 
     result.meshes[meshIdx++] = std::move(assetMesh);
 }
@@ -150,11 +153,26 @@ glm::vec4 GetMemberColor(
     return color;
 }
 
+void SwapAssimp_BGRA8888_To_RGBA8888(aiTexture* assimp_tex) {
+    auto width = assimp_tex->mWidth;
+    auto height = assimp_tex->mHeight;
+
+    for (uint32_t i{0}; i < width * height; i++) {
+        aiTexel& texel = assimp_tex->pcData[i];
+        aiTexel temp = texel;
+
+        texel.b = temp.r;
+        texel.g = temp.g;
+        texel.r = temp.b;
+    }
+}
+
 void AssetSTLAssimpFileImporter::ProcessMaterial(
     const aiMaterial* material,
     const aiScene* scene,
     AssetImportResult& result,
-    uint32_t& matIdx
+    const uint32_t& matIdx,
+    std::vector<AssetTexture>& asset_texs
 ) {
     AssetMaterial mat{};
     mat.name = material->GetName().C_Str();
@@ -212,36 +230,68 @@ void AssetSTLAssimpFileImporter::ProcessMaterial(
     }
     material->Get(AI_MATKEY_SHININESS, mat.props.shininess);
 
-    auto LoadTexture = [&](aiTextureType type) -> int {
-        if (material->GetTextureCount(type) == 0)
-            return -1;
+    auto MapTexture = [&](MaterialTextureType axType, aiTextureType type) -> void {
+        uint32_t count;
+        if ((count = material->GetTextureCount(type)) == 0) {
+            return;
+        }
 
         aiString path;
-        if (material->GetTexture(type, 0, &path) != AI_SUCCESS)
-            return -1;
+        std::vector<uint8_t> tex_indices;
+        for (uint32_t i{0}; i < count; i++) {
+            if (material->GetTexture(type, i, &path) != AI_SUCCESS) {
+                tex_indices.push_back(0);
+                continue;
+            }
 
-        const aiTexture* tex = scene->GetEmbeddedTexture(path.C_Str());
-        if (tex) {
-            auto& t = result.textures.emplace_back();
-            t.name = path.C_Str();
-            t.width = tex->mWidth;
-            t.height = tex->mHeight;
-            t.data.assign(tex->pcData, tex->pcData + tex->mWidth * tex->mHeight);
-            return (int)(result.textures.size() - 1);
+            const aiTexture* assimp_tex = scene->GetEmbeddedTexture(path.C_Str());
+            if (assimp_tex) {
+                auto& asset_tex = asset_texs.emplace_back();
+                uint32_t asset_tex_id = asset_texs.size() - 1;
+
+                // Texture is compressed (PNG, JPG, etc.)
+                if (assimp_tex->mWidth == 0) {
+                    auto image_file_size = assimp_tex->mHeight;
+                    data::BufferDataStream stream(utils::URawView((uint8_t*)assimp_tex->pcData, image_file_size));
+                    auto res = gfx::Img_Auto_LoadFileBytes(stream);
+                } else {
+
+                }
+
+                asset_tex.id = asset_tex_id;
+                asset_tex.path = std::string(path.C_Str());
+                aiTexel t;
+                
+                asset_tex.image
+                auto& t = result.textures.emplace_back();
+                t.name = path.C_Str();
+                t.width = tex->mWidth;
+                t.height = tex->mHeight;
+                t.data.assign(tex->pcData, tex->pcData + tex->mWidth * tex->mHeight);
+                return (int)(result.textures.size() - 1);
+            } else {
+
+            }
         }
+
 
         auto& t = result.textures.emplace_back();
         t.filePath = m_Path.parent_path() / std::string(path.C_Str());
         return (int)(result.textures.size() - 1);
     };
 
-    mat.diffuseTexture             = LoadTexture(aiTextureType_DIFFUSE);
-    mat.normalTexture              = LoadTexture(aiTextureType_NORMALS);
-    mat.metallicRoughnessTexture   = LoadTexture(aiTextureType_METALNESS);
+    MapTexture(MaterialTextureType::Albedo, aiTextureType_DIFFUSE);
+    MapTexture(MaterialTextureType::Specular, aiTextureType_SPECULAR);
+    MapTexture(MaterialTextureType::NormalMap, aiTextureType_NORMALS);
+    MapTexture(MaterialTextureType::HeightMap, aiTextureType_HEIGHT);
+    MapTexture(MaterialTextureType::Roughness, aiTextureType_DIFFUSE_ROUGHNESS);
+    MapTexture(MaterialTextureType::Metallic, aiTextureType_METALNESS);
+    MapTexture(MaterialTextureType::Emissive, aiTextureType_EMISSIVE);
+    MapTexture(MaterialTextureType::AmbientOcclusion, aiTextureType_AMBIENT_OCCLUSION);
+    MapTexture(MaterialTextureType::Displacement, aiTextureType_DISPLACEMENT);
 
     mat.imported = true;
     result.materials[matIdx] = mat;
-    return (uint32_t)result.materials.size() - 1;
 }
 
 

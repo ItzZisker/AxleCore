@@ -1,6 +1,6 @@
 #pragma once
 
-#include "axle/graphics/base/image/AX_Image.hpp"
+#include "axle/graphics/image/AX_ImageLoader.hpp"
 
 #include "axle/data/AX_IDataStream.hpp"
 #include "axle/data/AX_DataStreamImplBuffer.hpp"
@@ -16,6 +16,7 @@
 #include <string>
 #include <unordered_map>
 #include <variant>
+#include <array>
 
 namespace axle::assets
 {
@@ -146,6 +147,12 @@ struct AssetBuffer {
     }
 };
 
+struct AssetTexture {
+    uint32_t id;
+    std::string path;
+    gfx::Image image; 
+};
+
 struct PBRProps {
     float metallicFactor    {1.0f};
     float roughnessFactor   {1.0f};
@@ -175,11 +182,28 @@ struct MaterialProps {
     PBRProps pbr{};
 };
 
+enum class MaterialTextureType : int32_t {
+    Albedo,
+    Specular,
+    NormalMap,
+    HeightMap,
+    Roughness,
+    Metallic,
+    Emissive,
+    AmbientOcclusion,
+    Displacement,
+    __Last__
+};
+
 struct AssetMaterial {
     bool imported{false};
     std::string name;
     MaterialProps props;
     MetadataMap metadata;
+    std::array<std::vector<int32_t>, (int32_t)MaterialTextureType::__Last__> textures_idx;
+    std::array<uint32_t, (int32_t)MaterialTextureType::__Last__> textures_count;
+
+    AssetMaterial() { textures_count.fill(0); }
 };
 
 struct SubMesh {

@@ -3,18 +3,21 @@
 
 #include "axle/assets/AX_AssetImporter.hpp"
 
+#include "axle/utils/AX_Expected.hpp"
+
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
 #include <filesystem>
+#include <vector>
 
 namespace axle::assets
 {
 
 class AssetSTLAssimpFileImporter : public IAssetImporter {
 public:
-    explicit AssetSTLAssimpFileImporter(uint32_t assetImportFlags, const std::filesystem::path& path);
+    explicit AssetSTLAssimpFileImporter(const AssetImportDesc& desc, const std::filesystem::path& path);
 
     utils::ExResult<AssetImportResult> Import() override;
 
@@ -22,8 +25,12 @@ public:
         return "AssimpImporter";
     }
 
+    utils::Span<utils::ExError> GetErrors() {
+        return {m_Errors.data(), m_Errors.size()};
+    }
 private:
     std::filesystem::path m_Path;
+    std::vector<utils::ExError> m_Errors;
 
 private:
     void ProcessNode(
@@ -45,7 +52,8 @@ private:
         const aiMaterial* material,
         const aiScene* scene,
         AssetImportResult& result,
-        uint32_t& matIdx
+        const uint32_t& matIdx,
+        std::vector<AssetTexture>& asset_texs
     );
 
     void ProcessLights(
