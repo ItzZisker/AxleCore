@@ -129,7 +129,7 @@ public:
     Value Get() const;
     utils::SRaw& Raw();
 private:
-    const MetaType m_Type;
+    MetaType m_Type;
     utils::SRaw m_Copy;
 };
 
@@ -139,7 +139,7 @@ struct AssetBuffer {
     AssetBufferType type;
     uint32_t stride{0};
     uint32_t count{0};
-    MetadataMap metadata{};
+    MetadataMap metadata;
     utils::URaw raw;   // raw byte buffer (unowned or cow'd)
 
     inline data::BufferDataStream Stream() {
@@ -341,6 +341,7 @@ struct AssetImportResult {
     utils::CowSpan<AssetMesh> meshes;
     utils::CowSpan<AssetMaterial> materials;
     utils::CowSpan<AssetBuffer> buffers;
+    utils::CowSpan<AssetTexture> textures;
 
     utils::CowSpan<AssetShader> shaders;
 

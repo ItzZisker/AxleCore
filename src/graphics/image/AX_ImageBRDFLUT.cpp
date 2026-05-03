@@ -1,5 +1,5 @@
-#include "axle/graphics/base/image/AX_ImageBRDFLUT.hpp"
-#include "axle/graphics/base/image/AX_Image.hpp"
+#include "axle/graphics/image/AX_ImageBRDFLUT.hpp"
+#include "axle/graphics/image/AX_ImageLoader.hpp"
 
 #include <glm/ext/scalar_constants.hpp>
 
@@ -110,7 +110,7 @@ void BRDFLUT_Generate(Image& img, int samples, int size) {
 		return;
 	};
 
-    img.format = ImageFormat::RGB32F;
+    img.format = ImageFormat::Raw_RGB32F;
     img.width = img.height = size;
 
 	std::vector<uint8_t> buff;

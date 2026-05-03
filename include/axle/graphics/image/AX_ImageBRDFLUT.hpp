@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AX_Image.hpp"
+#include "axle/graphics/image/AX_ImageLoader.hpp"
 
 #include <glm/glm.hpp>
 

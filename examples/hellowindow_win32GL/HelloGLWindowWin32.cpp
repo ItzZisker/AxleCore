@@ -863,14 +863,20 @@ int main() {
 
 #ifdef __AX_ASSETS_ASSIMP__
     using namespace axle::assets;
+    
+    AssetImportDesc desc;
+    desc.flags |= (uint32_t)AssetImportFlag::CalcTangents;
+    desc.flags |= (uint32_t)AssetImportFlag::IncludePBR;
 
-    AssetSTLAssimpFileImporter importer((uint32_t)AssetImportFlag::CalcTangents, "sponza/Sponza.gltf");
+    AssetSTLAssimpFileImporter importer(desc, "sponza/Sponza.gltf");
     auto result = importer.Import();
 
     if (!result.has_value()) {
         throw std::runtime_error("Error: " + std::string(result.error().GetMessage()));
     }
     auto import = result.value();
+
+    throw std::runtime_error("break");
 #endif
     using namespace axle::gfx;
 

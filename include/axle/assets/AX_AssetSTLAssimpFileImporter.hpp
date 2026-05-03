@@ -40,22 +40,6 @@ private:
         AssetImportResult& result
     );
 
-    void ProcessMesh(
-        const aiMesh* mesh,
-        const aiScene* scene,
-        AssetImportResult& result,
-        uint32_t& meshIdx,
-        uint32_t& buffIdx
-    );
-
-    void ProcessMaterial(
-        const aiMaterial* material,
-        const aiScene* scene,
-        AssetImportResult& result,
-        const uint32_t& matIdx,
-        std::vector<AssetTexture>& asset_texs
-    );
-
     void ProcessLights(
         const aiScene* scene,
         AssetImportResult& result,
@@ -66,6 +50,20 @@ private:
         const aiScene* scene,
         AssetImportResult& result,
         uint32_t& cameraIdx
+    );
+
+    void ProcessMesh(
+        const aiMesh* mesh,
+        AssetImportResult& result,
+        uint32_t& meshIdx,
+        uint32_t& buffIdx
+    );
+
+    utils::ExError ProcessMaterial(
+        const aiScene* scene,
+        AssetImportResult& result,
+        const uint32_t& matIdx,
+        std::vector<AssetTexture>& asset_texs
     );
 };
 

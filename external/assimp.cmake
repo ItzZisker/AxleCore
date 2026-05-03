@@ -61,14 +61,14 @@ ExternalProject_Add(
 
 # Create imported target for linking
 add_library(Assimp STATIC IMPORTED GLOBAL)
-add_library(AssimpZlib STATIC IMPORTED GLOBAL)
+add_library(Assimp_zlib STATIC IMPORTED GLOBAL)
 
 if (WIN32)
     if (MSVC)
         set_target_properties(Assimp PROPERTIES
-            IMPORTED_LOCATION "${ASSIMP_INSTALL_DIR}/lib/assimp-vc145-mtd.lib"
+            IMPORTED_LOCATION "${ASSIMP_INSTALL_DIR}/lib/assimp-vc143-mtd.lib"
         )
-        set_target_properties(AssimpZlib PROPERTIES
+        set_target_properties(Assimp_zlib PROPERTIES
             IMPORTED_LOCATION "${ASSIMP_INSTALL_DIR}/lib/zlibstaticd.lib"
         )
     else()

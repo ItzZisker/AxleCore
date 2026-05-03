@@ -34,15 +34,19 @@ do {                                      \
     }                                     \
 } while (0)
 
-#define AX_DECL_OR_PROPAGATE(var, expr)  \
-    if (!expr.has_value())               \
-        return expr.error();             \
-    auto var = std::move(expr.value());
+#define AX_DECL_OR_PROPAGATE(var, statement)    \
+auto __res = (statement);                       \
+if (!__res.has_value())                         \
+    return __res.error();                       \
+auto var = std::move(__res.value());            \
 
-#define AX_SET_OR_PROPAGATE(var, expr)   \
-    if (!expr.has_value())               \
-        return expr.error();             \
-    var = std::move(expr.value());
+#define AX_SET_OR_PROPAGATE(var, statement)    \
+do {                                           \
+    auto __res = (statement);                  \
+    if (!__res.has_value())                    \
+        return __res.error();                  \
+    var = std::move(__res.value());            \
+} while (0)                                    \
 
 namespace axle::utils
 {

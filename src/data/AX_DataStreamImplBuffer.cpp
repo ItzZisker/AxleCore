@@ -9,7 +9,7 @@
 namespace axle::data
 {
 
-BufferDataStream::BufferDataStream(utils::Span<uint8_t> bufferView)
+BufferDataStream::BufferDataStream(utils::URawView bufferView)
     : m_BufferView(bufferView) {}
 
 BufferDataStream::BufferDataStream(uint64_t length)

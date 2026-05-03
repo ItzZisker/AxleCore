@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <vector>
+#include <iostream>
 
 using namespace axle::utils;
 using namespace axle::data;
@@ -135,8 +136,9 @@ ExResult<ASTCImage> Img_ASTC_LoadFile(const std::filesystem::path& path) {
 }
 
 bool Img_BCn_IsValidFileBytes(IDataStream& buffer) {
-    if (buffer.GetReadIndex() + 4 >= buffer.GetLength())
+    if (buffer.GetReadIndex() + 4 >= buffer.GetLength()){
         return false;
+    }
     auto prevIdx = buffer.GetReadIndex();
     uint8_t magic[4]{0, 0, 0, 0};
     buffer.Read(magic, 4);
@@ -186,8 +188,9 @@ utils::ExResult<BCnImage> Img_BCn_LoadFileBytes(data::IDataStream& buffer) {
     img.alpha = header.alpha;
 
     size_t dataSize = buffer.GetLength() - sizeof(BCnHeader);
-    img.data = utils::URaw(std::vector<uint8_t>(dataSize));
-    AX_PROPAGATE_RESULT_ERROR(buffer.Read(img.data.data(), dataSize));
+    std::vector<uint8_t> data(dataSize);
+    AX_PROPAGATE_RESULT_ERROR(buffer.Read(data.data(), dataSize));
+    img.data = std::move(data);
 
     return img;
 }
@@ -214,8 +217,7 @@ utils::ExResult<Image> Img_Auto_LoadFileBytes(IDataStream& buffer) {
     Image img;
 
     if (Img_ASTC_IsValidFileBytes(buffer)) {
-        ASTCImage astc;
-        AX_SET_OR_PROPAGATE(astc, Img_ASTC_LoadFileBytes(buffer));
+        AX_DECL_OR_PROPAGATE(astc, Img_ASTC_LoadFileBytes(buffer));
         if (astc.blockX == 4 && astc.blockY == 4) img.format = ImageFormat::Compressed_RGBA_ASTC_4x4;
         else if (astc.blockX == 5 && astc.blockY == 5) img.format = ImageFormat::Compressed_RGBA_ASTC_5x5;
         else if (astc.blockX == 6 && astc.blockY == 6) img.format = ImageFormat::Compressed_RGBA_ASTC_6x6;
@@ -226,8 +228,7 @@ utils::ExResult<Image> Img_Auto_LoadFileBytes(IDataStream& buffer) {
         img.height = astc.height;
         return img;
     } else if (Img_BCn_IsValidFileBytes(buffer)) {
-        BCnImage bcn;
-        AX_SET_OR_PROPAGATE(bcn, Img_BCn_LoadFileBytes(buffer));
+        AX_DECL_OR_PROPAGATE(bcn, Img_BCn_LoadFileBytes(buffer));
         img.format = bcn.alpha ? ImageFormat::Compressed_RGBA_DXT5 : ImageFormat::Compressed_RGB_DXT1;
         img.bytes = std::move(bcn.data);
         img.width = bcn.width;
