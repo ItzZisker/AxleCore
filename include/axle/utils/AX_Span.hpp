@@ -51,11 +51,9 @@ public:
 
     CowSpan() = default;
     CowSpan(Span<T> span) : m_Owned(false), m_View(span) {}
-    CowSpan(std::vector<T> data) : m_Owned(true) {
-        m_Storage = std::vector<T>(std::move(data));
+    CowSpan(std::vector<T>&& data) : m_Owned(true), m_Storage(std::move(data)) {
         m_View = Span<T>(m_Storage.data(), m_Storage.size());
     }
-
     CowSpan(const CowSpan& other) : m_Owned(other.m_Owned), m_Storage(other.m_Storage) {
         if (m_Owned) {
             m_View = Span<T>(m_Storage.data(), m_Storage.size());
@@ -85,6 +83,21 @@ public:
         } else {
             m_View = other.m_View;
         }
+    }
+
+    CowSpan& operator=(CowSpan&& other) noexcept {
+        if (this == &other)
+            return *this;
+
+        m_Owned = other.m_Owned;
+        m_Storage = std::move(other.m_Storage);
+
+        if (m_Owned)
+            m_View = Span<T>(m_Storage.data(), m_Storage.size());
+        else
+            m_View = other.m_View;
+
+        return *this;
     }
 
     T& operator[](std::size_t index) noexcept { return m_View[index]; }

@@ -1,10 +1,16 @@
 #pragma once
 
 #include "axle/graphics/AX_GraphicsParams.hpp"
+
 #include "axle/utils/AX_Expected.hpp"
 
 #include <cstdint>
 #include <variant>
+
+
+namespace axle::core {
+    class ThreadContextGfx;   
+}
 
 namespace axle::gfx {
 
@@ -118,6 +124,10 @@ struct CommandDrawIndirectIndexed {
 class ICommandList {
 public:
     virtual ~ICommandList() = default;
+
+    Future<utils::ExError> Submit(SharedPtr<core::ThreadContextGfx> gfxThread);
+
+    static SharedPtr<gfx::ICommandList> Create(SharedPtr<core::ThreadContextGfx> gfxThread);
 
     virtual utils::ExError Begin() = 0;
     virtual utils::ExError End() = 0;

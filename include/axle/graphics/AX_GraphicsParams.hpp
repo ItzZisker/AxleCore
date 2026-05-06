@@ -94,6 +94,11 @@ enum class TextureFormat {
     RG8_UINT,
     RG8_SINT,
 
+    RGB8_UNORM,
+    RGB8_SNORM,
+    RGB8_UINT,
+    RGB8_SINT,
+
     RGBA8_UNORM,
     RGBA8_SNORM,
     RGBA8_UINT,
@@ -114,6 +119,12 @@ enum class TextureFormat {
     RG16_UINT,
     RG16_SINT,
     RG16_FLOAT,
+
+    RGB16_UNORM,
+    RGB16_SNORM,
+    RGB16_UINT,
+    RGB16_SINT,
+    RGB16_FLOAT,
 
     RGBA16_UNORM,
     RGBA16_SNORM,
@@ -202,6 +213,12 @@ enum class TextureFilter {
     Linear,             // GL_LINEAR / VK_FILTER_LINEAR / D3D11_FILTER_MIN_MAG_MIP_LINEAR
 };
 
+enum class MipmapFilter {
+    None, // No mipmapping, only base level
+    Nearest,
+    Linear,
+};
+
 struct TextureBorderColor {
     float r{0.0f};
     float g{0.0f};
@@ -209,8 +226,17 @@ struct TextureBorderColor {
     float a{0.0f};
 };
 
+enum class TextureCubemapFace {
+    NegativeX,
+    NegativeY,
+    NegativeZ,
+    PositiveX,
+    PositiveY,
+    PositiveZ
+};
+
 struct TextureSubDesc {
-    uint32_t mipLevels{0};
+    uint32_t mipLevel{0};
     bool generateMips{false};
     float aniso{0.0f}; // anisotropic filtering, 0.0 means disabled
 
@@ -218,10 +244,14 @@ struct TextureSubDesc {
     TextureWrap wrapT{TextureWrap::Repeat};
     TextureWrap wrapR{TextureWrap::Repeat}; // used for 3D or arrays or cubemap
 
+    MipmapFilter mipFilter{MipmapFilter::None};
     TextureFilter minFilter{TextureFilter::Nearest};
     TextureFilter magFilter{TextureFilter::Nearest};
 
     TextureBorderColor borderColor{0, 0, 0, 0};
+
+    // Only used when UpdateTexture is called, Updating for cubemaps is "per-face"; unlike 2d-arrays and 3d
+    TextureCubemapFace updateThisCubemapFace{TextureCubemapFace::NegativeZ};
 };
 
 struct TextureDesc {
@@ -237,8 +267,7 @@ struct TextureDesc {
     TextureSubDesc subDesc{};
 
     // Optional texture data
-    utils::URaw pixelsByLayers{}; // 2D pixels data, aligned 2D arrays pixels data, aligned 3D pixels data
-    std::array<utils::URaw, 6> pixelsByCubemap{}; // cubemap pixels data
+    utils::CowSpan<utils::URaw> pixelsByLayers{}; // pixels data: for tex 2d: One single element, 2d-arrays/3d: One single element but aligned, for cubemap: 6
 };
 
 struct TextureTag {};
@@ -687,5 +716,74 @@ struct GraphicsCaps {
         return caps[static_cast<int>(_enum)];
     }
 };
+
+struct TextureImageDescriptor {
+    gfx::TextureType type;
+    gfx::TextureFormat format;
+    uint32_t width;
+    uint32_t height;
+    uint32_t layers;
+    uint32_t depth;
+    uint32_t mip;
+};
+
+static uint32_t CalcImageSize(const TextureImageDescriptor& desc) {
+    uint32_t w = std::max(1u, desc.width  >> desc.mip);
+    uint32_t h = std::max(1u, desc.height >> desc.mip);
+    uint32_t d{1};
+
+    if (desc.type == gfx::TextureType::Texture3D) {
+        d = std::max(1u, desc.depth >> desc.mip);
+    } else if (desc.type == gfx::TextureType::Array2D) {
+        d = desc.layers;
+    }
+
+    switch (desc.format) {
+        // BC1 / DXT1 (8 bytes per 4x4 block)
+        case TextureFormat::BC1_UNORM: {
+            uint32_t bw = (w + 3) / 4;
+            uint32_t bh = (h + 3) / 4;
+            return bw * bh * 8 * d;
+        }
+        // BC2 / BC3 (16 bytes per 4x4 block)
+        case TextureFormat::BC3_UNORM: {
+            uint32_t bw = (w + 3) / 4;
+            uint32_t bh = (h + 3) / 4;
+            return bw * bh * 16 * d;
+        }
+        // BC4
+        case TextureFormat::BC4_UNORM: {
+            uint32_t bw = (w + 3) / 4;
+            uint32_t bh = (h + 3) / 4;
+            return bw * bh * 8 * d;
+        }
+        // BC5
+        case TextureFormat::BC5_UNORM: {
+            uint32_t bw = (w + 3) / 4;
+            uint32_t bh = (h + 3) / 4;
+            return bw * bh * 16 * d;
+        }
+        // ASTC formats (always 16 bytes per block)
+        case TextureFormat::ASTC_4x4_UNORM:
+        case TextureFormat::ASTC_4x4_SRGB: {
+            uint32_t bw = (w + 3) / 4;
+            uint32_t bh = (h + 3) / 4;
+            return bw * bh * 16 * d;
+        }
+        case TextureFormat::ASTC_6x6_UNORM:
+        case TextureFormat::ASTC_6x6_SRGB: {
+            uint32_t bw = (w + 5) / 6;
+            uint32_t bh = (h + 5) / 6;
+            return bw * bh * 16 * d;
+        }
+        case TextureFormat::ASTC_8x8_UNORM:
+        case TextureFormat::ASTC_8x8_SRGB: {
+            uint32_t bw = (w + 7) / 8;
+            uint32_t bh = (h + 7) / 8;
+            return bw * bh * 16 * d;
+        }
+        default: return 0;
+    }
+}
 
 }

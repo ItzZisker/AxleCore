@@ -255,6 +255,7 @@ utils::ExResult<Image> Img_Auto_LoadFileBytes(IDataStream& buffer) {
 
     reset_stbi.Call();
     if (stbi_is_hdr_from_callbacks(&clbks, &stbi_user)) {
+        stbi_set_flip_vertically_on_load_thread(true);
         reset_stbi.Call();
         int channels;
         void* data = stbi_loadf_from_callbacks(&clbks, &stbi_user, &img.width, &img.height, &channels, 0);
@@ -281,6 +282,7 @@ utils::ExResult<Image> Img_Auto_LoadFileBytes(IDataStream& buffer) {
 
     reset_stbi.Call();
     if (stbi_is_16_bit_from_callbacks(&clbks, &stbi_user)) {
+        stbi_set_flip_vertically_on_load_thread(true);
         reset_stbi.Call();
         int channels;
         void* data = stbi_load_16_from_callbacks(&clbks, &stbi_user, &img.width, &img.height, &channels, 0);
@@ -307,6 +309,7 @@ utils::ExResult<Image> Img_Auto_LoadFileBytes(IDataStream& buffer) {
 
     int channels;
     reset_stbi.Call();
+    stbi_set_flip_vertically_on_load_thread(true);
     void* data = stbi_load_from_callbacks(&clbks, &stbi_user, &img.width, &img.height, &channels, 0);
     if (!data) {
         if (!stbi_user.errors.empty()) return stbi_user.errors.front();

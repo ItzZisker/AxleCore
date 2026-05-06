@@ -1,3 +1,2 @@
-add_subdirectory(hellowindow_win32dx11)
-add_subdirectory(hellowindow_win32GL)
-add_subdirectory(hellowindow_x11GL)
+add_subdirectory(hellowindow)
+add_subdirectory(hellowindow_girl)

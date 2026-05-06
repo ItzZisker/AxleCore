@@ -36,21 +36,21 @@ utils::ExError WindowWin32::Launch() {
     WNDCLASS wc = {};
     wc.lpfnWndProc = (WNDPROC)WindowWin32::WndProc;
     wc.hInstance = (HINSTANCE)m_Instance;
-    wc.lpszClassName = m_State.m_ClassName.c_str();
+    wc.lpszClassName = m_State->m_ClassName.c_str();
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClass(&wc);
 
     DWORD style = WS_OVERLAPPEDWINDOW;
-    if (!m_State.IsResizable()) style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
+    if (!m_State->IsResizable()) style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
 
-    RECT rect = { 0, 0, (LONG)m_State.GetWidth(), (LONG)m_State.GetHeight() };
+    RECT rect = { 0, 0, (LONG)m_State->GetWidth(), (LONG)m_State->GetHeight() };
     AdjustWindowRect(&rect, style, FALSE);
 
     m_LpClassName = wc.lpszClassName;
     m_Hwnd = CreateWindowEx(
-        m_State.GetAlphaMode() != WndAlphaMode::None ? WS_EX_LAYERED : 0,
+        m_State->GetAlphaMode() != WndAlphaMode::None ? WS_EX_LAYERED : 0,
         wc.lpszClassName,
-        m_State.GetTitle().c_str(),
+        m_State->GetTitle().c_str(),
         style,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -65,7 +65,7 @@ utils::ExError WindowWin32::Launch() {
         auto errorCode = GetLastError();
         return {"Failed To Create Window: Error " + std::format("{:x}", errorCode)};
     }
-    if (m_State.IsAwaitingNextEvent()) {
+    if (m_State->IsAwaitingNextEvent()) {
         m_TaskEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     }
     RAWINPUTDEVICE devices[2];
@@ -82,19 +82,19 @@ utils::ExError WindowWin32::Launch() {
 
     RegisterRawInputDevices(devices, 2, sizeof(RAWINPUTDEVICE));
 
-    switch (m_State.GetAlphaMode()) {
+    switch (m_State->GetAlphaMode()) {
         case WndAlphaMode::Constant:
-            SetAlphaConstant(m_State.GetAlphaConstant());
+            SetAlphaConstant(m_State->GetAlphaConstant());
         break;
         case WndAlphaMode::Color:
             float rgb[3];
-            m_State.GetAlphaColor(rgb);
+            m_State->GetAlphaColor(rgb);
             SetAlphaColor(rgb);
         break;
     }
 
     ShowWindow((HWND)m_Hwnd, SW_SHOW);
-    m_State.SetRunning(true);
+    m_State->SetRunning(true);
 
     return utils::ExError::NoError();
 }
@@ -106,17 +106,17 @@ void WindowWin32::Shutdown() {
         m_Hwnd = nullptr;
         m_LpClassName = "";
     }
-    m_State.SetRunning(false);
+    m_State->SetRunning(false);
 }
 
 void WindowWin32::PollEvents() {
-    if (m_State.m_WaitForNextEvent && m_TaskEvent) {
+    if (m_State->m_WaitForNextEvent && m_TaskEvent) {
         MsgWaitForMultipleObjectsEx(1, &m_TaskEvent, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
     }
     MSG msg;
     while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
-            m_State.RequestQuit();
+            m_State->RequestQuit();
         } else {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -125,28 +125,28 @@ void WindowWin32::PollEvents() {
 }
 
 void WindowWin32::SetAlphaConstant(float alpha) {
-    if (m_State.m_AlphaMode != WndAlphaMode::Constant) return;
+    if (m_State->m_AlphaMode != WndAlphaMode::Constant) return;
     BYTE _alpha = (BYTE)(alpha * 255);
     SetLayeredWindowAttributes((HWND)m_Hwnd, 0, _alpha, LWA_ALPHA);
-    m_State.SetAlphaConstant(_alpha / 255.0f);
+    m_State->SetAlphaConstant(_alpha / 255.0f);
 }
 
 void WindowWin32::SetAlphaColor(float *rgb) {
-    if (m_State.m_AlphaMode != WndAlphaMode::Color) return;
+    if (m_State->m_AlphaMode != WndAlphaMode::Color) return;
     COLORREF transparent = RGB((BYTE)(rgb[0] * 255), (BYTE)(rgb[1] * 255), (BYTE)(rgb[2] * 255));
     SetLayeredWindowAttributes((HWND)m_Hwnd, transparent, 0, LWA_COLORKEY);
-    m_State.SetAlphaColor(rgb);
+    m_State->SetAlphaColor(rgb);
 }
 
 void WindowWin32::RequestWakeEventloop() {
-    if (m_State.m_WaitForNextEvent && m_TaskEvent) {
+    if (m_State->m_WaitForNextEvent && m_TaskEvent) {
         SetEvent(m_TaskEvent);
     }
 }
 
 void WindowWin32::SetTitle(const std::string& title) {
     SetWindowText((HWND)m_Hwnd, title.c_str());
-    m_State.SetTitle(title);
+    m_State->SetTitle(title);
 }
 
 void WindowWin32::SetResizable(bool enabled) {
@@ -160,7 +160,7 @@ void WindowWin32::SetResizable(bool enabled) {
     SetWindowLong((HWND)m_Hwnd, GWL_STYLE, style);
     SetWindowPos((HWND)m_Hwnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
     
-    m_State.SetResizable(enabled);
+    m_State->SetResizable(enabled);
 }
 
 void WindowWin32::SetCursorMode(WndCursorMode mode) {
@@ -183,11 +183,11 @@ void WindowWin32::SetCursorMode(WndCursorMode mode) {
 
         ClipCursor(&rect);
     }
-    m_State.SetCursorMode(mode);
+    m_State->SetCursorMode(mode);
 }
 
 void WindowWin32::RequestQuit() {
-    m_State.RequestQuit();
+    m_State->RequestQuit();
     RequestWakeEventloop();
 }
 
@@ -310,15 +310,15 @@ vLRESULT CALLBACK WindowWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vL
 
     switch (msg) {
         case WM_CLOSE: {
-            app->m_State.RequestQuit();
-            if (app->m_State.m_WaitForNextEvent) {
+            app->m_State->RequestQuit();
+            if (app->m_State->m_WaitForNextEvent) {
                 CloseHandle(app->m_TaskEvent);
                 app->m_TaskEvent = nullptr;
             }
             break;
         }
         case WM_DESTROY: {
-            if (app->m_State.m_WaitForNextEvent) {
+            if (app->m_State->m_WaitForNextEvent) {
                 CloseHandle(app->m_TaskEvent);
                 app->m_TaskEvent = nullptr;
             }
@@ -328,7 +328,7 @@ vLRESULT CALLBACK WindowWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vL
         case WM_SIZE: {
             uint32_t w = LOWORD(lParam);
             uint32_t h = HIWORD(lParam);
-            app->m_State.SetSize(w, h);
+            app->m_State->SetSize(w, h);
 
             event.type = WndEventType::WindowResize;
             event.value.windowResize = { w, h };
@@ -375,53 +375,53 @@ vLRESULT CALLBACK WindowWin32::WndProc(vHWND hwnd, vUINT msg, vWPARAM wParam, vL
 
                 USHORT flags = raw->data.mouse.usButtonFlags;
 
-                app->m_State.AddMouseDX(static_cast<float>(dx));
-                app->m_State.AddMouseDY(static_cast<float>(dy));
+                app->m_State->AddMouseDX(static_cast<float>(dx));
+                app->m_State->AddMouseDY(static_cast<float>(dy));
 
                 if (flags & RI_MOUSE_LEFT_BUTTON_DOWN) {
-                    app->m_State.SetMouseButtonState(WndMB::Left, true);
+                    app->m_State->SetMouseButtonState(WndMB::Left, true);
                 } else if (flags & RI_MOUSE_LEFT_BUTTON_UP) {
-                    app->m_State.SetMouseButtonState(WndMB::Left, false);
+                    app->m_State->SetMouseButtonState(WndMB::Left, false);
                 }
 
                 if (flags & RI_MOUSE_RIGHT_BUTTON_DOWN) {
-                    app->m_State.SetMouseButtonState(WndMB::Right, true);
+                    app->m_State->SetMouseButtonState(WndMB::Right, true);
                 } else if (flags & RI_MOUSE_RIGHT_BUTTON_UP) {
-                    app->m_State.SetMouseButtonState(WndMB::Right, false);
+                    app->m_State->SetMouseButtonState(WndMB::Right, false);
                 }
 
                 if (flags & RI_MOUSE_MIDDLE_BUTTON_DOWN) {
-                    app->m_State.SetMouseButtonState(WndMB::Middle, true);
+                    app->m_State->SetMouseButtonState(WndMB::Middle, true);
                 } else if (flags & RI_MOUSE_MIDDLE_BUTTON_UP) {
-                    app->m_State.SetMouseButtonState(WndMB::Middle, false);
+                    app->m_State->SetMouseButtonState(WndMB::Middle, false);
                 }
 
                 if (flags & RI_MOUSE_BUTTON_4_DOWN) {
-                    app->m_State.SetMouseButtonState(WndMB::Misc4, true);
+                    app->m_State->SetMouseButtonState(WndMB::Misc4, true);
                 } else if (flags & RI_MOUSE_BUTTON_4_UP) {
-                    app->m_State.SetMouseButtonState(WndMB::Misc4, false);
+                    app->m_State->SetMouseButtonState(WndMB::Misc4, false);
                 }
 
                 if (flags & RI_MOUSE_BUTTON_5_DOWN) {
-                    app->m_State.SetMouseButtonState(WndMB::Misc5, true);
+                    app->m_State->SetMouseButtonState(WndMB::Misc5, true);
                 } else if (flags & RI_MOUSE_BUTTON_5_UP) {
-                    app->m_State.SetMouseButtonState(WndMB::Misc5, false);
+                    app->m_State->SetMouseButtonState(WndMB::Misc5, false);
                 }
 
                 if (flags & RI_MOUSE_WHEEL) {
                     float wheelDeltaNorm = static_cast<float>(raw->data.mouse.usButtonData) / (WHEEL_DELTA);
-                    app->m_State.AddMouseDWheel(wheelDeltaNorm);
+                    app->m_State->AddMouseDWheel(wheelDeltaNorm);
                 }
             } else if (raw->header.dwType == RIM_TYPEKEYBOARD) {
                 const RAWKEYBOARD& kb = raw->data.keyboard;
-                app->m_State.SetKeyState(ToWndKey(kb), !(kb.Flags & RI_KEY_BREAK));
+                app->m_State->SetKeyState(ToWndKey(kb), !(kb.Flags & RI_KEY_BREAK));
             }
             return 0;
         }
     }
 
     if (event.type != WndEventType::Void) {
-        app->m_State.PushEvent(event);
+        app->m_State->PushEvent(event);
         return 0;
     }
 

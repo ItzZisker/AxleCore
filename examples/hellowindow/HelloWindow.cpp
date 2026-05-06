@@ -173,11 +173,11 @@ using namespace axle::utils;
     - [ ] FileDataStream
     - [ ] BufferDataStream
 
-    - [ ] AssetLoader
-        -> [ ] Supported formats:
-            -> [ ] glTF
-            -> [ ] OBJ
-            -> [ ] FBX
+    - [*] AssetLoader
+        -> [*] Supported formats:
+            -> [*] glTF
+            -> [*] OBJ
+            -> [*] FBX
 
         Responsibilities:
 
@@ -514,17 +514,17 @@ void UpdateCube(core::ThreadContextGfx* gfxThread, float dT, void* userPtr) {
     auto wndThread = rdrData.wndThread;
     auto wndCtx = wndThread->GetContext();
 
-    auto& wndState = wndCtx->GetDiscreteState();
+    auto wndState = wndCtx->GetDiscreteState();
 
-    auto eventsQueue = wndState.TakeEvents();
+    auto eventsQueue = wndState->TakeEvents();
     for (auto& event : eventsQueue) {
         if (event.type == core::WndEventType::WindowResize) {
-            rdrData.uboState->Update(rdrData.camera, wndState);
+            rdrData.uboState->Update(rdrData.camera, *wndState);
         }
     }
 
-    float xrel = wndState.PeekMouseDX();
-    float yrel = wndState.PeekMouseDY();
+    float xrel = wndState->PeekMouseDX();
+    float yrel = wndState->PeekMouseDY();
 
     if (rdrData.mouseCaptured && (xrel != 0 || yrel != 0)) {
         xrel *= rdrData.sensitivity;
@@ -540,13 +540,13 @@ void UpdateCube(core::ThreadContextGfx* gfxThread, float dT, void* userPtr) {
             rdrData.yaw,
             rdrData.pitch
         ));
-        rdrData.uboState->Update(rdrData.camera, wndState);
+        rdrData.uboState->Update(rdrData.camera, *wndState);
     }
 
-    if (!wndState.IsKeyPressed(core::WndKey::kEscape) && rdrData.escPressed) {
+    if (!wndState->IsKeyPressed(core::WndKey::kEscape) && rdrData.escPressed) {
         rdrData.escPressed = false;
     }
-    if (wndState.IsKeyPressed(core::WndKey::kEscape) && !rdrData.escPressed) {
+    if (wndState->IsKeyPressed(core::WndKey::kEscape) && !rdrData.escPressed) {
         rdrData.escPressed = true;
         wndThread->EnqueueTask([wndCtx, mouseCaptured = &rdrData.mouseCaptured]() {
             auto mc = mouseCaptured->load();
@@ -572,34 +572,34 @@ void UpdateCube(core::ThreadContextGfx* gfxThread, float dT, void* userPtr) {
 
     bool queCameraUpdate{false};
 
-    if (wndState.IsKeyPressed(core::WndKey::kW)) {
+    if (wndState->IsKeyPressed(core::WndKey::kW)) {
         cameraPos += cameraSpeed * horizontalDirection;
         queCameraUpdate = true;
     }
-    if (wndState.IsKeyPressed(core::WndKey::kS)) {
+    if (wndState->IsKeyPressed(core::WndKey::kS)) {
         cameraPos -= cameraSpeed * horizontalDirection;
         queCameraUpdate = true;
     }
-    if (wndState.IsKeyPressed(core::WndKey::kA)) {
+    if (wndState->IsKeyPressed(core::WndKey::kA)) {
         cameraPos -= glm::normalize(glm::cross(horizontalDirection, cameraUp)) * cameraSpeed;
         queCameraUpdate = true;
     }
-    if (wndState.IsKeyPressed(core::WndKey::kD)) {
+    if (wndState->IsKeyPressed(core::WndKey::kD)) {
         cameraPos += glm::normalize(glm::cross(horizontalDirection, cameraUp)) * cameraSpeed;
         queCameraUpdate = true;
     }
-    if (wndState.IsKeyPressed(core::WndKey::kSpace)) {
+    if (wndState->IsKeyPressed(core::WndKey::kSpace)) {
         cameraPos += cameraSpeed * glm::vec3(0.0f, 1.0f, 0.0f);
         queCameraUpdate = true;
     }
-    if (wndState.IsKeyPressed(core::WndKey::kLeftShift)) {
+    if (wndState->IsKeyPressed(core::WndKey::kLeftShift)) {
         cameraPos -= cameraSpeed * glm::vec3(0.0f, 1.0f, 0.0f);
         queCameraUpdate = true;
     }
 
     if (queCameraUpdate) {
         rdrData.camera.SetPosition(cameraPos);
-        rdrData.uboState->Update(rdrData.camera, wndState);
+        rdrData.uboState->Update(rdrData.camera, *wndState);
     }
 
     if (rdrData.uboState->reqUpdateUBO) {
@@ -614,9 +614,9 @@ void DrawCube(core::ThreadContextGfx* gfxThread, float dT, void* userPtr) {
 
     uint32_t imgIndex = ExpectOrThrow(gbgfx->AcquireNextImage());
 
-    auto& appState = rdrData.wndThread->GetContext()->GetDiscreteState();
-    uint32_t width = appState.GetWidth();
-    uint32_t height = appState.GetHeight();
+    auto appState = rdrData.wndThread->GetContext()->GetDiscreteState();
+    uint32_t width = appState->GetWidth();
+    uint32_t height = appState->GetHeight();
 
     auto cmdList = rdrData.cmdList;
     cmdList->Begin();
@@ -660,9 +660,9 @@ void InitRender(RenderData& rdrData) {
 
     rdrData.defPass = ExpectOrThrow(gbgfx->CreateDefaultRenderPass(drpdesc));
 
-    auto& appState = rdrData.wndThread->GetContext()->GetDiscreteState();
-    rdrData.lastWidth = appState.GetWidth();
-    rdrData.lastHeight = appState.GetHeight();
+    auto appState = rdrData.wndThread->GetContext()->GetDiscreteState();
+    rdrData.lastWidth = appState->GetWidth();
+    rdrData.lastHeight = appState->GetHeight();
 
     gfx::ShaderEntryPoint shaderVertexEntry;
     shaderVertexEntry.name = "mainVertex";
@@ -698,7 +698,7 @@ void InitRender(RenderData& rdrData) {
     attributes.push_back({2, 2, 0, currentOffset, FLOAT_SIZE * 2, typeDesc, false});
     currentOffset += FLOAT_SIZE * 2;
 
-    layout.attributes = utils::CowSpan{attributes};
+    layout.attributes = utils::CowSpan{std::move(attributes)};
     layout.stride = currentOffset; 
 
     gfx::RenderPipelineDesc psoDesc{};
@@ -807,13 +807,10 @@ void InitMain(core::Application& app, void* userPtr) {
 
     // throw std::runtime_error("break");
 
-    auto gfx = app.GetGraphics();
-    gfx->SetVSync(false);
-
     SharedPtr<std::atomic<float>> accTimeAtomic = std::make_shared<std::atomic<float>>(0.0f);
     appData->accTimeAtomic = accTimeAtomic;
 
-    SharedPtr<gfx::ICommandList> cmdList = gfx->PrepCommandList();
+    SharedPtr<gfx::ICommandList> cmdList = gfx::ICommandList::Create(gfxThread);
     appData->cmdList = cmdList;
 
     SharedPtr<RenderData> rdrData = std::make_shared<RenderData>(wndThread, gfxThread, cmdList);
@@ -868,7 +865,7 @@ int main() {
     desc.flags |= (uint32_t)AssetImportFlag::CalcTangents;
     desc.flags |= (uint32_t)AssetImportFlag::IncludePBR;
 
-    AssetSTLAssimpFileImporter importer(desc, "sponza/Sponza.gltf");
+    AssetSTLAssimpFileImporter importer(desc, "asf.gltf");
     auto result = importer.Import();
 
     if (!result.has_value()) {
@@ -876,7 +873,7 @@ int main() {
     }
     auto import = result.value();
 
-    throw std::runtime_error("break");
+    // throw std::runtime_error("break");
 #endif
     using namespace axle::gfx;
 

@@ -37,7 +37,9 @@ private:
         const aiNode* node,
         const aiScene* scene,
         Node& outNode,
-        AssetImportResult& result
+        AssetImportResult& result,
+        uint32_t& meshIdx,
+        uint32_t& buffIdx
     );
 
     void ProcessLights(

@@ -268,143 +268,189 @@ ExError GLGraphicsBackend::DestroyBuffer(const BufferHandle& handle) {
     return ExError::NoError();
 }
 
+static uint32_t CalcFullMipCount(uint32_t w, uint32_t h, uint32_t d = 1) {
+    uint32_t size = std::max({w, h, d});
+    uint32_t levels = 1;
+    while (size > 1) {
+        size >>= 1;
+        ++levels;
+    }
+    return levels;
+}
+
 ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc) {
     if (desc.width == 0 || desc.height == 0)
         return ExError{"Invalid dimensions"};
 
     auto& tex = *m_Textures.Reserve();
-    
+    tex.desc = desc;
+
     GLenum target = ToGLTextureTarget(desc.type);
     GLenum internalFormat = ToGLTextureInternalFormat(desc.format);
     GLenum format = ToGLTextureFormat(desc.format);
     GLenum type = ToGLTextureType(desc.format);
     bool compressed = TextureFormatIsS3TC(desc.format) || TextureFormatIsASTC(desc.format);
 
+    uint32_t mip = desc.subDesc.mipLevel;
+    if (mip == 0) {
+        uint32_t depth = (desc.type == TextureType::Texture3D) ? desc.depth : 1;
+        mip = CalcFullMipCount(desc.width, desc.height, depth);
+    }
+
+    // Allocate and bind
     GL_CALL(m_GL->GenTextures(1, &tex.id));
     GL_CALL(m_GL->BindTexture(target, tex.id));
-    GL_CALL(m_GL->PixelStorei(GL_UNPACK_ALIGNMENT, 1)); // safest: 1, but slightly less optimal for some GPUs
+    GL_CALL(m_GL->PixelStorei(GL_UNPACK_ALIGNMENT, 1));
 
+    // Upload base level (mip 0)
     switch (desc.type) {
-        case TextureType::Texture2D:
+        case TextureType::Texture2D: {
+            const void* data = desc.pixelsByLayers[0].size() == 0 ? nullptr : desc.pixelsByLayers[0].data();
+            GLsizei dataSize = (GLsizei)desc.pixelsByLayers[0].size();
+
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexImage2D(
-                    target,
-                    desc.subDesc.mipLevels,
-                    format,
-                    desc.width,
-                    desc.height,
-                    0,
-                    (GLsizei) desc.pixelsByLayers.size(),
-                    desc.pixelsByLayers.data()
+                    target, 0, internalFormat,
+                    desc.width, desc.height, 0,
+                    dataSize, data
                 ));
             } else {
                 GL_CALL(m_GL->TexImage2D(
-                    target,
-                    desc.subDesc.mipLevels,
-                    internalFormat,
-                    desc.width,
-                    desc.height,
-                    0,
-                    format,
-                    type,
-                    desc.pixelsByLayers.data()
+                    target, 0, internalFormat,
+                    desc.width, desc.height, 0,
+                    format, type, data
                 ));
             }
-        break;
-        case TextureType::Array2D:
-        case TextureType::Texture3D:
+        } break;
+
+        case TextureType::Array2D: {
+            const void* data = desc.pixelsByLayers[0].size() == 0 ? nullptr : desc.pixelsByLayers[0].data();
+            GLsizei dataSize = (GLsizei)desc.pixelsByLayers[0].size();
+
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexImage3D(
-                    target,
-                    0,
-                    format,
-                    desc.width,
-                    desc.height,
-                    desc.layers,
-                    0, 
-                    (GLsizei) desc.pixelsByLayers.size(),
-                    desc.pixelsByLayers.data()
+                    target, 0, internalFormat,
+                    desc.width, desc.height, desc.layers, 0,
+                    dataSize, data
                 ));
             } else {
                 GL_CALL(m_GL->TexImage3D(
-                    target,
-                    0,
-                    internalFormat,
-                    desc.width,
-                    desc.height,
-                    desc.layers,
-                    0,
-                    format,
-                    type,
-                    desc.pixelsByLayers.data()
+                    target, 0, internalFormat,
+                    desc.width, desc.height, desc.layers, 0,
+                    format, type, data
                 ));
             }
-        break;
-        case TextureType::Cubemap:
-            for (unsigned int i = 0; i < 6; i++) {
+        } break;
+
+        case TextureType::Texture3D: {
+            const void* data = desc.pixelsByLayers[0].size() == 0 ? nullptr : desc.pixelsByLayers[0].data();
+            GLsizei dataSize = (GLsizei)desc.pixelsByLayers[0].size();
+
+            if (compressed) {
+                GL_CALL(m_GL->CompressedTexImage3D(
+                    target, 0, internalFormat,
+                    desc.width, desc.height, desc.depth, 0,
+                    dataSize, data
+                ));
+            } else {
+                GL_CALL(m_GL->TexImage3D(
+                    target, 0, internalFormat,
+                    desc.width, desc.height, desc.depth, 0,
+                    format, type, data
+                ));
+            }
+        } break;
+
+        case TextureType::Cubemap: {
+            if (desc.pixelsByLayers.size() != 6) {
+                GL_CALL(m_GL->DeleteTextures(1, &tex.id));
+                return ExError{"Invalid pixelsByLayers, should be size of 6, each representing a side of cubemap"};
+            }
+            for (uint32_t i = 0; i < 6; ++i) {
+                const void* data = desc.pixelsByLayers[i].size() == 0
+                    ? nullptr
+                    : desc.pixelsByLayers[i].data();
+                GLsizei dataSize = (GLsizei)desc.pixelsByLayers[i].size();
+
                 if (compressed) {
                     GL_CALL(m_GL->CompressedTexImage2D(
                         GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
-                        0,
-                        format,
-                        desc.width,
-                        desc.height,
-                        0,
-                        (GLsizei) desc.pixelsByCubemap[i].size(),
-                        desc.pixelsByCubemap[i].data()
+                        0, internalFormat,
+                        desc.width, desc.height, 0,
+                        dataSize, data
                     ));
                 } else {
                     GL_CALL(m_GL->TexImage2D(
                         GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
-                        0,
-                        internalFormat,
-                        desc.width,
-                        desc.height,
-                        0,
-                        format,
-                        type,
-                        desc.pixelsByCubemap[i].data()
+                        0, internalFormat,
+                        desc.width, desc.height, 0,
+                        format, type, data
                     ));
                 }
             }
-        break;
+        } break;
     }
 
+    // Sampler state
     GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_S, ToGLTextureWrap(desc.subDesc.wrapS)));
     GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_T, ToGLTextureWrap(desc.subDesc.wrapT)));
     GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_R, ToGLTextureWrap(desc.subDesc.wrapR)));
 
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, ToGLTextureFilter(desc.subDesc.minFilter)));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, ToGLTextureFilter(desc.subDesc.magFilter)));
+    GLenum glMin = ToGLMinFilter(desc.subDesc.minFilter, desc.subDesc.mipFilter);
+    GLenum glMag = ToGLMagFilter(desc.subDesc.magFilter);
 
+    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, glMin));
+    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, glMag));
+
+    // Border
     if (desc.subDesc.wrapS == TextureWrap::ClampToBorder ||
         desc.subDesc.wrapT == TextureWrap::ClampToBorder ||
         desc.subDesc.wrapR == TextureWrap::ClampToBorder)
+    {
         GL_CALL(m_GL->TexParameterfv(target, GL_TEXTURE_BORDER_COLOR, &desc.subDesc.borderColor.r));
+    }
 
-    if (desc.subDesc.generateMips && desc.subDesc.mipLevels == 0)
+    // Anisotropy
+    if (desc.subDesc.aniso > 0.0f) {
+        float aniso = std::min(desc.subDesc.aniso, m_Capabilities.maxAniso);
+        GL_CALL(m_GL->TexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso));
+    }
+
+    // Mip chain
+    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_BASE_LEVEL, 0));
+    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MAX_LEVEL, mip - 1));
+
+    if (desc.subDesc.generateMips && mip > 1) {
         GL_CALL(m_GL->GenerateMipmap(target));
-
-    if ((desc.subDesc.generateMips || desc.subDesc.mipLevels > 0) && desc.subDesc.aniso > 0.0f) {
-        if (!m_Capabilities.Has(GraphicsCapEnum::Anisotropy)) {
-            return ExError{"Anisotropic filtering is Unsupported on this device"};
-        }
-        if (desc.subDesc.aniso > m_Capabilities.maxAniso) {
-            return ExError{"Maximum supported anisotropy on this device is " + std::to_string(m_Capabilities.maxAniso)};
-        }
-        GL_CALL(m_GL->TexParameterf(
-            GL_TEXTURE_2D,
-            GL_TEXTURE_MAX_ANISOTROPY_EXT,
-            desc.subDesc.aniso
-        ));
     }
 
     GL_CALL(m_GL->BindTexture(target, 0));
 
     tex.alive = true;
-    tex.id = tex.id;
-
     return tex.External();
+}
+
+static TextureImageDescriptor Describe(const TextureDesc& desc, int mip) {
+    TextureImageDescriptor imgDesc;
+    imgDesc.type = desc.type;
+    imgDesc.format = desc.format;
+    imgDesc.width = desc.width;
+    imgDesc.height = desc.height;
+    imgDesc.layers = desc.layers;
+    imgDesc.mip = mip;
+    return imgDesc;
+}
+
+static GLenum GetCubemapFaceFromSubDesc(const TextureSubDesc& subDesc) {
+    switch (subDesc.updateThisCubemapFace) {
+        case TextureCubemapFace::NegativeX: return GL_TEXTURE_CUBE_MAP_NEGATIVE_X;
+        case TextureCubemapFace::NegativeY: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;
+        case TextureCubemapFace::NegativeZ: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;
+        case TextureCubemapFace::PositiveX: return GL_TEXTURE_CUBE_MAP_POSITIVE_X;
+        case TextureCubemapFace::PositiveY: return GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
+        case TextureCubemapFace::PositiveZ: return GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
+    }
+    return GL_NONE;
 }
 
 ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) {
@@ -417,126 +463,148 @@ ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const Text
     GLenum target = ToGLTextureTarget(desc.type);
     GLenum format = ToGLTextureFormat(desc.format);
     GLenum type = ToGLTextureType(desc.format);
-    bool compressed = TextureFormatIsASTC(desc.format) || TextureFormatIsS3TC(desc.format);
+    GLenum internalFormat = ToGLTextureInternalFormat(desc.format);
+    bool compressed = TextureFormatIsS3TC(desc.format) || TextureFormatIsASTC(desc.format);
+
+    uint32_t mip = subDesc.mipLevel;
 
     GL_CALL(m_GL->BindTexture(target, tex.id));
-    GL_CALL(m_GL->PixelStorei(GL_UNPACK_ALIGNMENT, 1)); // safest
+    GL_CALL(m_GL->PixelStorei(GL_UNPACK_ALIGNMENT, 1));
 
     switch (desc.type) {
-        case TextureType::Texture2D:
+        case TextureType::Texture2D: {
+            GLsizei imageSize = compressed ? CalcImageSize(Describe(desc, mip)) : 0;
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexSubImage2D(
-                    target,
-                    subDesc.mipLevels,
+                    target, mip,
                     0, 0,
-                    desc.width,
-                    desc.height,
-                    format,
-                    desc.pixelsByLayers.size(),
+                    desc.width >> mip,
+                    desc.height >> mip,
+                    internalFormat,
+                    imageSize,
                     data
                 ));
             } else {
                 GL_CALL(m_GL->TexSubImage2D(
-                    target,
-                    subDesc.mipLevels,
+                    target, mip,
                     0, 0,
-                    desc.width,
-                    desc.height,
-                    format,
-                    type,
+                    desc.width >> mip,
+                    desc.height >> mip,
+                    format, type,
                     data
                 ));
             }
-        break;
-        case TextureType::Array2D:
-        case TextureType::Texture3D:
+        } break;
+
+        case TextureType::Array2D: {
+            GLsizei imageSize = compressed ? CalcImageSize(Describe(desc, mip)) : 0;
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexSubImage3D(
-                    target,
-                    subDesc.mipLevels,
+                    target, mip,
                     0, 0, 0,
-                    desc.width,
-                    desc.height,
+                    desc.width >> mip,
+                    desc.height >> mip,
                     desc.layers,
-                    format,
-                    desc.pixelsByLayers.size(),
+                    internalFormat,
+                    imageSize,
                     data
                 ));
             } else {
                 GL_CALL(m_GL->TexSubImage3D(
-                    target,
-                    subDesc.mipLevels,
+                    target, mip,
                     0, 0, 0,
-                    desc.width,
-                    desc.height,
+                    desc.width >> mip,
+                    desc.height >> mip,
                     desc.layers,
-                    format,
-                    type,
+                    format, type,
                     data
                 ));
             }
-        break;
-        case TextureType::Cubemap:
-            for (unsigned int i = 0; i < 6; ++i) {
-                if (compressed) {
-                    GL_CALL(m_GL->CompressedTexSubImage2D(
-                        GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
-                        subDesc.mipLevels,
-                        0, 0,
-                        desc.width,
-                        desc.height,
-                        format,
-                        (GLsizei) desc.pixelsByCubemap[i].size(),
-                        data
-                    ));
-                } else {
-                    GL_CALL(m_GL->TexSubImage2D(
-                        GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
-                        subDesc.mipLevels,
-                        0, 0,
-                        desc.width,
-                        desc.height,
-                        format,
-                        type,
-                        data
-                    ));
-                }
+        } break;
+
+        case TextureType::Texture3D: {
+            GLsizei imageSize = compressed ? CalcImageSize(Describe(desc, mip)) : 0;
+            if (compressed) {
+                GL_CALL(m_GL->CompressedTexSubImage3D(
+                    target, mip,
+                    0, 0, 0,
+                    desc.width >> mip,
+                    desc.height >> mip,
+                    desc.depth >> mip,
+                    internalFormat,
+                    imageSize,
+                    data
+                ));
+            } else {
+                GL_CALL(m_GL->TexSubImage3D(
+                    target, mip,
+                    0, 0, 0,
+                    desc.width >> mip,
+                    desc.height >> mip,
+                    desc.depth >> mip,
+                    format, type,
+                    data
+                ));
             }
-        break;
+        } break;
+
+        case TextureType::Cubemap: {
+            // Caller must pass data for one face only.
+            GLenum face = GetCubemapFaceFromSubDesc(subDesc);
+            GLsizei imageSize = compressed ? CalcImageSize(Describe(desc, mip)) : 0;
+
+            if (compressed) {
+                GL_CALL(m_GL->CompressedTexSubImage2D(
+                    face, mip,
+                    0, 0,
+                    desc.width >> mip,
+                    desc.height >> mip,
+                    internalFormat,
+                    imageSize,
+                    data
+                ));
+            } else {
+                GL_CALL(m_GL->TexSubImage2D(
+                    face, mip,
+                    0, 0,
+                    desc.width >> mip,
+                    desc.height >> mip,
+                    format, type,
+                    data
+                ));
+            }
+        } break;
     }
 
+    // Update sampler state
     GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_S, ToGLTextureWrap(subDesc.wrapS)));
     GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_T, ToGLTextureWrap(subDesc.wrapT)));
     GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_R, ToGLTextureWrap(subDesc.wrapR)));
 
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, ToGLTextureFilter(subDesc.minFilter)));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, ToGLTextureFilter(subDesc.magFilter)));
+    GLenum glMin = ToGLMinFilter(subDesc.minFilter, subDesc.mipFilter);
+    GLenum glMag = ToGLMagFilter(subDesc.magFilter);
+
+    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, glMin));
+    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, glMag));
 
     if (subDesc.wrapS == TextureWrap::ClampToBorder ||
         subDesc.wrapT == TextureWrap::ClampToBorder ||
         subDesc.wrapR == TextureWrap::ClampToBorder)
+    {
         GL_CALL(m_GL->TexParameterfv(target, GL_TEXTURE_BORDER_COLOR, &subDesc.borderColor.r));
-
-    if (subDesc.generateMips && subDesc.mipLevels == 0)
-        GL_CALL(m_GL->GenerateMipmap(target));
-
-    if ((subDesc.generateMips || subDesc.mipLevels > 0) && subDesc.aniso > 0.0f) {
-        if (!m_Capabilities.Has(GraphicsCapEnum::Anisotropy)) {
-            return ExError{"Anisotropic filtering is Unsupported on this device"};
-        }
-        if (subDesc.aniso > m_Capabilities.maxAniso) {
-            return ExError{"Maximum supported anisotropy on this device is " + std::to_string(m_Capabilities.maxAniso)};
-        }
-        GL_CALL(m_GL->TexParameterf(
-            GL_TEXTURE_2D,
-            GL_TEXTURE_MAX_ANISOTROPY_EXT,
-            subDesc.aniso
-        ));
     }
 
-    tex.desc.subDesc = subDesc;
-    GL_CALL(m_GL->BindTexture(target, 0));
+    if (subDesc.aniso > 0.0f) {
+        float aniso = std::min(subDesc.aniso, m_Capabilities.maxAniso);
+        GL_CALL(m_GL->TexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso));
+    }
 
+    if (subDesc.generateMips)
+        GL_CALL(m_GL->GenerateMipmap(target));
+
+    tex.desc.subDesc = subDesc;
+
+    GL_CALL(m_GL->BindTexture(target, 0));
     return ExError::NoError();
 }
 
@@ -1823,7 +1891,7 @@ GLenum ToGLTextureFilter(TextureFilter filter, bool mipmapEnabled) {
     }
 }
 
-GLenum ToGLTextureInternalFormat(TextureFormat fmt) {
+GLenum ToGLTextureInternalFormat(TextureFormat fmt) { // alan barmigardim
     switch (fmt) {
         // --- 8-bit ---
         case TextureFormat::R8_UNORM:      return GL_R8;
@@ -1835,6 +1903,11 @@ GLenum ToGLTextureInternalFormat(TextureFormat fmt) {
         case TextureFormat::RG8_SNORM:     return GL_RG8_SNORM;
         case TextureFormat::RG8_UINT:      return GL_RG8UI;
         case TextureFormat::RG8_SINT:      return GL_RG8I;
+
+        case TextureFormat::RGB8_UNORM:     return GL_RGB8;
+        case TextureFormat::RGB8_SNORM:     return GL_RGB8_SNORM;
+        case TextureFormat::RGB8_UINT:      return GL_RGB8UI;
+        case TextureFormat::RGB8_SINT:      return GL_RGB8I;
 
         case TextureFormat::RGBA8_UNORM:   return GL_RGBA8;
         case TextureFormat::RGBA8_SNORM:   return GL_RGBA8_SNORM;
@@ -1856,6 +1929,12 @@ GLenum ToGLTextureInternalFormat(TextureFormat fmt) {
         case TextureFormat::RG16_UINT:     return GL_RG16UI;
         case TextureFormat::RG16_SINT:     return GL_RG16I;
         case TextureFormat::RG16_FLOAT:    return GL_RG16F;
+
+        case TextureFormat::RGB16_UNORM:   return GL_RGB16;
+        case TextureFormat::RGB16_SNORM:   return GL_RGB16_SNORM;
+        case TextureFormat::RGB16_UINT:    return GL_RGB16UI;
+        case TextureFormat::RGB16_SINT:    return GL_RGB16I;
+        case TextureFormat::RGB16_FLOAT:   return GL_RGB16F;
 
         case TextureFormat::RGBA16_UNORM:  return GL_RGBA16;
         case TextureFormat::RGBA16_SNORM:  return GL_RGBA16_SNORM;
@@ -1942,7 +2021,16 @@ GLenum ToGLTextureFormat(TextureFormat fmt) {
         case TextureFormat::RG32_FLOAT:
             return GL_RG;
 
+        case TextureFormat::RGB8_UNORM:
+        case TextureFormat::RGB8_SNORM:
+        case TextureFormat::RGB8_UINT:
+        case TextureFormat::RGB8_SINT:
         case TextureFormat::RGB32_FLOAT:
+        case TextureFormat::RGB16_UNORM:
+        case TextureFormat::RGB16_SNORM:
+        case TextureFormat::RGB16_UINT:
+        case TextureFormat::RGB16_SINT:
+        case TextureFormat::RGB16_FLOAT:
         case TextureFormat::RG11B10_FLOAT:
             return GL_RGB;
 
@@ -1982,20 +2070,24 @@ GLenum ToGLTextureType(TextureFormat fmt) {
         // -------- 8-bit --------
         case TextureFormat::R8_UNORM:
         case TextureFormat::RG8_UNORM:
+        case TextureFormat::RGB8_UNORM:
         case TextureFormat::RGBA8_UNORM:
         case TextureFormat::BGRA8_UNORM:
         case TextureFormat::RGBA8_SRGB:
             return GL_UNSIGNED_BYTE;
         case TextureFormat::R8_SNORM:
         case TextureFormat::RG8_SNORM:
+        case TextureFormat::RGB8_SNORM:
         case TextureFormat::RGBA8_SNORM:
             return GL_BYTE;
         case TextureFormat::R8_UINT:
         case TextureFormat::RG8_UINT:
+        case TextureFormat::RGB8_UINT:
         case TextureFormat::RGBA8_UINT:
             return GL_UNSIGNED_BYTE;
         case TextureFormat::R8_SINT:
         case TextureFormat::RG8_SINT:
+        case TextureFormat::RGB8_SINT:
         case TextureFormat::RGBA8_SINT:
             return GL_BYTE;
 
@@ -2006,18 +2098,22 @@ GLenum ToGLTextureType(TextureFormat fmt) {
             return GL_UNSIGNED_SHORT;
         case TextureFormat::R16_SNORM:
         case TextureFormat::RG16_SNORM:
+        case TextureFormat::RGB16_SNORM:
         case TextureFormat::RGBA16_SNORM:
             return GL_SHORT;
         case TextureFormat::R16_UINT:
         case TextureFormat::RG16_UINT:
+        case TextureFormat::RGB16_UINT:
         case TextureFormat::RGBA16_UINT:
             return GL_UNSIGNED_SHORT;
         case TextureFormat::R16_SINT:
         case TextureFormat::RG16_SINT:
+        case TextureFormat::RGB16_SINT:
         case TextureFormat::RGBA16_SINT:
             return GL_SHORT;
         case TextureFormat::R16_FLOAT:
         case TextureFormat::RG16_FLOAT:
+        case TextureFormat::RGB16_FLOAT:
         case TextureFormat::RGBA16_FLOAT:
             return GL_HALF_FLOAT;
 
@@ -2087,12 +2183,20 @@ GLenum ToGLTextureTarget(TextureType type) {
     }
 }
 
-GLenum ToGLTextureFilter(TextureFilter filter) {
-    switch (filter) {
-        case TextureFilter::Nearest:    return GL_NEAREST;
-        case TextureFilter::Linear:     return GL_LINEAR;
-        default: return GL_NONE;
+GLenum ToGLMinFilter(TextureFilter f, MipmapFilter mf) {
+    switch (mf) {
+        case MipmapFilter::None:
+            return f == TextureFilter::Nearest ? GL_NEAREST : GL_LINEAR;
+        case MipmapFilter::Nearest:
+            return f == TextureFilter::Nearest ? GL_NEAREST_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_NEAREST;
+        case MipmapFilter::Linear:
+            return f == TextureFilter::Nearest ? GL_NEAREST_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_LINEAR;
     }
+    return GL_LINEAR;
+}
+
+GLenum ToGLMagFilter(TextureFilter f) {
+    return f == TextureFilter::Nearest ? GL_NEAREST : GL_LINEAR;
 }
 
 GLenum ToGLShaderStage(ShaderStage stg) {

@@ -5,6 +5,7 @@
 #include <string>
 
 #include "axle/utils/AX_Expected.hpp"
+#include "axle/utils/AX_Types.hpp"
 
 // IMPORTANT!
 // We have to implement joystick calliberation/choose or anything support later;
@@ -307,7 +308,7 @@ private:
 class IWindow {
 public:
     IWindow(const WindowSpec& spec, uint32_t maxSharedEvents)
-        : m_State(spec, maxSharedEvents) {}
+        : m_State(std::make_shared<DiscreteState>(spec, maxSharedEvents)) {}
 
     IWindow(const IWindow&) = delete;
     IWindow& operator=(const IWindow&) = delete;
@@ -328,9 +329,9 @@ public:
     virtual void SetAlphaColor(float *rgb) = 0;
 
     virtual void RequestWakeEventloop() = 0;
-    virtual void RequestQuit() { m_State.RequestQuit(); }
+    virtual void RequestQuit() { m_State->RequestQuit(); }
 
-    virtual DiscreteState& GetDiscreteState() { return m_State; }
+    virtual SharedPtr<DiscreteState> GetDiscreteState() { return m_State; }
     virtual WindowType GetType() const = 0;
 
     // Backend-specific pointer access (GL/DX/VK surfaces, handles, etc)
@@ -344,7 +345,7 @@ protected:
 
     std::mutex m_HandleMutex;
 
-    mutable DiscreteState m_State;
+    mutable SharedPtr<DiscreteState> m_State;
 };
 
 }

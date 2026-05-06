@@ -113,11 +113,10 @@ utils::ExError Application::InitCurrent(
     }
 
     m_GfxThread->AwaitStart();
-    m_Graphics = std::make_shared<gfx::Graphics>(m_GfxThread);
 
     initFunc(*this, miscData);
 
-    auto& state = wndCtx->GetDiscreteState();
+    auto& state = *wndCtx->GetDiscreteState();
 
     using namespace std::chrono;
 
@@ -136,7 +135,6 @@ utils::ExError Application::InitCurrent(
     if (m_GfxThread->IsRunning()) {
         m_GfxThread->Stop(true);
     }
-    m_Graphics.reset();
 
     if (m_WndThread->IsRunning()) {
         m_WndThread->Stop(true);

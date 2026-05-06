@@ -41,8 +41,10 @@ utils::ExResult<AssetImportResult> AssetSTLAssimpFileImporter::Import() {
     Node root;
     root.name = "ROOT";
 
+    uint32_t meshIdx{0}, buffIdx{0};
     result.meshes = {std::vector<AssetMesh>(scene->mNumMeshes)};
-    ProcessNode(scene->mRootNode, scene, root, result);
+    result.buffers = {std::vector<AssetBuffer>(2 * scene->mNumMeshes)};
+    ProcessNode(scene->mRootNode, scene, root, result, meshIdx, buffIdx);
     result.nodes = {std::vector<Node>{root}};
 
     return result;
@@ -52,21 +54,20 @@ void AssetSTLAssimpFileImporter::ProcessNode(
     const aiNode* node,
     const aiScene* scene,
     Node& outNode,
-    AssetImportResult& result
+    AssetImportResult& result,
+    uint32_t& meshIdx,
+    uint32_t& buffIdx
 ) {
     outNode.name = node->mName.C_Str();
     outNode.transform = utils::Coordination{utils::Assimp_ToGLM(node->mTransformation)};
 
-    result.buffers = utils::CowSpan(std::vector<AssetBuffer>(2 * scene->mNumMeshes));
-
-    uint32_t meshIdx{0}, buffIdx{0};
     for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
-        ProcessMesh(scene->mMeshes[node->mMeshes[i]], result, meshIdx, buffIdx);
         outNode.meshId = meshIdx;
+        ProcessMesh(scene->mMeshes[node->mMeshes[i]], result, meshIdx, buffIdx);
     }
     for (uint32_t i = 0; i < node->mNumChildren; ++i) {
         Node child;
-        ProcessNode(node->mChildren[i], scene, child, result);
+        ProcessNode(node->mChildren[i], scene, child, result, meshIdx, buffIdx);
         outNode.children.push_back(std::move(child));
     }
 }
@@ -90,13 +91,24 @@ void AssetSTLAssimpFileImporter::ProcessMesh(
     std::vector<uint8_t> vertexBuffer;
     auto fmt = GetVertexFormat(GetMeshUvCount(mesh), HasFlag(AssetImportFlag::CalcTangents));
     auto fmtDesc = GetVertexFormatDesc(fmt);
-    vertexBuffer.reserve(sizeof(float) * ((fmtDesc.hasTangents ? 6 : 0) + fmtDesc.uvCount * 2 + 6) * mesh->mNumVertices);
+    auto vtSize = sizeof(float) * ((fmtDesc.hasTangents ? 6 : 0) + fmtDesc.uvCount * 2 + 6) * mesh->mNumVertices;
+    vertexBuffer.reserve(vtSize);
+    vertexBuffer.resize(vtSize);
 
     std::vector<uint8_t> indexBuffer;
-    indexBuffer.reserve(sizeof(uint32_t) * mesh->mNumFaces);
+    auto idxCount{0u};
+    for (uint32_t i{0}; i < mesh->mNumFaces; i++) {
+        idxCount += mesh->mFaces[i].mNumIndices;
+    }
+    auto idxSize = sizeof(uint32_t) * idxCount;
+    indexBuffer.reserve(idxSize);
+    indexBuffer.resize(idxSize);
 
-    auto vertexStream = data::BufferDataStream(utils::URawView(vertexBuffer.data(), vertexBuffer.size()));
-    auto indexStream = data::BufferDataStream(utils::URawView(indexBuffer.data(), indexBuffer.size()));
+    auto vertexStream = data::BufferDataStream(utils::URawView(vertexBuffer.data(), vtSize));
+    auto indexStream = data::BufferDataStream(utils::URawView(indexBuffer.data(), idxSize));
+
+    vertexStream.Open();
+    indexStream.Open();
 
     for (uint32_t i{0}; i < mesh->mNumVertices; ++i) {
         vertexStream.Write(&mesh->mVertices[i], sizeof(float) * 3);
@@ -106,9 +118,25 @@ void AssetSTLAssimpFileImporter::ProcessMesh(
             if (mesh->mTextureCoords[j]) {
                 vertexStream.Write(&mesh->mTextureCoords[j][i], sizeof(float) * 2);
             } else {
-                static const float zeros[2]{0.0f, 0.0f};
-                vertexStream.Write(&zeros, sizeof(float) * 2);
-            }            
+                static const float zeros2[2]{0.0f, 0.0f};
+                vertexStream.Write(zeros2, sizeof(float) * 2);
+            }
+        }
+
+        if (fmtDesc.hasTangents) {
+            if (mesh->mTangents) {
+                vertexStream.Write(&mesh->mTangents[i], sizeof(float) * 3);
+            } else {
+                static const float zeros3[3]{0.0f, 0.0f, 0.0f};
+                vertexStream.Write(zeros3, sizeof(float) * 3);
+            }
+
+            if (mesh->mBitangents) {
+                vertexStream.Write(&mesh->mBitangents[i], sizeof(float) * 3);
+            } else {
+                static const float zeros3[3]{0.0f, 0.0f, 0.0f};
+                vertexStream.Write(zeros3, sizeof(float) * 3);
+            }
         }
     }
 
@@ -116,7 +144,7 @@ void AssetSTLAssimpFileImporter::ProcessMesh(
         const aiFace& face = mesh->mFaces[i];
 
         for (uint32_t j = 0; j < face.mNumIndices; ++j)
-            indexStream.Write(&face.mIndices[j], sizeof(uint32_t) * 2);
+            indexStream.Write(&face.mIndices[j], sizeof(uint32_t));
     }
 
     AssetBuffer vertexBuf;
@@ -128,13 +156,13 @@ void AssetSTLAssimpFileImporter::ProcessMesh(
     AssetBuffer indexBuf;
     indexBuf.type = AssetBufferType::Index;
     indexBuf.stride = sizeof(uint32_t);
-    indexBuf.count = indexBuffer.size();
+    indexBuf.count = idxCount;
     indexBuf.raw = {std::move(indexBuffer)};
 
-    uint32_t vertBuffIdx, idxBuffIdx;
+    uint32_t vertBuffIdx{buffIdx++}, idxBuffIdx{buffIdx++};
 
-    result.buffers[vertBuffIdx = buffIdx++] = std::move(vertexBuf);
-    result.buffers[idxBuffIdx = buffIdx++] = std::move(indexBuf);
+    result.buffers[vertBuffIdx] = {std::move(vertexBuf)};
+    result.buffers[idxBuffIdx] = {std::move(indexBuf)};
 
     AssetMesh assetMesh;
     assetMesh.vertexBufferIdx = vertBuffIdx;

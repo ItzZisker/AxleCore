@@ -40,7 +40,7 @@ utils::ExResult<OGGAudio> OGG_LoadFileBytes(data::IDataStream& buffer) {
     OGGAudio ogg;
     ogg.channels = vor->channels;
     ogg.sampleRate = vor->sample_rate;
-    ogg.entireStream = fileData;
+    ogg.entireStream = std::move(fileData);
 
     stb_vorbis_close((stb_vorbis*)vor);
     return ogg;

@@ -21,8 +21,10 @@ BufferDataStream::~BufferDataStream() {
 }
 
 utils::ExError BufferDataStream::Open() {
-    m_BufferHeld = std::vector<uint8_t>((std::size_t) m_BufferView.size(), 0);
-    m_BufferView = {m_BufferHeld.data(), m_BufferHeld.size()};
+    if (m_BufferView.handle() == nullptr) {
+        m_BufferHeld = std::vector<uint8_t>((std::size_t) m_BufferView.size(), 0);
+        m_BufferView = {m_BufferHeld.data(), m_BufferHeld.size()};
+    }
     m_Opened = true;
     return utils::ExError::NoError();
 }
