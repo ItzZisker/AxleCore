@@ -2,10 +2,10 @@
 
 #ifdef __AX_GRAPHICS_GL__
 
-#include "AX_GLCommandList.hpp"
+#include "axle/graphics/cmd/AX_IGraphicsBackend.hpp"
+#include "axle/graphics/cmd/AX_ICommandList.hpp"
 
 #include "axle/graphics/ctx/AX_IRenderContext.hpp"
-#include "axle/graphics/AX_Graphics.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_MagicPool.hpp"

@@ -9,7 +9,7 @@
 #include "axle/graphics/ctx/GL/AX_RenderContextGLX11.hpp"
 #endif
 
-#include "axle/graphics/AX_Graphics.hpp"
+#include "axle/graphics/AX_GraphicsParams.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 

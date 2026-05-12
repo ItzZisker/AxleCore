@@ -40,6 +40,21 @@ public:
     void Call() const { m_Func(); }
 };
 
+inline void HashCombine(size_t& h, size_t v) {
+    h ^= v + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+}
+
+template<typename T>
+inline void HashValue(size_t& h, const T& v) {
+    HashCombine(h, std::hash<T>{}(v));
+}
+
+template<typename E>
+inline void HashEnum(size_t& h, E v) {
+    using U = std::underlying_type_t<E>;
+    HashCombine(h, std::hash<U>{}(static_cast<U>(v)));
+}
+
 void Uni_NanoSleep(ChNanos nanos);
 
 unsigned int Decode85Byte(char c);

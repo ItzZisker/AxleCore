@@ -50,6 +50,7 @@ set(GFX_SRC
 
     src/graphics/layer/AX_RenderLayer.cpp
 
+    src/graphics/cmd/AX_PipelineManager.cpp
     src/graphics/cmd/AX_ICommandList.cpp
     src/graphics/cmd/GL/AX_GLCommandList.cpp
     src/graphics/cmd/GL/AX_GLGraphicsBackend.cpp

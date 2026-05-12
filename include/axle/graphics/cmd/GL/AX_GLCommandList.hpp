@@ -1,7 +1,5 @@
 #pragma once
 
-#include "axle/graphics/AX_Graphics.hpp"
-
 #include "axle/data/AX_DataStreamImplBuffer.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
