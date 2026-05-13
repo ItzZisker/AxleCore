@@ -308,17 +308,14 @@ inline PipelineType ToPipelineType(ShaderStage stg) {
     }
 }
 
-struct ShaderEntryPoint {
-    const char* name;
-    ShaderStage stage;
-};
-
 struct ShaderDesc {
+    PipelineType pipelineType;
+
     const char* sourcePath; // .slang file
     
-    const char* entryPointVertex;
-    const char* entryPointFragment;
-    const char* entryPointCompute;
+    std::string_view entryPointVertex{""};
+    std::string_view entryPointFragment{""};
+    std::string_view entryPointCompute{""};
 
     // Optional compile defines
     utils::CowSpan<const char*> defines{};
@@ -372,7 +369,7 @@ struct ShaderVertexInput {
 };
 
 struct ShaderInputState {
-    utils::CowSpan<ShaderVertexInput> inputs{};
+    std::vector<ShaderVertexInput> inputs{};
 };
 
 struct ShaderTag {};

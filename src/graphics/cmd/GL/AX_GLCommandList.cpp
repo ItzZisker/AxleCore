@@ -1,7 +1,6 @@
 #ifdef __AX_GRAPHICS_GL__
 
 #include "axle/graphics/cmd/GL/AX_GLCommandList.hpp"
-#include "axle/graphics/AX_Graphics.hpp"
 
 #include <mutex>
 #include <bit>

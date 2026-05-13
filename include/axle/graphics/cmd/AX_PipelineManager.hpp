@@ -1,6 +1,7 @@
 #pragma once
 
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
+#include "axle/utils/AX_Expected.hpp"
 
 #include "AX_IGraphicsBackend.hpp"
 
@@ -19,12 +20,12 @@ private:
     SharedPtr<core::ThreadContextGfx> m_GfxThread;
     std::unordered_map<std::size_t, RenderPipelineHandle> m_PipelineLookup;
 
-    RenderPipelineHandle Create(const RenderPipelineDesc& desc);
+    utils::ExResult<RenderPipelineHandle> Create(const RenderPipelineDesc& desc);
 public:
     PipelineManager(SharedPtr<core::ThreadContextGfx> gfxThr);
     ~PipelineManager();
 
-    RenderPipelineHandle GetOrCreate(const RenderPipelineDesc& desc);
+    utils::ExResult<RenderPipelineHandle> GetOrCreate(const RenderPipelineDesc& desc);
 };
 
 }

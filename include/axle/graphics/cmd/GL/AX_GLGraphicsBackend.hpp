@@ -7,6 +7,8 @@
 
 #include "axle/graphics/ctx/AX_IRenderContext.hpp"
 
+#include "axle/data/AX_DataStreamImplBuffer.hpp"
+
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_MagicPool.hpp"
 

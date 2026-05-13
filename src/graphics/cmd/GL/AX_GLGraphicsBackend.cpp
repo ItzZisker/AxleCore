@@ -864,18 +864,19 @@ ExError GLGraphicsBackend::DestroyFramebuffer(const FramebufferHandle& handle) {
 }
 
 ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) {
-    bool hasCompute{false};
-    bool hasOthers{false};
 
-    for (size_t i{0}; i < desc.entryPoints.size(); i++) {
-        if (desc.entryPoints[i].stage == ShaderStage::Compute) {
-            hasCompute = true;
-        } else {
-            hasOthers = true;
+    if (desc.pipelineType == PipelineType::Graphics) {
+        if (desc.entryPointVertex.empty()) {
+            return ExError{"Renderer pipeline shader must have Vertex entry-point set"};
+        } else if (desc.entryPointFragment.empty()) {
+            return ExError{"Renderer pipeline shader must have Fragment entry-point set"};
         }
-    }
-    if (hasCompute && hasOthers) {
-        return ExError{"Cannot keep fragment/vertex/etc. along with compute in a pipeline program; Compute is separate."};
+    } else if (desc.pipelineType == PipelineType::Compute) {
+        if (desc.entryPointCompute.empty()) {
+            return ExError{"Compute pipeline shader must have Compute entry-point set"};
+        }
+    } else {
+        return ExError{"Invalid PipelineType"};
     }
 
     auto& program = *m_Programs.Reserve();
@@ -886,7 +887,7 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
     GL_CALL(m_GL->GetIntegerv(GL_MINOR_VERSION, &minor));
 
     // TODO: Add GLES
-    std::string modName = "glsl_" + std::to_string(major) + std::to_string(minor) + "0";
+    std::string modName = (m_IsCore ? "glsl_" : "gles_") + std::to_string(major) + std::to_string(minor) + "0";
 
     slang::TargetDesc target{};
     target.format = SLANG_GLSL;
@@ -916,18 +917,33 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
         return {error_msg.str()};
     }
 
+    struct StageValue {
+        std::string_view name;
+        Slang::ComPtr<slang::IEntryPoint> entryPoint;
+        uint32_t linkedIndex;
+    };
+
+    std::unordered_map<ShaderStage, StageValue> entryPoints;
     std::vector<slang::IComponentType*> components;
     components.push_back(module.get());
 
-    std::vector<Slang::ComPtr<slang::IEntryPoint>> entryPoints;
+    uint32_t entryIndex{0};
+    if (desc.pipelineType == PipelineType::Graphics) {
+        Slang::ComPtr<slang::IEntryPoint> entryVertex, entryFragment;
 
-    auto& eps = desc.entryPoints;
-    for (auto& ep : eps) {
-        Slang::ComPtr<slang::IEntryPoint> entry;
-        module->findEntryPointByName(ep.name, entry.writeRef());
+        module->findEntryPointByName(desc.entryPointVertex.data(), entryVertex.writeRef());
+        components.push_back(entryVertex.get());
+        entryPoints[ShaderStage::Vertex] = {desc.entryPointVertex, std::move(entryVertex), entryIndex++};
 
-        entryPoints.push_back(entry);
-        components.push_back(entry.get());
+        module->findEntryPointByName(desc.entryPointFragment.data(), entryFragment.writeRef());
+        components.push_back(entryFragment.get());
+        entryPoints[ShaderStage::Fragment] = {desc.entryPointFragment, std::move(entryFragment), entryIndex++};
+    } else {
+        Slang::ComPtr<slang::IEntryPoint> entryCompute;
+
+        module->findEntryPointByName(desc.entryPointCompute.data(), entryCompute.writeRef());
+        components.push_back(entryCompute.get());
+        entryPoints[ShaderStage::Compute] = {desc.entryPointCompute, std::move(entryCompute), entryIndex++};
     }
 
     Slang::ComPtr<slang::IComponentType> linked;
@@ -938,11 +954,11 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
         nullptr
     );
 
-    for (size_t i{0}; i < desc.entryPoints.size(); ++i) {
+    for (const auto& [stage, stageVal] : entryPoints) {
 
-        if (desc.entryPoints[i].stage == ShaderStage::Vertex) {
+        if (stage == ShaderStage::Vertex) {
             auto* programLayout = linked->getLayout();
-            auto* entryPoint = programLayout->getEntryPointByIndex(i);
+            auto* entryPoint = programLayout->getEntryPointByIndex(stageVal.linkedIndex);
 
             auto* param = entryPoint->getParameterByIndex(0);
 
@@ -960,20 +976,20 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
 
                 ShaderVertexInput input{};
 
-                input.semantic = ParseSemantic(semanticName);
-                if (input.semantic == VertexSemantic::Custom)
-                    continue;
-
+                auto semantic = ParseSemantic(semanticName);
+                if (semantic == VertexSemantic::Custom) continue;
+                
+                input.semantic = semantic;
                 input.semanticIndex = semanticIndex;
                 input.location = location;
 
-                program.vertexBindings.inputs.
+                program.vertexBindings.inputs.push_back(input);
             }
         }
 
         Slang::ComPtr<slang::IBlob> code;
         linked->getEntryPointCode(
-            (SlangInt)i,
+            (SlangInt)stageVal.linkedIndex,
             0,
             code.writeRef(),
             nullptr
@@ -981,8 +997,7 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
 
         const char* glsl = (const char*) code->getBufferPointer();
 
-        std::string glName = desc.entryPoints[i].name;
-        GLenum glStage = ToGLShaderStage(desc.entryPoints[i].stage);
+        GLenum glStage = ToGLShaderStage(stage);
 
         GLuint shader = m_GL->CreateShader(glStage);
         GL_CALL(m_GL->ShaderSource(shader, 1, &glsl, nullptr));
@@ -991,6 +1006,7 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
         GLint state;
         GL_CALL(m_GL->GetShaderiv(shader, GL_COMPILE_STATUS, &state));
         if (!state) {
+            auto glName = std::string(stageVal.name);
             std::vector<char> log(4096);
             GLsizei length;
             GL_CALL(m_GL->GetShaderInfoLog(shader, log.size(), &length, log.data()));

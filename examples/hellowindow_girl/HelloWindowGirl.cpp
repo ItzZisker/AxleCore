@@ -57,6 +57,17 @@ struct Uniforms {
 
         cameraPos = camera.GetPosition();
     }
+
+    void UpdateLook(float dT) {
+        static thread_local float accTime{0.0f};
+        accTime += dT;
+
+        MVP[1] = glm::lookAt(
+            glm::vec3(2 * std::sin(accTime), 2.0f, 2 * std::cos(accTime)),
+            glm::vec3(0.0f, 0.75f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+    }
 };
 
 struct UBOState {
@@ -111,21 +122,13 @@ void Girl_Init(SharedPtr<RenderData> rdrData) {
     drpdesc.colorOps.store = StoreOp::Store;
     drpdesc.depthStencilOps.load = LoadOp::Clear;
     drpdesc.depthStencilOps.store = StoreOp::Discard;
-
     rdrData->defPass = ExpectOrThrow(gbgfx->CreateDefaultRenderPass(drpdesc));
 
-    ShaderEntryPoint shaderVertexEntry;
-    shaderVertexEntry.name = "mainVertex";
-    shaderVertexEntry.stage = ShaderStage::Vertex;
-
-    ShaderEntryPoint shaderFragmentEntry;
-    shaderFragmentEntry.name = "mainFragment";
-    shaderFragmentEntry.stage = ShaderStage::Fragment;
-
     ShaderDesc shaderGirlDesc;
+    shaderGirlDesc.pipelineType = PipelineType::Graphics;
     shaderGirlDesc.sourcePath = "girl.slang";
-    shaderGirlDesc.entryPoints = {std::vector<ShaderEntryPoint>{shaderVertexEntry, shaderFragmentEntry}};
-
+    shaderGirlDesc.entryPointVertex = "mainVertex";
+    shaderGirlDesc.entryPointFragment = "mainFragment";
     auto shaderGirl = ExpectOrThrow(gbgfx->CreateProgram(shaderGirlDesc));
 
     MeshVertexLayout layout;
@@ -229,10 +232,10 @@ void Girl_Draw(SharedPtr<RenderData> rdrData) {
     auto gbgfx = gfxThread->GetContext();
 
     auto uboState = rdrData->uboState.load();
-    if (uboState.reqUpdateUBO) {
-        auto ubo = uboState.Peek();
-        gbgfx->UpdateBuffer(rdrData->girlUniforms, 0, sizeof(Uniforms), &ubo).ThrowIfValid();
-    }
+    auto ubo = uboState.Peek();
+
+    ubo.UpdateLook(gfxThread->GetFrameTime());
+    gbgfx->UpdateBuffer(rdrData->girlUniforms, 0, sizeof(Uniforms), &ubo).ThrowIfValid();
 
     uint32_t imgIndex = ExpectOrThrow(gbgfx->AcquireNextImage());
 

@@ -5,6 +5,7 @@
 #include <vector>
 #include <type_traits>
 #include <algorithm>
+#include <bit>
 
 /*  
     RULES FOR A "GOOD" COMPARATOR:

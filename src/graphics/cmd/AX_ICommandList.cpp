@@ -1,9 +1,13 @@
 #include "axle/graphics/cmd/AX_ICommandList.hpp"
 #include "axle/graphics/cmd/GL/AX_GLCommandList.hpp"
 
+#include "axle/graphics/cmd/AX_IGraphicsBackend.hpp"
+
 #ifdef __AX_GRAPHICS_GL__
 #include "axle/graphics/cmd/GL/AX_GLGraphicsBackend.hpp"
 #endif
+
+#include "axle/core/concurrency/AX_ThreadCycler.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"

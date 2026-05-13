@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <variant>
 
-
 namespace axle::core {
     class ThreadContextGfx;   
 }

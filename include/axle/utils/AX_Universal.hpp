@@ -7,6 +7,8 @@
 #include <assimp/matrix4x4.h>
 #endif
 
+#include <type_traits>
+
 namespace axle::utils
 {
 
@@ -42,11 +44,6 @@ public:
 
 inline void HashCombine(size_t& h, size_t v) {
     h ^= v + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
-}
-
-template<typename T>
-inline void HashValue(size_t& h, const T& v) {
-    HashCombine(h, std::hash<T>{}(v));
 }
 
 template<typename E>
