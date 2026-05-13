@@ -315,11 +315,64 @@ struct ShaderEntryPoint {
 
 struct ShaderDesc {
     const char* sourcePath; // .slang file
-    utils::CowSpan<ShaderEntryPoint> entryPoints;
+    
+    const char* entryPointVertex;
+    const char* entryPointFragment;
+    const char* entryPointCompute;
 
     // Optional compile defines
     utils::CowSpan<const char*> defines{};
     utils::CowSpan<std::pair<const char*, const char*>> variables{};
+};
+
+enum class VertexSemantic : uint8_t {
+    Position,
+    Normal,
+    TexCoord,
+    Tangent,
+    Bitangent,
+    Color,
+    BoneIndices,
+    BoneWeights,
+    Custom
+};
+
+enum class VertexAttributeClass {
+    Int,
+    Float,
+    Double // Requires GL410
+};
+
+enum class VertexAttributeType {
+    Int8,
+    UInt8,
+    Int16,
+    UInt16,
+    Int32,
+    UInt32,
+    Int64, // Requires GL410
+    Float16,
+    Float32,
+    Float64 // Requires GL410
+};
+
+struct VertexTypeDesc {
+    VertexAttributeClass _class;
+    VertexAttributeType type;
+};
+
+struct ShaderVertexInput {
+    VertexSemantic semantic;
+    uint32_t semanticIndex;
+
+    uint32_t location;
+    uint32_t componentCount;
+
+    VertexTypeDesc typeDesc;
+};
+
+struct ShaderInputState {
+    utils::CowSpan<ShaderVertexInput> inputs{};
 };
 
 struct ShaderTag {};
@@ -583,49 +636,29 @@ struct BlendState {
     BlendOp alphaOp{BlendOp::Add};
 };
 
-enum class VertexAttributeClass {
-    Int,
-    Float,
-    Double // Requires GL410
-};
+struct MeshVertexAttribute {
+    VertexSemantic semantic;
+    uint32_t semanticIndex;
 
-enum class VertexAttributeType {
-    Int8,
-    UInt8,
-    Int16,
-    UInt16,
-    Int32,
-    UInt32,
-    Int64, // Requires GL410
-    Float16,
-    Float32,
-    Float64 // Requires GL410
-};
-
-struct VertexTypeDesc {
-    VertexAttributeClass _class;
-    VertexAttributeType type;
-};
-
-struct VertexAttribute {
-    uint32_t location;
     uint32_t componentCount;
+ 
     uint32_t divisor;
     uint32_t offset;
     uint32_t size;
+
     VertexTypeDesc typeDesc;
     bool normalized;
 };
 
-struct VertexLayout {
+struct MeshVertexLayout {
     uint32_t stride;
-    utils::CowSpan<VertexAttribute> attributes;
+    utils::CowSpan<MeshVertexAttribute> attributes;
 };
 
 struct RenderPipelineDesc {
     RenderPassHandle renderPass;
     ShaderHandle shader;
-    VertexLayout layout;
+    MeshVertexLayout vertexLayout;
 
     RasterState raster{};
     DepthStencilState depth{};
@@ -727,63 +760,7 @@ struct TextureImageDescriptor {
     uint32_t mip;
 };
 
-static uint32_t CalcImageSize(const TextureImageDescriptor& desc) {
-    uint32_t w = std::max(1u, desc.width  >> desc.mip);
-    uint32_t h = std::max(1u, desc.height >> desc.mip);
-    uint32_t d{1};
-
-    if (desc.type == gfx::TextureType::Texture3D) {
-        d = std::max(1u, desc.depth >> desc.mip);
-    } else if (desc.type == gfx::TextureType::Array2D) {
-        d = desc.layers;
-    }
-
-    switch (desc.format) {
-        // BC1 / DXT1 (8 bytes per 4x4 block)
-        case TextureFormat::BC1_UNORM: {
-            uint32_t bw = (w + 3) / 4;
-            uint32_t bh = (h + 3) / 4;
-            return bw * bh * 8 * d;
-        }
-        // BC2 / BC3 (16 bytes per 4x4 block)
-        case TextureFormat::BC3_UNORM: {
-            uint32_t bw = (w + 3) / 4;
-            uint32_t bh = (h + 3) / 4;
-            return bw * bh * 16 * d;
-        }
-        // BC4
-        case TextureFormat::BC4_UNORM: {
-            uint32_t bw = (w + 3) / 4;
-            uint32_t bh = (h + 3) / 4;
-            return bw * bh * 8 * d;
-        }
-        // BC5
-        case TextureFormat::BC5_UNORM: {
-            uint32_t bw = (w + 3) / 4;
-            uint32_t bh = (h + 3) / 4;
-            return bw * bh * 16 * d;
-        }
-        // ASTC formats (always 16 bytes per block)
-        case TextureFormat::ASTC_4x4_UNORM:
-        case TextureFormat::ASTC_4x4_SRGB: {
-            uint32_t bw = (w + 3) / 4;
-            uint32_t bh = (h + 3) / 4;
-            return bw * bh * 16 * d;
-        }
-        case TextureFormat::ASTC_6x6_UNORM:
-        case TextureFormat::ASTC_6x6_SRGB: {
-            uint32_t bw = (w + 5) / 6;
-            uint32_t bh = (h + 5) / 6;
-            return bw * bh * 16 * d;
-        }
-        case TextureFormat::ASTC_8x8_UNORM:
-        case TextureFormat::ASTC_8x8_SRGB: {
-            uint32_t bw = (w + 7) / 8;
-            uint32_t bh = (h + 7) / 8;
-            return bw * bh * 16 * d;
-        }
-        default: return 0;
-    }
-}
+VertexSemantic ParseSemantic(const char* semanticName);
+uint32_t CalcImageSize(const TextureImageDescriptor& desc);
 
 }

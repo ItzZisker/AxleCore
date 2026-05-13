@@ -44,6 +44,8 @@ set(AUDIO_SRC
 )
 
 set(GFX_SRC
+    src/graphics/AX_GraphicsParams.cpp
+
     src/graphics/ctx/DX11/AX_RenderContextDX11Win32.cpp
     src/graphics/ctx/GL/AX_RenderContextGLWin32.cpp
     src/graphics/ctx/GL/AX_RenderContextGLX11.cpp

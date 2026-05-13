@@ -55,6 +55,8 @@ inline void HashEnum(size_t& h, E v) {
     HashCombine(h, std::hash<U>{}(static_cast<U>(v)));
 }
 
+bool EqualsIgnoreCase(const char* a, const char* b);
+
 void Uni_NanoSleep(ChNanos nanos);
 
 unsigned int Decode85Byte(char c);

@@ -76,11 +76,12 @@ std::size_t RPipeline_Hash_Raster(const RasterState& r) {
     return h;
 }
 
-std::size_t RPipeline_Hash_VertexLayout(const VertexLayout& layout) {
+std::size_t RPipeline_Hash_VertexLayout(const MeshVertexLayout& layout) {
     size_t h = 0;
     HashValue(h, layout.stride);
     for (const auto& a : layout.attributes) {
-        HashValue(h, a.location);
+        HashValue(h, a.semantic);
+        HashValue(h, a.semanticIndex);
         HashValue(h, a.componentCount);
         HashValue(h, a.divisor);
         HashValue(h, a.offset);
@@ -96,7 +97,7 @@ std::size_t RPipeline_Hash_PipelineDesc(const RenderPipelineDesc& desc) {
     size_t h = 0;
     HashValue(h, desc.renderPass);
     HashValue(h, desc.shader);
-    HashCombine(h, RPipeline_Hash_VertexLayout(desc.layout));
+    HashCombine(h, RPipeline_Hash_VertexLayout(desc.vertexLayout));
     HashCombine(h, RPipeline_Hash_Raster(desc.raster));
     HashCombine(h, RPipeline_Hash_DepthStencil(desc.depth));
     HashCombine(h, RPipeline_Hash_Blend(desc.blend));

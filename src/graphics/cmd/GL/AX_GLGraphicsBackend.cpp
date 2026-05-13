@@ -939,6 +939,38 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
     );
 
     for (size_t i{0}; i < desc.entryPoints.size(); ++i) {
+
+        if (desc.entryPoints[i].stage == ShaderStage::Vertex) {
+            auto* programLayout = linked->getLayout();
+            auto* entryPoint = programLayout->getEntryPointByIndex(i);
+
+            auto* param = entryPoint->getParameterByIndex(0);
+
+            auto* typeLayout = param->getTypeLayout();
+
+            uint32_t fieldCount = typeLayout->getFieldCount();
+
+            for (uint32_t i{0}; i < fieldCount; i++) {
+                auto* field = typeLayout->getFieldByIndex(i);
+
+                const char* semanticName = field->getSemanticName();
+
+                uint32_t semanticIndex = field->getSemanticIndex();
+                uint32_t location = field->getOffset(slang::ParameterCategory::VertexInput);
+
+                ShaderVertexInput input{};
+
+                input.semantic = ParseSemantic(semanticName);
+                if (input.semantic == VertexSemantic::Custom)
+                    continue;
+
+                input.semanticIndex = semanticIndex;
+                input.location = location;
+
+                program.vertexBindings.inputs.
+            }
+        }
+
         Slang::ComPtr<slang::IBlob> code;
         linked->getEntryPointCode(
             (SlangInt)i,
@@ -1130,56 +1162,80 @@ ExResult<GLuint> GLGraphicsBackend::CreateVertexArray(GLRenderPipeline& pipeline
 
     GL_CALL(m_GL->GenVertexArrays(1, &vao));
     GL_CALL(m_GL->BindVertexArray(vao));
+
     GL_CALL(m_GL->BindBuffer(GL_ARRAY_BUFFER, m_CurrentState.currentVbo));
+
     if (m_CurrentState.currentEbo > 0) {
         GL_CALL(m_GL->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_CurrentState.currentEbo));
     }
 
-    auto& desc = pipeline.desc;
-    auto& attrSpan = desc.layout.attributes;
-    for (size_t i{0}; i < attrSpan.size(); i++) {
-        auto& attr = attrSpan[i];
-        GL_CALL(m_GL->EnableVertexAttribArray(attr.location));
+    auto& meshLayout = pipeline.desc.vertexLayout;
 
-        switch (attr.typeDesc._class) {
+    if (!m_Programs.IsValid(pipeline.desc.shader)) {
+        return ExError{"Invalid/Out-of-use Pipeline shader"};
+    }
+    auto& shader = *m_Programs.Get(pipeline.desc.shader);
+    auto& shaderVertexInputs = shader.vertexBindings.inputs;
+
+    for (const auto& input : shaderVertexInputs) {
+        const MeshVertexAttribute* meshAttr = nullptr;
+
+        for (const auto& attr : meshLayout.attributes) {
+            if (attr.semantic == input.semantic &&
+                attr.semanticIndex == input.semanticIndex) {
+                meshAttr = &attr;
+                break;
+            }
+        }
+
+        if (!meshAttr) {
+            return ExError("Mesh missing required shader vertex attribute");
+        }
+
+        GL_CALL(m_GL->EnableVertexAttribArray(input.location));
+
+        switch (meshAttr->typeDesc._class) {
             case VertexAttributeClass::Float: {
                 GL_CALL(m_GL->VertexAttribPointer(
-                    attr.location,
-                    attr.componentCount,
-                    ToGLVertexAttribType(attr.typeDesc.type),
-                    attr.normalized,
-                    desc.layout.stride,
-                    (void*)(uintptr_t)attr.offset
+                    input.location,
+                    meshAttr->componentCount,
+                    ToGLVertexAttribType(meshAttr->typeDesc.type),
+                    meshAttr->normalized,
+                    meshLayout.stride,
+                    (void*)(uintptr_t)meshAttr->offset
                 ));
                 break;
             }
             case VertexAttributeClass::Int: {
                 GL_CALL(m_GL->VertexAttribIPointer(
-                    attr.location,
-                    attr.componentCount,
-                    ToGLVertexAttribType(attr.typeDesc.type),
-                    desc.layout.stride,
-                    (void*)(uintptr_t)attr.offset
+                    input.location,
+                    meshAttr->componentCount,
+                    ToGLVertexAttribType(meshAttr->typeDesc.type),
+                    meshLayout.stride,
+                    (void*)(uintptr_t)meshAttr->offset
                 ));
                 break;
             }
             case VertexAttributeClass::Double: {
-                if (!m_Capabilities.Has(GraphicsCapEnum::LongPointers) || m_GL->VertexAttribLPointer == nullptr) {
-                    return ExError("Invalid vertex attribute type: Host GPU doesn't support 64 bit pointers");
-                }
                 GL_CALL(m_GL->VertexAttribLPointer(
-                    attr.location,
-                    attr.componentCount,
-                    ToGLVertexAttribType(attr.typeDesc.type),
-                    desc.layout.stride,
-                    (void*)(uintptr_t)attr.offset
+                    input.location,
+                    meshAttr->componentCount,
+                    ToGLVertexAttribType(meshAttr->typeDesc.type),
+                    meshLayout.stride,
+                    (void*)(uintptr_t)meshAttr->offset
                 ));
                 break;
             }
         }
-        if (attr.divisor > 0)
-            GL_CALL(m_GL->VertexAttribDivisor(attr.location, attr.divisor));
+
+        if (meshAttr->divisor > 0) {
+            GL_CALL(m_GL->VertexAttribDivisor(
+                input.location,
+                meshAttr->divisor
+            ));
+        }
     }
+
     GL_CALL(m_GL->BindVertexArray(0));
 
     return vao;

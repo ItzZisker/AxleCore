@@ -11,7 +11,7 @@ std::size_t RPipeline_Hash_StencilOpState(const StencilOpState& s);
 std::size_t RPipeline_Hash_DepthStencil(const DepthStencilState& d);
 std::size_t RPipeline_Hash_Blend(const BlendState& b);
 std::size_t RPipeline_Hash_Raster(const RasterState& r);
-std::size_t RPipeline_Hash_VertexLayout(const VertexLayout& layout);
+std::size_t RPipeline_Hash_VertexLayout(const MeshVertexLayout& layout);
 std::size_t RPipeline_Hash_PipelineDesc(const RenderPipelineDesc& desc);
 
 class PipelineManager {

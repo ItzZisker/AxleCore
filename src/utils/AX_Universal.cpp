@@ -8,6 +8,17 @@
 namespace axle::utils
 {
 
+bool EqualsIgnoreCase(const char* a, const char* b) {
+    if (a == b) return true;
+    while (*a && *b) {
+        if (toupper(*a) != toupper(*b))
+            return false;
+        ++a;
+        ++b;
+    }
+    return *a == *b;
+}
+
 void Uni_NanoSleep(ChNanos nanos) {
     using namespace std::chrono;
     if (nanos <= ChNanos(0)) return;

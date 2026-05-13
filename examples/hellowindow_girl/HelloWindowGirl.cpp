@@ -128,7 +128,7 @@ void Girl_Init(SharedPtr<RenderData> rdrData) {
 
     auto shaderGirl = ExpectOrThrow(gbgfx->CreateProgram(shaderGirlDesc));
 
-    VertexLayout layout;
+    MeshVertexLayout layout;
     VertexTypeDesc typeDesc {
         VertexAttributeClass::Float, 
         VertexAttributeType::Float32
@@ -137,21 +137,21 @@ void Girl_Init(SharedPtr<RenderData> rdrData) {
     uint32_t currentOffset = 0;
     const uint32_t FLOAT_SIZE = sizeof(float); // 4 bytes
 
-    // 1. Position (float3, location 0)
-    std::vector<VertexAttribute> attributes;
-    attributes.push_back({0, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
+    // 1. Position (float3, POSITION0)
+    std::vector<MeshVertexAttribute> attributes;
+    attributes.push_back({VertexSemantic::Position, 0, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
     currentOffset += FLOAT_SIZE * 3;
-    // 2. Normal (float3, location 1)
-    attributes.push_back({1, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
+    // 2. Normal (float3, NORMAL0)
+    attributes.push_back({VertexSemantic::Normal, 0, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
     currentOffset += FLOAT_SIZE * 3;
-    // 3. TexCoord (float2, location 2)
-    attributes.push_back({2, 2, 0, currentOffset, FLOAT_SIZE * 2, typeDesc, false});
+    // 3. TexCoord (float2, TEXCOORD0)
+    attributes.push_back({VertexSemantic::TexCoord, 0, 2, 0, currentOffset, FLOAT_SIZE * 2, typeDesc, false});
     currentOffset += FLOAT_SIZE * 2;
-    // 4. Tangent (float3, location 3)
-    attributes.push_back({3, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
+    // 4. Tangent (float3, TANGENT0)
+    attributes.push_back({VertexSemantic::Tangent, 0, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
     currentOffset += FLOAT_SIZE * 3;
-    // 5. BiTangent (float3, location 4)
-    attributes.push_back({4, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
+    // 5. BiTangent (float3, BINORMAL0)
+    attributes.push_back({VertexSemantic::Bitangent, 0, 3, 0, currentOffset, FLOAT_SIZE * 3, typeDesc, false});
     currentOffset += FLOAT_SIZE * 3;
 
     layout.attributes = utils::CowSpan{std::move(attributes)};
@@ -160,7 +160,7 @@ void Girl_Init(SharedPtr<RenderData> rdrData) {
     RenderPipelineDesc psoDesc{};
     psoDesc.renderPass = rdrData->defPass;
     psoDesc.shader = shaderGirl;
-    psoDesc.layout = layout;
+    psoDesc.vertexLayout = layout;
     psoDesc.raster.cull = CullMode::None;
     psoDesc.blend.enabled = true;
     rdrData->girlPipeline = ExpectOrThrow(gbgfx->CreateRenderPipeline(psoDesc));

@@ -103,6 +103,7 @@ struct GLInternal : public utils::MagicInternal<T_Extern> {};
 
 struct GLProgram : public GLInternal<ShaderHandle> {
     GLuint id{0};
+    ShaderInputState vertexBindings;
 };
 
 struct GLBuffer : public GLInternal<BufferHandle> {
