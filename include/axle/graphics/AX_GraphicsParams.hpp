@@ -32,6 +32,21 @@ namespace axle::gfx {
 template<typename Tag>
 struct ExternalHandle : public utils::MagicHandleTagged<Tag> {};
 
+struct BufferIndirectParam {
+    uint32_t vertexCount;
+    uint32_t instanceCount;
+    uint32_t firstVertex;
+    uint32_t firstInstance;
+};
+
+struct BufferIndirectIndexedParam {
+    uint32_t indexCount;
+    uint32_t instanceCount;
+    uint32_t firstIndex;
+    int32_t vertexOffset;
+    uint32_t firstInstance;
+};
+
 enum class BufferUsage {
     Vertex,
     Index,

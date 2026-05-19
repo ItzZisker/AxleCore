@@ -17,7 +17,7 @@ enum class RLStage : uint8_t {
     Late,     // overlays, UI, debug
 };
 
-using RLFunc = std::function<void(core::ThreadContextGfx* thrCtx, float dT, void* userPtr)>;
+using RLFunc = std::function<void(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void* userPtr)>;
 using RLOrderKey = utils::MagicId;
 
 struct RLHandle : public utils::MagicHandle {};
@@ -44,7 +44,7 @@ struct RLRegistry {
     bool active{false};
 };
 
-const inline Predicate<RLIntern> SORT_BY_WEIGHT = [](const RLIntern& a, const RLIntern& b){
+const inline Predicate<RLIntern> RL_SORT_BY_WEIGHT = [](const RLIntern& a, const RLIntern& b){
     return a.sortKey > b.sortKey;
 };
 
@@ -68,7 +68,7 @@ public:
     utils::ExResult<RLHandle> CreateLayer(const RLDesc& desc);
     utils::ExError RemoveLayer(const RLHandle& handle);
 
-    void SortLayers(const Predicate<RLIntern>& pred = SORT_BY_WEIGHT);
+    void SortLayers(const Predicate<RLIntern>& pred = RL_SORT_BY_WEIGHT);
 
     const utils::ExResult<RLRegistry> GetCurrentRegistry();
 

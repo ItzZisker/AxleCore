@@ -27,6 +27,10 @@ using MagicId = uint32_t;
 struct MagicHandle {
 public:
     MagicId index{0}, generation{0};
+
+    bool IsSameHandles(const MagicHandle& other) {
+        return index == other.index && generation == other.generation;
+    }
 };
 
 template <typename Tag>

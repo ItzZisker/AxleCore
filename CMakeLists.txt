@@ -28,7 +28,7 @@ set(AUDIO_SRC
 	src/audio/AL/AX_ALAudioContext.cpp
 	src/audio/AL/AX_ALAudioListener.cpp
 	src/audio/AL/AX_ALAudioSource.cpp
-    
+
 	src/audio/AL/buffer/AX_ALAudioBuffer.cpp
 	src/audio/AL/buffer/AX_ALAudioBufferSource.cpp
 	src/audio/AL/buffer/AX_ALAudioBufferPlayer.cpp
@@ -50,6 +50,8 @@ set(GFX_SRC
     src/graphics/ctx/GL/AX_RenderContextGLWin32.cpp
     src/graphics/ctx/GL/AX_RenderContextGLX11.cpp
 
+    src/graphics/layer/AX_RenderItemBuilder.cpp
+    src/graphics/layer/AX_RenderProcedure.cpp
     src/graphics/layer/AX_RenderLayer.cpp
 
     src/graphics/cmd/AX_PipelineManager.cpp
@@ -61,6 +63,9 @@ set(GFX_SRC
     src/graphics/image/AX_ImageBRDFLUT.cpp
 	
     src/graphics/scene/AX_Camera.cpp
+    src/graphics/scene/AX_SWFrustumCulling.cpp
+    src/graphics/scene/AX_NodeInstance.cpp
+    src/graphics/scene/AX_ModelInstance.cpp
 
     src/graphics/text/AX_BitmapFont.cpp
 )

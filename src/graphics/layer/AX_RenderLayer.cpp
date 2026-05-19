@@ -40,7 +40,7 @@ void RenderLayer::Update(float dT) {
 
     if (!m_RLRegistry.active) return;
 
-    auto* thrPtr = m_RLRegistry.gfxThread.get();
+    auto thrPtr = m_RLRegistry.gfxThread;
     for (auto& orderId : m_RLPool.GetOrder()) {
         auto& raw = m_RLPool.GetRaw(orderId);
         if (raw.updateFunc) {
@@ -54,7 +54,7 @@ void RenderLayer::Draw(float dT) {
 
     if (!m_RLRegistry.active) return;
 
-    auto* thrPtr = m_RLRegistry.gfxThread.get();
+    auto thrPtr = m_RLRegistry.gfxThread;
     for (auto& orderId : m_RLPool.GetOrder()) {
         auto& raw = m_RLPool.GetRaw(orderId);
         if (raw.drawFunc) {

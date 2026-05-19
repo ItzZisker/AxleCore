@@ -62,8 +62,6 @@ GLGraphicsBackend::GLGraphicsBackend(IRenderContext* context) {
     m_GL->GetIntegerv(GL_SAMPLE_BUFFERS, &sampleBuffers);
     m_GL->GetIntegerv(GL_SAMPLES, &samples);
 
-    printf("Sample buffers = %d, samples = %d\n", sampleBuffers, samples);
-
     fb.width = m_SurfaceInfo.width;
     fb.height = m_SurfaceInfo.height;
 
@@ -79,6 +77,8 @@ GLGraphicsBackend::GLGraphicsBackend(IRenderContext* context) {
     m_Swapchain.height = fb.height;
     m_Swapchain.format = TextureFormat::RGBA8_UINT;
     m_Swapchain.backbuffer = m_DefaultBackbuffer;
+
+    m_Context->SetVSync(m_SurfaceInfo.vsync);
 }
 
 GLGraphicsBackend::~GLGraphicsBackend() {
