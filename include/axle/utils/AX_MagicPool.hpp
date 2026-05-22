@@ -33,6 +33,8 @@ public:
     }
 };
 
+constexpr MagicHandle INVALID_HANDLE = {UINT32_MAX, 0};
+
 template <typename Tag>
 struct MagicHandleTagged : public MagicHandle {};
 
@@ -71,6 +73,8 @@ public:
     MagicPool(bool ordered = false) : m_Ordered(ordered) {}
 
     bool IsValid(MagicId index, MagicId generation) const {
+        if (index == UINT32_MAX)
+            return false;
         if (index >= m_Handles.size())
             return false;
 

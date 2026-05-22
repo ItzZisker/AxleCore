@@ -701,7 +701,7 @@ enum class BindingType {
 struct Binding {
     uint32_t slot{0};
     BindingType type{};
-    ResourceHandle resource;
+    ResourceHandle resource; // BufferHandle, TextureHandle, etc.
 
     uint64_t offset{0}; // for buffer bindings
     uint64_t range{0};  // 0 = full size
