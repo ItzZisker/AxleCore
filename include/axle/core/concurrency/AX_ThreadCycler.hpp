@@ -93,6 +93,29 @@ protected:
     void DoCycle();
 };
 
+template<typename F>
+inline auto InstaFutureOrQueue(ThreadCycler& thread, F&& func) {
+    if (thread.ValidateThread()) {
+        using Ret = decltype(func());
+
+        auto task = std::make_shared<std::packaged_task<Ret()>>(std::forward<F>(func));
+        auto future = task->get_future();
+        (*task)();
+        return future;
+    } else {
+        return thread.EnqueueFuture(func);
+    }
+}
+
+template<typename F>
+inline void InstaTaskOrQueue(ThreadCycler& thread, const F& func) {
+    if (thread.ValidateThread()) {
+        func();
+    } else {
+        thread.EnqueueTask(func);
+    }
+}
+
 template <typename T>
 class ThreadContext : public ThreadCycler {
 protected:

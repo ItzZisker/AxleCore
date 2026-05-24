@@ -52,6 +52,7 @@ inline const char* GLErrorToString(GLenum err) {
             throw std::runtime_error("GL Error");           \
         }                                                   \
     } while (0)
+
 #else
 #define GL_CALL(x) x
 #endif
@@ -131,8 +132,16 @@ struct VAOKeyLookup {
     }
 };
 
+struct BindingSlotCache {
+    uint32_t resourceSetVersion;
+    std::vector<uint32_t> blockIndices;
+    std::vector<uint32_t> textureUnits;
+    std::vector<uint32_t> textureLocations;
+};
+
 struct GLRenderPipeline : public GLInternal<RenderPipelineHandle> {
     RenderPipelineDesc desc;
+    std::unordered_map<ResourceSetHandle, BindingSlotCache> bindingSlotCache{};
     std::unordered_map<VAOKey, GLuint, VAOKeyLookup> vaoCache{};
 };
 

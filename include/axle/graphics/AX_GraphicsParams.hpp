@@ -698,13 +698,25 @@ enum class BindingType {
     //Sampler
 };
 
+enum BindingStage {
+    BindingStage_Vertex   = 1 << 0,
+    BindingStage_Fragment = 1 << 1,
+    BindingStage_Compute  = 1 << 2,
+};
+
 struct Binding {
-    uint32_t slot{0};
+    std::string bindName; // required; backend is responsible either to use the implicit (Get-uniform-index-by-name) method or binding directly to that specific index
+    uint32_t slot{0}; // required; backend is responsible to either use the direct bind index method or legacy get-uniform-index-by-name method
+    // thus bindName and slot must be explicitly defined
+
     BindingType type{};
     ResourceHandle resource; // BufferHandle, TextureHandle, etc.
 
     uint64_t offset{0}; // for buffer bindings
     uint64_t range{0};  // 0 = full size
+
+    uint32_t stageMask{BindingStage_Vertex | BindingStage_Fragment}; // required; backend decides at which stage, target should be bound
+    uint32_t arraySize{1}; // set to 'more' if you are binding against an array
 
     ResourceHandle sampler; // optional (for SampledTexture)
 };
@@ -730,6 +742,7 @@ enum class GraphicsCapEnum {
     Tessellation,
     MultiDrawIndirect,
     SparseTextures,
+    ImageLoadStore,
     RayTracing,
     HalfFloatColorBuffer,
     FullFloatColorBuffer,
@@ -738,8 +751,16 @@ enum class GraphicsCapEnum {
     __Last__
 };
 
+enum class ResourceBindingInternal {
+    BindImplicitlyByNames,
+    BindExplicitlyByIndexElement,
+    BindExplicitlyByIndexAndDescSetBinding,
+    BindExplicitlyByIndexAndDXSemantics
+};
+
 struct GraphicsCaps {
     std::array<bool, (int)GraphicsCapEnum::__Last__ + 1> caps{};
+    ResourceBindingInternal resourceBindingInternal{ResourceBindingInternal::BindImplicitlyByNames};
 
     int32_t maxVertexAttribs{0};
     int32_t maxColorAttachments{0};

@@ -115,6 +115,14 @@ ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
         return extensions.contains(ext);
     };
 
+    if ((isGL && (major > 4 || (major == 4 && minor == 2))) ||
+        (isES && (major > 3 || (major == 3 && minor == 1))) ||
+        HasExt("GL_ARB_shading_language_420pack")) {
+        result.resourceBindingInternal = ResourceBindingInternal::BindExplicitlyByIndexElement;
+    } else {
+        result.resourceBindingInternal = ResourceBindingInternal::BindImplicitlyByNames;
+    }
+
     result.caps[(int)GraphicsCapEnum::ComputeShaders] =
         (isGL  && (major > 4 || (major == 4 && minor >= 3))) ||
         (isES  && (major > 3 || (major == 3 && minor >= 1))) ||
@@ -142,6 +150,10 @@ ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
     result.caps[(int)GraphicsCapEnum::MultiDrawIndirect] =
         (isGL && (major > 4 || (major == 4 && minor >= 3))) ||
         HasExt("GL_ARB_multi_draw_indirect");
+
+    result.caps[(int)GraphicsCapEnum::ImageLoadStore] =
+        (isGL && (major > 4 || (major == 4 && minor >= 2))) ||
+        HasExt("ARB_shader_image_load_store");
 
     result.caps[(int)GraphicsCapEnum::SparseTextures] =
         (isGL && (major > 4 || (major == 4 && minor >= 4))) ||
@@ -1674,9 +1686,66 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             if (!m_ResourceSets.IsValid(cmd.handle))
                 return {"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Invalid ResourceSet handle"};
 
+            auto& pipeline = *m_RenderPipelines.Get(m_CurrentRenderPipeline.handle);
             auto& res = *m_ResourceSets.Get(cmd.handle);
 
-            for (auto& b : res.bindings) {
+            bool implicitBinds = m_Capabilities.resourceBindingInternal ==
+                    ResourceBindingInternal::BindImplicitlyByNames;
+
+            auto& shaderHandle = pipeline.desc.shader;
+            if (!m_Programs.IsValid(shaderHandle)) {
+                return {"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Invalid Pipeline Shader handle"};
+            }
+            auto programId = m_Programs.Get(shaderHandle)->id;
+        
+            if (implicitBinds) {
+                auto& bindings = res.bindings;
+                auto& slotCache = pipeline.bindingSlotCache;
+
+                auto lastCache = slotCache.find(cmd.handle);
+                auto found = lastCache != slotCache.end();
+
+                if (!found || (found && lastCache->second.resourceSetVersion != res.version)) {
+                    if (!found) slotCache[cmd.handle] = {};
+                    auto& cache = slotCache[cmd.handle];
+                    cache.resourceSetVersion = res.version; // Update version
+
+                    cache.blockIndices.clear();
+                    cache.blockIndices.resize(bindings.size());
+
+                    cache.textureUnits.clear();
+                    cache.textureUnits.resize(bindings.size());
+
+                    cache.textureLocations.clear();
+                    cache.textureLocations.resize(bindings.size());
+
+                    uint32_t texUnit{0};
+
+                    for (uint32_t i{0}; i < bindings.size(); i++) { // Update uniform block indices
+                        auto& binding = bindings[i];
+                        if (binding.type == BindingType::SampledTexture || binding.type == BindingType::StorageTexture) {
+                            cache.textureUnits[i] = texUnit++;
+                            cache.textureLocations[i] = m_GL->GetUniformLocation(programId, binding.bindName.c_str());
+                        } else {
+                            cache.blockIndices[i] = m_GL->GetUniformBlockIndex(programId, binding.bindName.c_str());
+                        }
+                    }
+                }
+            }
+
+            for (uint32_t ib{0}; ib < res.bindings.size(); ib++) {
+                auto& b = res.bindings[ib];
+                uint32_t blockIndex, texUnit, texLoc;
+
+                if (implicitBinds) {
+                    if (b.type == BindingType::SampledTexture || b.type == BindingType::StorageTexture) {
+                        texUnit = pipeline.bindingSlotCache[cmd.handle].textureUnits[ib];
+                        texLoc = pipeline.bindingSlotCache[cmd.handle].textureLocations[ib];
+                    } else {
+                        blockIndex = pipeline.bindingSlotCache[cmd.handle].blockIndices[ib];
+                    }
+                }
+
                 switch (b.type) {
                     case BindingType::UniformBuffer: {
                         if (!m_Buffers.IsValid(b.resource.index, b.resource.generation))
@@ -1689,6 +1758,10 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                             b.offset,
                             b.range
                         ));
+
+                        if (implicitBinds) {
+                            GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
+                        }
                         break;
                     }
                     case BindingType::StorageBuffer: {
@@ -1702,22 +1775,36 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                             b.offset,
                             b.range
                         ));
+
+                        if (implicitBinds) {
+                            GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
+                        }
                         break;
                     }
                     case BindingType::SampledTexture: {
                         if (!m_Textures.IsValid(b.resource.index, b.resource.generation))
                             return {"GLCommand::Execute \"GLCommandType::BindResourceSet::SampledTexture\" Failed: Invalid Texture handle"};
                         
-                        GL_CALL(m_GL->ActiveTexture(GL_TEXTURE0 + b.slot));
+                        auto texSlot = implicitBinds ? texUnit : b.slot;
+                        GL_CALL(m_GL->ActiveTexture(GL_TEXTURE0 + texSlot));
                         GL_CALL(m_GL->BindTexture(GL_TEXTURE_2D, m_Textures.Get(b.resource.AsTexture())->id));
+
+                        if (implicitBinds) {
+                            GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
+                        }
                         break;
                     }
                     case BindingType::StorageTexture: {
                         if (!m_Textures.IsValid(b.resource.index, b.resource.generation))
                             return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Invalid Texture handle"};
 
+                        if (!m_Capabilities.Has(GraphicsCapEnum::ImageLoadStore)) {
+                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Host: Image Load/Store Unsupported"};
+                        }
+
+                        auto texSlot = implicitBinds ? texUnit : b.slot;
                         GL_CALL(m_GL->BindImageTexture(
-                            b.slot,
+                            texSlot,
                             m_Textures.Get(b.resource.AsTexture())->id,
                             0,
                             GL_FALSE,
@@ -1725,6 +1812,10 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                             GL_READ_WRITE,
                             ToGLTextureFormat(m_Textures.Get(b.resource.AsTexture())->desc.format)
                         ));
+
+                        if (implicitBinds) {
+                            GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
+                        }
                         break;
                     }
                 }
@@ -1910,7 +2001,7 @@ utils::ExError GLGraphicsBackend::Present(uint32_t imageIndex) {
 
 utils::ExResult<ResourceSetHandle> GLGraphicsBackend::CreateResourceSet(const ResourceSetDesc& desc) {
     auto& handle = *m_ResourceSets.Reserve();
-
+    
     handle.bindings.resize(desc.bindings.size());
     for (size_t i{0}; i < desc.bindings.size(); i++) {
         handle.bindings[i] = desc.bindings[i];

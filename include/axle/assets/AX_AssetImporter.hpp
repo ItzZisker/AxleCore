@@ -213,8 +213,10 @@ struct SubMesh {
 };
 
 struct AssetMesh {
+    VertexFormat vertexFormat;
+
     uint32_t vertexBufferIdx;
-    uint32_t indexBufferIdx;
+    uint32_t indexBufferIdx; // Equals to UINT32_MAX if Mesh is not indexed
     uint32_t materialIdx;
 
     utils::CowSpan<SubMesh> parts;   // submeshes referencing materials

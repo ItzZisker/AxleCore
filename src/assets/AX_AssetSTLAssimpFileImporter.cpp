@@ -131,12 +131,14 @@ void AssetSTLAssimpFileImporter::ProcessMesh(
                 vertexStream.Write(zeros3, sizeof(float) * 3);
             }
 
-            if (mesh->mBitangents) {
-                vertexStream.Write(&mesh->mBitangents[i], sizeof(float) * 3);
-            } else {
-                static const float zeros3[3]{0.0f, 0.0f, 0.0f};
-                vertexStream.Write(zeros3, sizeof(float) * 3);
-            }
+            // In modern approach we calculate bitangents based on TBN matrix at fragment shading stage, thus bitangents is useless and space-consuming
+
+            // if (mesh->mBitangents) {
+            //     vertexStream.Write(&mesh->mBitangents[i], sizeof(float) * 3);
+            // } else {
+            //     static const float zeros3[3]{0.0f, 0.0f, 0.0f};
+            //     vertexStream.Write(zeros3, sizeof(float) * 3);
+            // }
         }
     }
 
@@ -168,7 +170,8 @@ void AssetSTLAssimpFileImporter::ProcessMesh(
     assetMesh.vertexBufferIdx = vertBuffIdx;
     assetMesh.indexBufferIdx = idxBuffIdx;
     assetMesh.materialIdx = mesh->mMaterialIndex;
-    // TODO: Research: about how to get mesh parts
+    assetMesh.vertexFormat = fmt;
+    // TODO: Research: about how to get mesh parts, we need it for multi-stage rendering and world geometry
 
     result.meshes[meshIdx++] = std::move(assetMesh);
 }
