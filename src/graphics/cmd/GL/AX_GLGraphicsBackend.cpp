@@ -1748,20 +1748,30 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
                 switch (b.type) {
                     case BindingType::UniformBuffer: {
-                        if (!m_Buffers.IsValid(b.resource.index, b.resource.generation))
-                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle"};
-
-                        GL_CALL(m_GL->BindBufferRange(
-                            GL_UNIFORM_BUFFER,
-                            b.slot,
-                            m_Buffers.Get(b.resource.AsBuffer())->id,
-                            b.offset,
-                            b.range
-                        ));
-
-                        if (implicitBinds) {
-                            GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
+                        for (auto& resource : b.resources) {
+                            if (!m_Buffers.IsValid(resource.index, resource.generation))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle"};
+                            if (resource.kind == ResourceKind::Buffer) {
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle, ResourceKind != Buffer"};
+                            }
                         }
+
+                        for (auto& resource : b.resources) {
+                            
+
+                            GL_CALL(m_GL->BindBufferRange(
+                                GL_UNIFORM_BUFFER,
+                                b.slot,
+                                m_Buffers.Get(b.resource.AsBuffer())->id,
+                                b.offset,
+                                b.range
+                            ));
+
+                            if (implicitBinds) {
+                                GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
+                            }
+                        }
+                        
                         break;
                     }
                     case BindingType::StorageBuffer: {

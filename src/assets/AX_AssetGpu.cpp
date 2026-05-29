@@ -68,15 +68,15 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
         indicesDesc.usage = gfx::BufferUsage::Index;
         indicesDesc.cpuVisible = false;
 
-        for (uint32_t i{0}; i < desc.immutable_meshes.size(); i++) {
-            auto& immutable_mesh_ref = desc.immutable_meshes[i];
+        for (uint32_t i{0}; i < desc.immutableMeshes.size(); i++) {
+            auto& immutableMeshRef = desc.immutableMeshes[i];
 
             gfx::BufferHandle vertexBuffer{UINT32_MAX, UINT32_MAX};
             gfx::BufferHandle indexBuffer{UINT32_MAX, UINT32_MAX};
             
             gfx::MeshVertexLayout layout;
 
-            auto& vertices = desc.immutable_import.buffers[immutable_mesh_ref.vertexBufferIdx];
+            auto& vertices = desc.immutableImport.buffers[immutableMeshRef.vertexBufferIdx];
             verticesDesc.size = vertices.raw.size();
 
             auto vres = gbgfx->CreateBuffer(verticesDesc);
@@ -91,10 +91,10 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
                 m_BufferDescs[vertexBuffer] = verticesDesc;
             }
 
-            bool indexed = immutable_mesh_ref.indexBufferIdx != UINT32_MAX;
+            bool indexed = immutableMeshRef.indexBufferIdx != UINT32_MAX;
 
             if (indexed) {
-                auto& indices = desc.immutable_import.buffers[immutable_mesh_ref.indexBufferIdx];
+                auto& indices = desc.immutableImport.buffers[immutableMeshRef.indexBufferIdx];
                 indicesDesc.size = indices.raw.size();
 
                 auto ires = gbgfx->CreateBuffer(indicesDesc);
@@ -110,7 +110,7 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
                 }
             }
 
-            auto& vDesc = GetVertexFormatDesc(immutable_mesh_ref.vertexFormat);
+            auto& vDesc = GetVertexFormatDesc(immutableMeshRef.vertexFormat);
 
             gfx::VertexTypeDesc typeDesc {
                 gfx::VertexAttributeClass::Float, 
@@ -175,18 +175,48 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
     return core::InstaFutureOrQueue(*m_GfxThread.get(), lambdaUploader);
 }
 
-Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterialsConcat(AssetMaterialsConcatUploadDesc& desc) {
-    auto lambdaUploader = [&, desc]() -> ExResult<AssetGpuMaterials> {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        // TODO
-    };
-    return core::InstaFutureOrQueue(*m_GfxThread.get(), lambdaUploader);
-}
-
 Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUploadDesc& desc) {
     auto lambdaUploader = [&, desc]() -> ExResult<AssetGpuMaterials> {
         std::lock_guard<std::mutex> lock(m_Mutex);
-        // TODO
+        auto gbgfx = m_GfxThread->GetContext();
+
+        std::vector<AssetGpuMaterial> materials;
+        std::vector<ExError> errors;
+        
+        for (uint32_t i{0}; i < desc.immutableMaterials.size(); i++) {
+            auto& argMat = desc.immutableMaterials[i];
+            auto& mat = argMat.immutableMaterial;
+
+            gfx::ResourceSetDesc rDesc;
+            rDesc.setIndex = argMat.resourceSetIndex;
+
+            if (!mat.imported) {
+                errors.push_back({"Material at index=" + std::to_string(i) + " is not yet imported!"});
+                continue;
+            }
+
+            for (uint32_t i{0}; i < mat.texture_indices.size(); i++) {
+                auto texType = (MaterialTextureType) i;
+                auto& texIndices = mat.texture_indices[i];
+
+                
+            }
+        }
+        
+        if (!errors.empty()) {
+            for (auto& material : materials) {
+                m_ResourcesDescs.erase(material.resourcesHandle);
+                gbgfx->DestroyResourceSet(material.resourcesHandle);
+            }
+            std::stringstream error_str_stream;
+            for (auto& error : errors) {
+                error_str_stream << "ErrCode=" << error.GetCode() << ", "
+                    << error.GetMessage() << "\n";
+            }
+            return ExError{error_str_stream.str()};
+        }
+
+        return AssetGpuMaterials{{std::move(materials)}};
     };
     return core::InstaFutureOrQueue(*m_GfxThread.get(), lambdaUploader);
 }

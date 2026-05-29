@@ -297,8 +297,7 @@ utils::ExError AssetSTLAssimpFileImporter::ProcessMaterial(
             asset_tex.id = asset_tex_id;
             asset_tex.path = std::string(path.C_Str());
 
-            mat.textures_count[(uint32_t)axType]++;
-            mat.textures_idx[(uint32_t)axType].push_back(asset_tex_id);
+            mat.texture_indices[axType].push_back(asset_tex_id);
 
             if (assimp_tex) { // Texture is embedded
                 auto width = assimp_tex->mWidth;
@@ -327,15 +326,15 @@ utils::ExError AssetSTLAssimpFileImporter::ProcessMaterial(
         return utils::ExError::NoError();
     };
 
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::Albedo, aiTextureType_DIFFUSE));
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::Specular, aiTextureType_SPECULAR));
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::NormalMap, aiTextureType_NORMALS));
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::HeightMap, aiTextureType_HEIGHT));
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::Roughness, aiTextureType_DIFFUSE_ROUGHNESS));
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::Metallic, aiTextureType_METALNESS));
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::Emissive, aiTextureType_EMISSIVE));
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::AmbientOcclusion, aiTextureType_AMBIENT_OCCLUSION));
-    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType::Displacement, aiTextureType_DISPLACEMENT));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_Albedo, aiTextureType_DIFFUSE));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_Specular, aiTextureType_SPECULAR));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_NormalMap, aiTextureType_NORMALS));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_HeightMap, aiTextureType_HEIGHT));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_Roughness, aiTextureType_DIFFUSE_ROUGHNESS));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_Metallic, aiTextureType_METALNESS));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_Emissive, aiTextureType_EMISSIVE));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_AmbientOcclusion, aiTextureType_AMBIENT_OCCLUSION));
+    AX_PROPAGATE_ERROR(MapTexture(MaterialTextureType_Displacement, aiTextureType_DISPLACEMENT));
 
     mat.imported = true;
     result.materials[matIdx] = mat;

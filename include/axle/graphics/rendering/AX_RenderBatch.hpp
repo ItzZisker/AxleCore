@@ -1,7 +1,7 @@
 #pragma once
 
 #include "axle/graphics/AX_GraphicsParams.hpp"
-#include "axle/graphics/layer/AX_RenderLayer.hpp"
+#include "axle/graphics/rendering/AX_RenderLayer.hpp"
 
 #include "axle/utils/AX_Types.hpp"
 #include "axle/utils/AX_Expected.hpp"
@@ -14,13 +14,13 @@
 namespace axle::gfx
 {
 
-enum class RenderItemType : uint8_t {
+enum class MeshMode : uint8_t {
     Vertices,
     Indexed
 };
 
-struct RenderItem {
-    RenderItemType type;
+struct DrawItem {
+    MeshMode meshMode;
 
     RenderPipelineHandle pipeline;
 
@@ -35,13 +35,20 @@ struct RenderItem {
     uint32_t sortKey;
 };
 
-const inline Predicate<RenderItem> RPROC_SORT_BY_WEIGHT = [](const RenderItem& a, const RenderItem& b) {
+const inline Predicate<DrawItem> RPROC_SORT_BY_WEIGHT = [](const DrawItem& a, const DrawItem& b) {
     return a.sortKey > b.sortKey;
 };
 
-class RenderProcedure {
+using BatchErrorPredicate = std::function<bool(const utils::ExError&)>;
+
+struct RenderBatchDesc {
+    SharedPtr<ICommandList> commandList;
+    BatchErrorPredicate frameErrorHandler;
+};
+
+class RenderBatch {
 private:
-    std::deque<RenderItem> m_Items{};
+    std::deque<DrawItem> m_Items{};
 
     std::unordered_map<RLHandle, SharedPtr<RenderLayer>> m_Registries{};
     std::unordered_map<SharedPtr<RenderLayer>, std::vector<RLHandle>> m_RegistriesRev{};
@@ -50,23 +57,25 @@ private:
 
     std::mutex m_Mutex{};
 public:
-    RenderProcedure(SharedPtr<ICommandList> renderCmds);
-    ~RenderProcedure();
+    RenderBatch(const RenderBatchDesc& desc);
+    ~RenderBatch();
 
     void ResetItems();
 
-    void Submit(const RenderItem& item);
-    void Submit(utils::Span<RenderItem> itemsView);
+    void Submit(const DrawItem& item);
+    void Submit(utils::Span<DrawItem> itemsView);
 
-    void ResetAndSubmit(const RenderItem& item);
-    void ResetAndSubmit(utils::Span<RenderItem> itemsView);
+    void ResetAndSubmit(const DrawItem& item);
+    void ResetAndSubmit(utils::Span<DrawItem> itemsView);
 
     utils::ExResult<RLHandle> Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey = 0);
     utils::ExError UnRegister(const RLHandle& handle);
 
-    void Sort(const Predicate<RenderItem>& pred = RPROC_SORT_BY_WEIGHT);
+    void Sort(const Predicate<DrawItem>& pred = RPROC_SORT_BY_WEIGHT);
 protected:
     friend RenderLayer;
+
+    BatchErrorPredicate m_ErrorHandler{};
 
     static void Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void* userPtr);
 };

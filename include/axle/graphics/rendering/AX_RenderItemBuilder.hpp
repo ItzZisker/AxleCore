@@ -1,14 +1,14 @@
 #pragma once
 
 #include "axle/graphics/cmd/AX_PipelineManager.hpp"
-#include "axle/graphics/layer/AX_RenderProcedure.hpp"
+#include "axle/graphics/rendering/AX_RenderBatch.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
 
 namespace axle::gfx
 {
 
-enum class RenderProcedureType {
+enum class RenderBatchType {
     DirectDraw,
     DirectInstancedDraw,
     IndirectDraw
@@ -20,7 +20,7 @@ enum class TransformInput {
 };
 
 struct RenderItemBuilderDesc {
-    RenderProcedureType procedureType{RenderProcedureType::DirectDraw};
+    RenderBatchType batchType{RenderBatchType::DirectDraw};
     TransformInput transformInput{TransformInput::VertexInput};
     bool separateSamplersFromTextures{false}; // Requires FeatureSet on Host device
 };
@@ -49,8 +49,8 @@ public:
     // - Build: To Build new handles for new RenderItems for our RenderProcedure
     // - BuildAndDiscard: Discard previous handles and modify/create-new-ones for our RenderProcedure
 
-    utils::CowSpan<RenderItem> BuildAndDiscard();
-    utils::CowSpan<RenderItem> Build();
+    utils::CowSpan<DrawItem> BuildAndDiscard();
+    utils::CowSpan<DrawItem> Build();
 };
 
 }

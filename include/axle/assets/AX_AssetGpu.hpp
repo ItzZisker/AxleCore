@@ -38,17 +38,18 @@ struct AssetGpuMaterials {
 };
 
 struct AssetMeshesUploadDesc {
-    const AssetImportResult& immutable_import;
-    const utils::CowSpan<AssetMesh>& immutable_meshes;
+    const AssetImportResult& immutableImport;
+    const utils::CowSpan<AssetMesh>& immutableMeshes;
 };
 
-struct AssetMaterialsConcatUploadDesc {
-    gfx::ResourceSetHandle& previousBindings;
-    const utils::CowSpan<AssetMaterial>& immutable_materials;
+struct AssetMaterialDesc {
+    const AssetMaterial& immutableMaterial;
+    uint32_t resourceSetIndex{0};
 };
 
 struct AssetMaterialsUploadDesc {
-    const utils::CowSpan<AssetMaterial>& immutable_materials;
+    const AssetImportResult& immutableImport;
+    const utils::CowSpan<AssetMaterialDesc>& immutableMaterials;
 };
 
 class AssetGpu {
@@ -65,7 +66,6 @@ public:
     ~AssetGpu();
 
     Future<utils::ExResult<AssetGpuMeshes>> UploadMeshes(AssetMeshesUploadDesc& desc);
-    Future<utils::ExResult<AssetGpuMaterials>> UploadMaterialsConcat(AssetMaterialsConcatUploadDesc& desc);
     Future<utils::ExResult<AssetGpuMaterials>> UploadMaterials(AssetMaterialsUploadDesc& desc);
     
     utils::ExResult<gfx::ResourceSetDesc> DescribeBindings(const gfx::ResourceSetHandle& handle);

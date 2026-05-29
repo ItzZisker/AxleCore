@@ -1,12 +1,17 @@
-#include "axle/graphics/layer/AX_RenderProcedure.hpp"
+#include "axle/graphics/rendering/AX_RenderBatch.hpp"
+
+#define ACT_EXERR_BATCH_PRED(statement, errorHandler)   \
+auto __err = (statement);                               \
+if (__err.IsValid())                                    \
+    if (errorHandler(__err)) return;                    \
 
 namespace axle::gfx
 {
 
-RenderProcedure::RenderProcedure(SharedPtr<ICommandList> cmdList)
-    : m_RenderCmds(cmdList) {}
+RenderBatch::RenderBatch(const RenderBatchDesc& desc)
+    : m_ErrorHandler(desc.frameErrorHandler), m_RenderCmds(desc.commandList) {}
 
-RenderProcedure::~RenderProcedure() {
+RenderBatch::~RenderBatch() {
     std::lock_guard<std::mutex> lock(m_Mutex);
     for (auto& [rl, rlh_s] : m_RegistriesRev) {
         for (auto& rlh : rlh_s) {
@@ -86,65 +91,71 @@ RenderProcedure::~RenderProcedure() {
                 - Issue Indirect Instanced Draw/DrawIndexed Calls (whether RenderItemType is Indexed/Vertices)
                 - Submit Commands and let GPU draw based off IBO Draw Parameters.
 */
-void RenderProcedure::Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void* userPtr) {
+void RenderBatch::Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void* userPtr) {
     if (!thrCtx->ValidateThread()) return;
 
-    auto& rp = *((RenderProcedure*)userPtr);
+    auto& rp = *((RenderBatch*)userPtr);
     std::lock_guard<std::mutex> lock(rp.m_Mutex);
 
     auto gbgfx = thrCtx->GetContext();
 
     RenderPipelineHandle currentPipeline{UINT32_MAX, UINT32_MAX};
+    ResourceSetHandle currentResources{UINT32_MAX, UINT32_MAX};
+
+    rp.m_RenderCmds->Begin();
 
     for (auto& item : rp.m_Items) {
-        if (currentPipeline.IsSameHandles(item.pipeline)) {
-            rp.m_RenderCmds->BindRenderPipeline({item.pipeline});
+        if (!currentPipeline.IsSameHandles(item.pipeline)) {
+            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindRenderPipeline({item.pipeline}), rp.m_ErrorHandler);
             currentPipeline = item.pipeline;
+            currentResources = {UINT32_MAX, UINT32_MAX};
         }
 
         rp.m_RenderCmds->BindVertexBuffer({item.vertices});
-        if (item.type == RenderItemType::Indexed) {
-            rp.m_RenderCmds->BindIndexBuffer({item.vertices});
+        if (item.meshMode == MeshMode::Indexed) {
+            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindIndexBuffer({item.vertices}), rp.m_ErrorHandler);
         }
 
-        for (auto& res : item.resourcesPerInstance) {
-            rp.m_RenderCmds->BindResourceSet({res});
+        if (!currentResources.IsSameHandles(item.resources)) {
+            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindResourceSet({item.resources}), rp.m_ErrorHandler);
+            currentResources = item.resources;
+        }
 
-            if (item.type == RenderItemType::Indexed) {
-                rp.m_RenderCmds->DrawIndexed({item.indexCount, item.firstIndex});
-            } else {
-                rp.m_RenderCmds->Draw({item.vertexCount, item.indexCount});
-            }
+        if (item.meshMode == MeshMode::Indexed) {
+            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->DrawIndexed({item.indexCount, item.firstIndex}), rp.m_ErrorHandler);
+        } else {
+            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->Draw({item.vertexCount, item.indexCount}), rp.m_ErrorHandler);
         }
     }
-    rp.m_RenderCmds->End();
-    rp.m_RenderCmds->Submit(thrCtx);
+
+    ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->End(), rp.m_ErrorHandler);
+    ACT_EXERR_BATCH_PRED(gbgfx->Execute(*rp.m_RenderCmds), rp.m_ErrorHandler);
 }
 
-void RenderProcedure::ResetItems() {
+void RenderBatch::ResetItems() {
     std::lock_guard<std::mutex> lock(m_Mutex);
     m_Items.clear();
 }
 
-void RenderProcedure::Submit(const RenderItem& item) {
+void RenderBatch::Submit(const DrawItem& item) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     m_Items.push_back(item);
 }
 
-void RenderProcedure::Submit(utils::Span<RenderItem> itemsView) {
+void RenderBatch::Submit(utils::Span<DrawItem> itemsView) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     for (auto& item : itemsView) {
         m_Items.push_back(item);
     }
 }
 
-void RenderProcedure::ResetAndSubmit(const RenderItem& item) {
+void RenderBatch::ResetAndSubmit(const DrawItem& item) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     m_Items.clear();
     m_Items.push_back(item);
 }
 
-void RenderProcedure::ResetAndSubmit(utils::Span<RenderItem> itemsView) {
+void RenderBatch::ResetAndSubmit(utils::Span<DrawItem> itemsView) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     m_Items.clear();
     for (auto& item : itemsView) {
@@ -152,12 +163,12 @@ void RenderProcedure::ResetAndSubmit(utils::Span<RenderItem> itemsView) {
     }
 }
 
-utils::ExResult<RLHandle> RenderProcedure::Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey) {
+utils::ExResult<RLHandle> RenderBatch::Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     RLDesc desc;
     desc.stage = stage;
     desc.sortKey = sortKey;
-    desc.drawFunc = RenderProcedure::Draw;
+    desc.drawFunc = RenderBatch::Draw;
     desc.updateFunc = nullptr;
     AX_DECL_OR_PROPAGATE(rlh, rl->CreateLayer(desc));
 
@@ -170,7 +181,7 @@ utils::ExResult<RLHandle> RenderProcedure::Register(SharedPtr<RenderLayer> rl, c
     return rlh;
 }
 
-utils::ExError RenderProcedure::UnRegister(const RLHandle& rlh) {
+utils::ExError RenderBatch::UnRegister(const RLHandle& rlh) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     if (m_Registries.find(rlh) == m_Registries.end()) {
         return {"RenderLayer handle is not registered"};
@@ -183,7 +194,7 @@ utils::ExError RenderProcedure::UnRegister(const RLHandle& rlh) {
     m_Registries.erase(rlh);
 }
 
-void RenderProcedure::Sort(const Predicate<RenderItem>& pred = RPROC_SORT_BY_WEIGHT) {
+void RenderBatch::Sort(const Predicate<DrawItem>& pred = RPROC_SORT_BY_WEIGHT) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     std::sort(m_Items.begin(), m_Items.end(), pred);
 }

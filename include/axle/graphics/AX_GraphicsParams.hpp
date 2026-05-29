@@ -710,13 +710,15 @@ struct Binding {
     // thus bindName and slot must be explicitly defined
 
     BindingType type{};
-    ResourceHandle resource; // BufferHandle, TextureHandle, etc.
+    utils::CowSpan<ResourceHandle> resources; // BufferHandle, TextureHandle, etc.
+    // the length of resources will be arraySize of the elements you bind to
+    // so, you should take care that arraySize of 1 means singular element
+    // thus more, means an array of elements with size of resources.length in the shader
 
     uint64_t offset{0}; // for buffer bindings
     uint64_t range{0};  // 0 = full size
 
     uint32_t stageMask{BindingStage_Vertex | BindingStage_Fragment}; // required; backend decides at which stage, target should be bound
-    uint32_t arraySize{1}; // set to 'more' if you are binding against an array
 
     ResourceHandle sampler; // optional (for SampledTexture)
 };

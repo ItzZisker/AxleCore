@@ -50,9 +50,9 @@ set(GFX_SRC
     src/graphics/ctx/GL/AX_RenderContextGLWin32.cpp
     src/graphics/ctx/GL/AX_RenderContextGLX11.cpp
 
-    src/graphics/layer/AX_RenderItemBuilder.cpp
-    src/graphics/layer/AX_RenderProcedure.cpp
-    src/graphics/layer/AX_RenderLayer.cpp
+    src/graphics/rendering/AX_RenderItemBuilder.cpp
+    src/graphics/rendering/AX_RenderBatch.cpp
+    src/graphics/rendering/AX_RenderLayer.cpp
 
     src/graphics/cmd/AX_PipelineManager.cpp
     src/graphics/cmd/AX_ICommandList.cpp

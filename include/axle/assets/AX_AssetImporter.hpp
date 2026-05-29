@@ -182,17 +182,17 @@ struct MaterialProps {
     PBRProps pbr{};
 };
 
-enum class MaterialTextureType : int32_t {
-    Albedo,
-    Specular,
-    NormalMap,
-    HeightMap,
-    Roughness,
-    Metallic,
-    Emissive,
-    AmbientOcclusion,
-    Displacement,
-    __Last__
+enum MaterialTextureType {
+    MaterialTextureType_Albedo,
+    MaterialTextureType_Specular,
+    MaterialTextureType_NormalMap,
+    MaterialTextureType_HeightMap,
+    MaterialTextureType_Roughness,
+    MaterialTextureType_Metallic,
+    MaterialTextureType_Emissive,
+    MaterialTextureType_AmbientOcclusion,
+    MaterialTextureType_Displacement,
+    MaterialTextureType___Last__
 };
 
 struct AssetMaterial {
@@ -200,10 +200,7 @@ struct AssetMaterial {
     std::string name;
     MaterialProps props;
     MetadataMap metadata;
-    std::array<std::vector<int32_t>, (int32_t)MaterialTextureType::__Last__> textures_idx;
-    std::array<uint32_t, (int32_t)MaterialTextureType::__Last__> textures_count;
-
-    AssetMaterial() { textures_count.fill(0); }
+    std::array<std::vector<int32_t>, MaterialTextureType___Last__ + 1> texture_indices;
 };
 
 struct SubMesh {
