@@ -13,6 +13,8 @@
 namespace axle::assets
 {
 
+gfx::TextureFormat GetTexFormatOfImg(const gfx::ImageFormat& fmt);
+
 struct AssetGpuMesh {
     gfx::MeshVertexLayout layout;
 

@@ -28,7 +28,7 @@ enum class ImageFormat {
     Raw_RGBA32F,
 
     Compressed_RGBA_ASTC_4x4,
-    Compressed_RGBA_ASTC_5x5,
+    // Compressed_RGBA_ASTC_5x5,
     Compressed_RGBA_ASTC_6x6,
     Compressed_RGBA_ASTC_8x8,
 

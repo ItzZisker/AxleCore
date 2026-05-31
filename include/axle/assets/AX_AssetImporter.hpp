@@ -153,6 +153,12 @@ struct AssetTexture {
     gfx::Image image; 
 };
 
+enum MaterialFlag {
+    MatFlag_IsTransparent       = (1 << 0),
+    MatFlag_HasDisplacement     = (1 << 1),
+    MatFlag_HasRoughness        = (1 << 2)
+};
+
 struct PBRProps {
     float metallicFactor    {1.0f};
     float roughnessFactor   {1.0f};
@@ -171,9 +177,7 @@ struct MaterialProps {
     float opacity{1.0f};
     float F0{0.04f};
 
-    bool isTransparent{false};
-    bool hasDisplacement{false};
-    bool hasRoughness{true};
+    uint32_t flags;
 
     glm::vec4 baseColor{1.0f};
     glm::vec4 diffuseColor{1.0f};

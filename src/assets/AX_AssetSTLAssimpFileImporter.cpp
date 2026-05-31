@@ -230,8 +230,10 @@ utils::ExError AssetSTLAssimpFileImporter::ProcessMaterial(
     if (material->Get(AI_MATKEY_OPACITY, opacity) == AI_SUCCESS) {
         mat.props.opacity = opacity;
         mat.props.maxOpacity = opacity;
-        mat.props.isTransparent = (opacity < 1.0f);
 
+        if (opacity < 1.0f) {
+            mat.props.flags |= MatFlag_IsTransparent;
+        }
         if (HasFlag(AssetImportFlag::IncludePBR)) {
             mat.props.pbr.transparencyFactor = std::clamp(1.0f - opacity, 0.0f, 1.0f);
             if (mat.props.pbr.transparencyFactor >= 1.0f - m_Desc.opaquenessThreshold) {

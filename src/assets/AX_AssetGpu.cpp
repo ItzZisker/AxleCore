@@ -183,15 +183,18 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
         std::vector<AssetGpuMaterial> materials;
         std::vector<ExError> errors;
         
-        for (uint32_t i{0}; i < desc.immutableMaterials.size(); i++) {
-            auto& argMat = desc.immutableMaterials[i];
+        for (uint32_t matIdx{0}; matIdx < desc.immutableMaterials.size(); matIdx++) {
+            auto& argMat = desc.immutableMaterials[matIdx];
             auto& mat = argMat.immutableMaterial;
+
+            std::vector<gfx::TextureHandle> textureHandles;
+            gfx::BufferHandle propsUbo;
 
             gfx::ResourceSetDesc rDesc;
             rDesc.setIndex = argMat.resourceSetIndex;
 
             if (!mat.imported) {
-                errors.push_back({"Material at index=" + std::to_string(i) + " is not yet imported!"});
+                errors.push_back({"Material at matIdx=" + std::to_string(matIdx) + " is not yet imported!"});
                 continue;
             }
 
@@ -199,9 +202,49 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
                 auto texType = (MaterialTextureType) i;
                 auto& texIndices = mat.texture_indices[i];
 
-                
+                for (auto& texIdx : texIndices) {
+                    auto& tex = desc.immutableImport.textures[texIdx];
+
+                    gfx::TextureDesc texDesc;
+                    texDesc.type = gfx::TextureType::Texture2D;
+                    texDesc.width = tex.image.width;
+                    texDesc.height = tex.image.height;
+                    texDesc.format = GetTexFormatOfImg(tex.image.format);
+                    texDesc.usage = gfx::TextureUsage::Sampled;
+
+                    std::vector<utils::URaw> layers;
+                    layers.push_back(utils::URaw(utils::URawView(tex.image.bytes.data(), tex.image.bytes.size())));
+                    texDesc.pixelsByLayers = {std::move(layers)};
+
+                    gfx::TextureSubDesc subDesc;
+                    if (gbgfx->GetCaps().maxAniso >= 4.0f) {
+                        subDesc.generateMips = true;
+                        subDesc.aniso = 4.0f;
+                        subDesc.mipFilter = gfx::MipmapFilter::Linear;
+                        subDesc.minFilter = gfx::TextureFilter::Linear;
+                        subDesc.magFilter = gfx::TextureFilter::Linear;
+                    }
+                    texDesc.subDesc = std::move(subDesc);
+
+                    auto texRes = gbgfx->CreateTexture(texDesc);
+
+                    if (!texRes.has_value()) {
+                        auto& err = texRes.error();
+                        errors.push_back(ExError{err.GetCode(), 
+                            "Texture Upload failure at matIdx=" + std::to_string(matIdx) +
+                            " and texIdx=" + std::to_string(texIdx) + ", Error=" + std::string(err.GetMessage())
+                        });
+                    } else {
+                        auto val = texRes.value();
+
+                        textureHandles.push_back(val);
+                        m_TextureDescs[val] = texDesc;
+                    }
+                }
             }
         }
+
+        // TODO: here
         
         if (!errors.empty()) {
             for (auto& material : materials) {
@@ -240,6 +283,31 @@ ExResult<gfx::BufferDesc> AssetGpu::DescribeBuffer(const gfx::BufferHandle& hand
     auto found = m_BufferDescs.find(handle);
     if (found == m_BufferDescs.end()) return ExError{"Invalid BufferHandle"};
     return found->second;
+}
+
+gfx::TextureFormat GetTexFormatOfImg(const gfx::ImageFormat& fmt) {
+    switch (fmt) {
+        case gfx::ImageFormat::Raw_R8:          return gfx::TextureFormat::R8_UNORM;
+        case gfx::ImageFormat::Raw_RG8:         return gfx::TextureFormat::RG8_UNORM;
+        case gfx::ImageFormat::Raw_RGB8:        return gfx::TextureFormat::RGB8_UNORM;
+        case gfx::ImageFormat::Raw_RGBA8:       return gfx::TextureFormat::RGBA8_UNORM;
+        
+        case gfx::ImageFormat::Raw_R16:         return gfx::TextureFormat::R16_UNORM;
+        case gfx::ImageFormat::Raw_RG16:        return gfx::TextureFormat::RG16_UNORM;
+        case gfx::ImageFormat::Raw_RGB16:       return gfx::TextureFormat::RGB16_UNORM;
+        case gfx::ImageFormat::Raw_RGBA16:      return gfx::TextureFormat::RGBA16_UNORM;
+        
+        case gfx::ImageFormat::Raw_R32F:        return gfx::TextureFormat::R32_FLOAT;
+        case gfx::ImageFormat::Raw_RG32F:       return gfx::TextureFormat::RG32_FLOAT;
+        case gfx::ImageFormat::Raw_RGB32F:      return gfx::TextureFormat::RGB32_FLOAT;
+        case gfx::ImageFormat::Raw_RGBA32F:     return gfx::TextureFormat::RGBA32_FLOAT;
+
+        case gfx::ImageFormat::Compressed_RGBA_ASTC_4x4:    return gfx::TextureFormat::ASTC_4x4_UNORM;
+        case gfx::ImageFormat::Compressed_RGBA_ASTC_6x6:    return gfx::TextureFormat::ASTC_6x6_UNORM;
+        case gfx::ImageFormat::Compressed_RGBA_ASTC_8x8:    return gfx::TextureFormat::ASTC_8x8_UNORM;
+        case gfx::ImageFormat::Compressed_RGB_DXT1:         return gfx::TextureFormat::BC1_UNORM;
+        case gfx::ImageFormat::Compressed_RGBA_DXT5:        return gfx::TextureFormat::BC3_UNORM;
+    }
 }
 
 }
