@@ -27,16 +27,20 @@ using MagicId = uint32_t;
 struct MagicHandle {
 public:
     MagicId index{0}, generation{0};
-
-    bool IsSameHandles(const MagicHandle& other) {
-        return index == other.index && generation == other.generation;
-    }
 };
 
 constexpr MagicHandle INVALID_HANDLE = {UINT32_MAX, 0};
 
 template <typename Tag>
-struct MagicHandleTagged : public MagicHandle {};
+struct MagicHandleTagged : public MagicHandle {
+    constexpr bool operator==(const MagicHandleTagged& other) const {
+        return index == other.index && generation == other.generation;
+    }
+
+    constexpr bool operator<(const MagicHandleTagged& other) const {
+        return std::tie(index, generation) < std::tie(other.index, other.generation);
+    }
+};
 
 template <typename T_Extern>
 requires std::is_base_of_v<MagicHandle, T_Extern>

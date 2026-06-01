@@ -187,15 +187,55 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
             auto& argMat = desc.immutableMaterials[matIdx];
             auto& mat = argMat.immutableMaterial;
 
+            std::vector<gfx::Binding> bindings;
             std::vector<gfx::TextureHandle> textureHandles;
             gfx::BufferHandle propsUbo;
-
-            gfx::ResourceSetDesc rDesc;
-            rDesc.setIndex = argMat.resourceSetIndex;
 
             if (!mat.imported) {
                 errors.push_back({"Material at matIdx=" + std::to_string(matIdx) + " is not yet imported!"});
                 continue;
+            }
+
+            constexpr std::size_t MAT_PROPS_SIZE = sizeof(MaterialProps);
+
+            gfx::BufferDesc propsUboDesc;
+            propsUboDesc.size = MAT_PROPS_SIZE;
+            propsUboDesc.usage = gfx::BufferUsage::Uniform;
+            propsUboDesc.access = gfx::BufferAccess::Dynamic;
+            propsUboDesc.cpuVisible = true;
+
+            auto uboCRes = gbgfx->CreateBuffer(propsUboDesc);
+
+            if (!uboCRes.has_value()) {
+                auto& err = uboCRes.error();
+                errors.push_back(ExError{err.GetCode(), 
+                    "MaterialProps uniform buffer creation failure at matIdx=" + std::to_string(matIdx) +
+                    " Error=" + std::string(err.GetMessage())
+                });
+            } else {
+                propsUbo = uboCRes.value();
+                m_BufferDescs[propsUbo] = std::move(propsUboDesc);
+
+                gfx::ResourceHandle uboResH(propsUbo);
+                gfx::Binding uboBind;
+                uboBind.bindName = AX_BINDING_KEY_MATERIAL_PROPS;
+                uboBind.slot = AX_BINDING_SLOT_MATERIAL_PROPS;
+                uboBind.type = gfx::BindingType::UniformBuffer;
+                uboBind.resources = {std::vector<gfx::ResourceHandle>{uboResH}};
+                uboBind.offset = 0;
+                uboBind.range = 0;
+                uboBind.stageMask = gfx::BindingStage_Vertex | gfx::BindingStage_Fragment;
+
+                bindings.push_back(uboBind);
+            }
+
+            auto uboUErr = gbgfx->UpdateBuffer(propsUbo, 0, MAT_PROPS_SIZE, &mat.props);
+
+            if (uboUErr.IsValid()) {
+                errors.push_back(ExError{uboUErr.GetCode(), 
+                    "MaterialProps uniform buffer upload failure at matIdx=" + std::to_string(matIdx) +
+                    " Error=" + std::string(uboUErr.GetMessage())
+                });
             }
 
             for (uint32_t i{0}; i < mat.texture_indices.size(); i++) {
@@ -218,12 +258,12 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
 
                     gfx::TextureSubDesc subDesc;
                     if (gbgfx->GetCaps().maxAniso >= 4.0f) {
-                        subDesc.generateMips = true;
                         subDesc.aniso = 4.0f;
-                        subDesc.mipFilter = gfx::MipmapFilter::Linear;
-                        subDesc.minFilter = gfx::TextureFilter::Linear;
-                        subDesc.magFilter = gfx::TextureFilter::Linear;
                     }
+                    subDesc.generateMips = true; // TODO: add parameters in desc which affets each texture upload and gives ability to code (or we actually) to modify texture/uniform-props desc per material/material-texture
+                    subDesc.mipFilter = gfx::MipmapFilter::Linear;
+                    subDesc.minFilter = gfx::TextureFilter::Linear;
+                    subDesc.magFilter = gfx::TextureFilter::Linear;
                     texDesc.subDesc = std::move(subDesc);
 
                     auto texRes = gbgfx->CreateTexture(texDesc);
@@ -238,17 +278,60 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
                         auto val = texRes.value();
 
                         textureHandles.push_back(val);
-                        m_TextureDescs[val] = texDesc;
+                        m_TextureDescs[val] = std::move(texDesc);
+
+                        gfx::ResourceHandle texResH(val);
+                        gfx::Binding texBind;
+                        texBind.bindName = GetAssetBindKey(texType);
+                        texBind.slot = GetAssetBindSlot(texType);
+                        texBind.type = gfx::BindingType::SampledTexture;
+                        texBind.resources = {std::vector<gfx::ResourceHandle>{texResH}};
+                        texBind.stageMask = gfx::BindingStage_Vertex | gfx::BindingStage_Fragment;
+
+                        bindings.push_back(texBind);
                     }
                 }
             }
-        }
 
-        // TODO: here
+            gfx::ResourceSetDesc rDesc;
+            rDesc.setIndex = argMat.resourceSetIndex;
+            rDesc.bindings = {std::move(bindings)};
+
+            auto resRes = gbgfx->CreateResourceSet(rDesc);
+            if (!resRes.has_value()) {
+                auto& err = resRes.error();
+                errors.push_back(ExError{err.GetCode(), 
+                    "ResourceSet creation failure at matIdx=" + std::to_string(matIdx) +
+                    ", Error=" + std::string(err.GetMessage())
+                });
+                
+                for (auto& binding : bindings) {
+                    for (auto& res : binding.resources) {
+                        switch (res.kind) {
+                            case gfx::ResourceKind::Buffer:
+                                gbgfx->DestroyBuffer(res.AsBuffer());
+                            break;
+                            case gfx::ResourceKind::Texture:
+                                gbgfx->DestroyTexture(res.AsTexture());
+                            break;
+                        }
+                    }
+                }
+            } else {
+                auto resHandle = resRes.value();
+                m_ResourcesDescs[resHandle] = std::move(rDesc);
+
+                AssetGpuMaterial gpuMat;
+
+                gpuMat.bindings = std::move(bindings);
+                gpuMat.resourcesHandle = resHandle;
+
+                materials.push_back(gpuMat);
+            }
+        }
         
         if (!errors.empty()) {
             for (auto& material : materials) {
-                m_ResourcesDescs.erase(material.resourcesHandle);
                 gbgfx->DestroyResourceSet(material.resourcesHandle);
             }
             std::stringstream error_str_stream;
@@ -308,6 +391,36 @@ gfx::TextureFormat GetTexFormatOfImg(const gfx::ImageFormat& fmt) {
         case gfx::ImageFormat::Compressed_RGB_DXT1:         return gfx::TextureFormat::BC1_UNORM;
         case gfx::ImageFormat::Compressed_RGBA_DXT5:        return gfx::TextureFormat::BC3_UNORM;
     }
+}
+
+const char* GetAssetBindKey(const MaterialTextureType& type) {
+    switch (type) {
+        case MaterialTextureType_Albedo:            return AX_BINDING_KEY_TEXTURE_BASE_COLOR;
+        case MaterialTextureType_Specular:          return AX_BINDING_KEY_TEXTURE_SPECULAR;
+        case MaterialTextureType_NormalMap:         return AX_BINDING_KEY_TEXTURE_NORMAL;
+        case MaterialTextureType_HeightMap:         return AX_BINDING_KEY_TEXTURE_HEIGHTMAP;
+        case MaterialTextureType_Roughness:         return AX_BINDING_KEY_TEXTURE_ROUGHNESS;
+        case MaterialTextureType_Metallic:          return AX_BINDING_KEY_TEXTURE_METALLIC;
+        case MaterialTextureType_Emissive:          return AX_BINDING_KEY_TEXTURE_EMISSIVE;
+        case MaterialTextureType_AmbientOcclusion:  return AX_BINDING_KEY_TEXTURE_AO;
+        case MaterialTextureType_Displacement:      return AX_BINDING_KEY_TEXTURE_DISPLACEMENT;
+    }
+    return "";
+}
+
+uint32_t GetAssetBindSlot(const MaterialTextureType& type) {
+    switch (type) {
+        case MaterialTextureType_Albedo:            return AX_BINDING_SLOT_TEXTURE_BASE_COLOR;
+        case MaterialTextureType_Specular:          return AX_BINDING_SLOT_TEXTURE_SPECULAR;
+        case MaterialTextureType_NormalMap:         return AX_BINDING_SLOT_TEXTURE_NORMAL;
+        case MaterialTextureType_HeightMap:         return AX_BINDING_SLOT_TEXTURE_HEIGHTMAP;
+        case MaterialTextureType_Roughness:         return AX_BINDING_SLOT_TEXTURE_ROUGHNESS;
+        case MaterialTextureType_Metallic:          return AX_BINDING_SLOT_TEXTURE_METALLIC;
+        case MaterialTextureType_Emissive:          return AX_BINDING_SLOT_TEXTURE_EMISSIVE;
+        case MaterialTextureType_AmbientOcclusion:  return AX_BINDING_SLOT_TEXTURE_AO;
+        case MaterialTextureType_Displacement:      return AX_BINDING_SLOT_TEXTURE_DISPLACEMENT;
+    }
+    return UINT32_MAX;
 }
 
 }

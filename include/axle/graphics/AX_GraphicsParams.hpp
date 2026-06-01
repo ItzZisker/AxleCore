@@ -67,7 +67,6 @@ struct BufferDesc {
     BufferUsage usage;
     BufferAccess access;
     bool cpuVisible;
-    uint32_t bindSlot{0};
 };
 
 struct BufferTag {};
