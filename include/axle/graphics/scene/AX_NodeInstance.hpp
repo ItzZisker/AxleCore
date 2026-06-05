@@ -1,36 +1,51 @@
 #pragma once
 
+#include "axle/assets/AX_AssetImporter.hpp"
+
 #include "axle/graphics/scene/AX_SWFrustumCulling.hpp"
+
 #include "axle/utils/AX_Coordination.hpp"
+#include "axle/utils/AX_Types.hpp"
 
 namespace axle::scene
 {
 
-class NodeInstance : public SWFrustumDiscardable {
+struct NodeInstanceParams {
+    const assets::AssetImportResult& immutableImport;
+    uint32_t assetNodeIdx;
+};
+
+// TODO: NodeInstance : public SWFrustumDiscardable
+class NodeInstance {
 private:
-    std::string name = "NONE";
+    NodeInstanceParams m_Params;
 
-    std::vector<NodeInstance*> children = {};
-    std::vector<NamedMesh*> meshes = {};
+    utils::Coordination m_Coords;
 
-    bool markedDirty = false;
+    std::vector<NodeInstance> m_Children{};
+    std::vector<uint32_t> m_MeshesIdx{};
 
-    void Handle(LocalNode& node, glm::vec3& min, glm::vec3& max, bool& unset);
+    bool m_Dirty{false};
+
+    void Handle(assets::Node& node, glm::vec3& min, glm::vec3& max, bool& unset);
 public:
-    NodeInstance(NamedMesh* namedMesh);
-    NodeInstance(NamedMesh* namedMesh, Coordination coords);
-    NodeInstance(LocalNode rootNode);
+    NodeInstance(const NodeInstanceParams& params);
     ~NodeInstance();
 
+    const assets::Node& GetRoot();
+
+    bool IsDirty() const;
     void MarkDirty(bool flag);
-    bool IsDirty();
 
-    void UpdateTransform() override;
+    inline void ApplyCoords(const std::function<void(utils::Coordination&)>& consumer) {
+        consumer(m_Coords);
+        MarkDirty(true);
+    }
 
-    std::vector<NodeInstance*>& GetChildren();
-    std::vector<NamedMesh*>& GetMeshes();
+    const std::vector<NodeInstance>& GetChildren();
+    const std::vector<uint32_t>& GetMeshesIdx();
 
-    const std::string& GetName();
+    std::string_view GetName();
     bool HasMeshes();
 };
 
