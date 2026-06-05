@@ -245,7 +245,6 @@ ExResult<BufferHandle> GLGraphicsBackend::CreateBuffer(const BufferDesc& desc) {
     buff.id = id;
     buff.usage = desc.usage;
     buff.size = desc.size;
-    buff.slot = desc.bindSlot;
     buff.alive = true;
 
     return buff.External();

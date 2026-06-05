@@ -113,7 +113,6 @@ struct GLBuffer : public GLInternal<BufferHandle> {
     GLuint id{0};
     BufferUsage usage;
     size_t size{0};
-    uint32_t slot{0};
 };
 
 struct VAOKey {

@@ -35,8 +35,20 @@ struct DrawItem {
     uint32_t sortKey;
 };
 
-const inline Predicate<DrawItem> RPROC_SORT_BY_WEIGHT = [](const DrawItem& a, const DrawItem& b) {
-    return a.sortKey > b.sortKey;
+const inline Predicate<DrawItem> RBATCH_SORT_BY_MINIMAL_STATE = [](const DrawItem& a, const DrawItem& b) {
+    if (a.pipeline != b.pipeline) return a.pipeline < b.pipeline;
+    if (a.resources != b.resources) return a.resources < b.resources;
+    if (a.vertices != b.vertices) return a.vertices < b.vertices;
+    if (a.indices != b.indices) return a.indices < b.indices;
+    if (a.meshMode != b.meshMode) return a.meshMode < b.meshMode;
+
+    // Optional tie-breakers for deterministic ordering
+    if (a.firstVertex != b.firstVertex) return a.firstVertex < b.firstVertex;
+    if (a.firstIndex != b.firstIndex) return a.firstIndex < b.firstIndex;
+    if (a.vertexCount != b.vertexCount) return a.vertexCount < b.vertexCount;
+    if (a.indexCount != b.indexCount) return a.indexCount < b.indexCount;
+
+    return a.sortKey < b.sortKey;
 };
 
 using BatchErrorPredicate = std::function<bool(const utils::ExError&)>;
@@ -44,10 +56,20 @@ using BatchErrorPredicate = std::function<bool(const utils::ExError&)>;
 struct RenderBatchDesc {
     SharedPtr<ICommandList> commandList;
     BatchErrorPredicate frameErrorHandler;
+    bool autoSort{false};
+};
+
+struct ModelInstanceTag {};
+struct ModelInstanceHandle : public utils::MagicHandleTagged<ModelInstanceTag> {};
+
+struct ModelInstanceWrapper : public utils::MagicInternal<ModelInstanceHandle> {
+    SharedPtr<ModelInstance> value;
 };
 
 class RenderBatch {
 private:
+    utils::MagicPool<ModelInstanceWrapper> m_Instances{};
+
     std::deque<DrawItem> m_Items{};
 
     std::unordered_map<RLHandle, SharedPtr<RenderLayer>> m_Registries{};
@@ -62,8 +84,8 @@ public:
 
     void ResetItems();
 
-    void Submit(const DrawItem& item);
-    void Submit(utils::Span<DrawItem> itemsView);
+    void AddInstance(SharedPtr<> );
+    void AddInstances(utils::Span<DrawItem> itemsView);
 
     void ResetAndSubmit(const DrawItem& item);
     void ResetAndSubmit(utils::Span<DrawItem> itemsView);
@@ -71,7 +93,7 @@ public:
     utils::ExResult<RLHandle> Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey = 0);
     utils::ExError UnRegister(const RLHandle& handle);
 
-    void Sort(const Predicate<DrawItem>& pred = RPROC_SORT_BY_WEIGHT);
+    void Sort(const Predicate<DrawItem>& pred = RBATCH_SORT_BY_MINIMAL_STATE);
 protected:
     friend RenderLayer;
 
