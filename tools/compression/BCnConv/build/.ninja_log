@@ -1,0 +1,9 @@
+# ninja log v7
+4	718	7846035211913953	CMakeFiles/bcnconv.dir/Main.cpp.obj	7d84959a1ca68f11
+719	940	7846035219064524	bcnconv.exe	2bf64c82606703bc
+5	253	7846050235857199	build.ninja	f21be115fbf0abbf
+5	253	7846050235857199	C:/Users/riske/DXTCompressor/build/cmake_install.cmake	f21be115fbf0abbf
+6	1400	7846050236063844	CMakeFiles/bcnconv.dir/Main.cpp.obj	7d84959a1ca68f11
+1401	1633	7846050250020444	bcnconv.exe	2bf64c82606703bc
+5	1382	7846058670432648	CMakeFiles/bcnconv.dir/Main.cpp.obj	7d84959a1ca68f11
+1383	1613	7846058684207673	bcnconv.exe	2bf64c82606703bc

@@ -1,0 +1,8 @@
+[
+{
+  "directory": "C:/Users/riske/DXTCompressor/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\c++.exe -IC:/Users/riske/DXTCompressor -IC:/Users/riske/DXTCompressor/include -std=gnu++20 -o CMakeFiles\\bcnconv.dir\\Main.cpp.obj -c C:\\Users\\riske\\DXTCompressor\\Main.cpp",
+  "file": "C:\\Users\\riske\\DXTCompressor\\Main.cpp",
+  "output": "CMakeFiles\\bcnconv.dir\\Main.cpp.obj"
+}
+]
