@@ -1,3 +1,0 @@
-C:/Users/riske/DXTCompressor/build/CMakeFiles/bcnconv.dir
-C:/Users/riske/DXTCompressor/build/CMakeFiles/edit_cache.dir
-C:/Users/riske/DXTCompressor/build/CMakeFiles/rebuild_cache.dir
