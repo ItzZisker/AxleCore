@@ -105,7 +105,7 @@ void RenderBatch::Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void*
     rp.m_RenderCmds->Begin();
 
     for (auto& item : rp.m_Items) {
-        if (!currentPipeline.IsSameHandles(item.pipeline)) {
+        if (currentPipeline != item.pipeline) {
             ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindRenderPipeline({item.pipeline}), rp.m_ErrorHandler);
             currentPipeline = item.pipeline;
             currentResources = {UINT32_MAX, UINT32_MAX};
@@ -116,7 +116,7 @@ void RenderBatch::Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void*
             ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindIndexBuffer({item.vertices}), rp.m_ErrorHandler);
         }
 
-        if (!currentResources.IsSameHandles(item.resources)) {
+        if (currentResources != item.resources) {
             ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindResourceSet({item.resources}), rp.m_ErrorHandler);
             currentResources = item.resources;
         }
@@ -194,7 +194,7 @@ utils::ExError RenderBatch::UnRegister(const RLHandle& rlh) {
     m_Registries.erase(rlh);
 }
 
-void RenderBatch::Sort(const Predicate<DrawItem>& pred = RPROC_SORT_BY_WEIGHT) {
+void RenderBatch::Sort(const Predicate<DrawItem>& pred) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     std::sort(m_Items.begin(), m_Items.end(), pred);
 }

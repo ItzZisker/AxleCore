@@ -219,7 +219,6 @@ utils::ExResult<Image> Img_Auto_LoadFileBytes(IDataStream& buffer) {
     if (Img_ASTC_IsValidFileBytes(buffer)) {
         AX_DECL_OR_PROPAGATE(astc, Img_ASTC_LoadFileBytes(buffer));
         if (astc.blockX == 4 && astc.blockY == 4) img.format = ImageFormat::Compressed_RGBA_ASTC_4x4;
-        else if (astc.blockX == 5 && astc.blockY == 5) img.format = ImageFormat::Compressed_RGBA_ASTC_5x5;
         else if (astc.blockX == 6 && astc.blockY == 6) img.format = ImageFormat::Compressed_RGBA_ASTC_6x6;
         else if (astc.blockX == 8 && astc.blockY == 8) img.format = ImageFormat::Compressed_RGBA_ASTC_8x8;
         else return ExError("Unsupported ASTC Image (block dims)");
@@ -360,7 +359,6 @@ bool Img_IsCompressed(const ImageFormat& fmt) {
         case ImageFormat::Raw_RGBA32F:
             return false;
         case ImageFormat::Compressed_RGBA_ASTC_4x4:
-        case ImageFormat::Compressed_RGBA_ASTC_5x5:
         case ImageFormat::Compressed_RGBA_ASTC_6x6:
         case ImageFormat::Compressed_RGBA_ASTC_8x8:
         case ImageFormat::Compressed_RGBA_DXT5:
@@ -388,7 +386,6 @@ uint32_t Img_GetChannelCount(const ImageFormat& fmt) {
         case ImageFormat::Raw_RGBA32F:  return 4;
 
         case ImageFormat::Compressed_RGBA_ASTC_4x4:
-        case ImageFormat::Compressed_RGBA_ASTC_5x5:
         case ImageFormat::Compressed_RGBA_ASTC_6x6:
         case ImageFormat::Compressed_RGBA_ASTC_8x8: return 4;
 
@@ -413,7 +410,6 @@ uint32_t Img_GetBytesPerChannel(const ImageFormat& fmt) {
         case ImageFormat::Raw_RGB32F:
         case ImageFormat::Raw_RGBA32F:  return 4;
         case ImageFormat::Compressed_RGBA_ASTC_4x4:
-        case ImageFormat::Compressed_RGBA_ASTC_5x5:
         case ImageFormat::Compressed_RGBA_ASTC_6x6:
         case ImageFormat::Compressed_RGBA_ASTC_8x8:
         case ImageFormat::Compressed_RGBA_DXT5:
