@@ -1,11 +1,14 @@
 #pragma once
 
 #include "axle/assets/AX_AssetImporter.hpp"
+#include "axle/assets/AX_AssetGpu.hpp"
 
 #include "axle/graphics/scene/AX_SWFrustumCulling.hpp"
 
 #include "axle/utils/AX_Coordination.hpp"
 #include "axle/utils/AX_Types.hpp"
+
+namespace axle::gfx { class RenderBatch; }
 
 namespace axle::scene
 {
@@ -15,6 +18,8 @@ struct NodeInstanceParams {
     uint32_t assetNodeIdx;
 };
 
+// RenderThread Owns This
+
 // TODO: NodeInstance : public SWFrustumDiscardable
 class NodeInstance {
 private:
@@ -23,30 +28,40 @@ private:
     utils::Coordination m_Coords;
 
     std::vector<NodeInstance> m_Children{};
-    std::vector<uint32_t> m_MeshesIdx{};
+    std::vector<uint32_t> m_MeshIds{};
 
-    bool m_Dirty{false};
+    bool m_Dirty{true};
+    std::mutex m_Mutex{};
+    
+    typedef struct {
+        NodeInstance& nodeInstance;
+        const assets::Node& node;
+        glm::vec3 &min;
+        glm::vec3 &max;
+        bool &unset;
+    } NodeHandleParams;
 
-    void Handle(assets::Node& node, glm::vec3& min, glm::vec3& max, bool& unset);
+    utils::ExError GetMinMax(const NodeHandleParams& params);
+    utils::ExError Handle(const NodeHandleParams& params);
 public:
     NodeInstance(const NodeInstanceParams& params);
     ~NodeInstance();
 
-    const assets::Node& GetRoot();
+    const assets::Node& GetRoot() const;
 
-    bool IsDirty() const;
-    void MarkDirty(bool flag);
+    bool IsDirty();
 
-    inline void ApplyCoords(const std::function<void(utils::Coordination&)>& consumer) {
-        consumer(m_Coords);
-        MarkDirty(true);
-    }
+    void ApplyCoords(const std::function<void(utils::Coordination&)>& consumer);
+    utils::Coordination GetCoords();
 
+    const std::vector<uint32_t>& GetMeshIds();
     const std::vector<NodeInstance>& GetChildren();
-    const std::vector<uint32_t>& GetMeshesIdx();
 
-    std::string_view GetName();
-    bool HasMeshes();
+    std::string_view GetName() const;
+protected:
+    friend gfx::RenderBatch;
+
+    utils::Coordination UseCoords();
 };
 
 }

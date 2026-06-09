@@ -62,8 +62,8 @@ void AssetSTLAssimpFileImporter::ProcessNode(
     outNode.transform = utils::Coordination{utils::Assimp_ToGLM(node->mTransformation)};
 
     for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
-        outNode.meshId = meshIdx;
         ProcessMesh(scene->mMeshes[node->mMeshes[i]], result, meshIdx, buffIdx);
+        outNode.meshIds.push_back(meshIdx);
     }
     for (uint32_t i = 0; i < node->mNumChildren; ++i) {
         Node child;

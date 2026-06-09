@@ -23,10 +23,10 @@ namespace axle::assets
 
 struct Node {
     int32_t nodeId{-1};
-    int32_t meshId{-1};
     std::string name{"ROOT"};
     utils::Coordination transform{};
 
+    std::vector<uint32_t> meshIds{};
     std::vector<Node> children{};
     SharedPtr<void> misc{nullptr};
 };
