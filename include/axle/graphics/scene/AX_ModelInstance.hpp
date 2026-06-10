@@ -1,41 +1,60 @@
 #pragma once
 
+#include "axle/assets/AX_AssetGpu.hpp"
+#include "axle/assets/AX_AssetImporter.hpp"
+
+#include "axle/graphics/scene/AX_NodeInstance.hpp"
+
 #include "axle/utils/AX_Coordination.hpp"
+
+#include <unordered_set>
 
 namespace axle::scene
 {
 
-class ModelInstance : public Coordination, public SWDiscardable {
+struct MeshBounds {
+    std::unordered_map<assets::MeshId, utils::CowSpan<assets::AssetGpuMesh>> draw;
+    std::unordered_map<assets::MeshId, utils::CowSpan<assets::AssetGpuMaterial>> materials; 
+};
+
+struct ModelDesc {
+    MeshBounds bounds;
+    assets::Node root;
+};
+
+// RenderThread Owns This
+
+// TODO: NodeInstance : public SWDiscardable
+class ModelInstance {
 private:
-    Model* model;
+    ModelDesc m_Desc;
+    utils::Coordination m_Coords;
 
-    NodeInstance* root;
-    std::unordered_map<NodeInstance*, std::vector<NodeInstance*>> leafParents;
-    std::unordered_map<NodeInstance*, glm::mat4> cachedLeafFinalTransform;
+    std::unordered_map<assets::NodeId, std::vector<assets::NodeId>> m_LeafParents;
+    std::unordered_map<assets::NodeId, glm::mat4> m_CachedLeafFinalTransform;
 
-    std::set<NodeInstance*> discarded;
-
+    std::unordered_set<assets::NodeId> m_Discards;
+protected:
+    explicit ModelInstance(const ModelDesc& desc);
 public:
-    ModelInstance(Model* model);
-
-    void PushLeafParents(NodeInstance *meI, std::vector<NodeInstance*> parentList);
+    void PushLeafParents(assets::NodeId, std::vector<assets::NodeId> parentList);
 
     void ClearCachedTransforms();
     void ClearLeafParents();
     void ClearDiscarded();
 
-    glm::mat4 GetWorldTransform(NodeInstance* leaf, bool cacheFinalTransform = true);
-    glm::mat4 GetCachedWorldTransform(NodeInstance *leaf);
+    glm::mat4 GetWorldTransform(assets::NodeId leafInstance, bool cacheFinalTransform = true);
+    glm::mat4 GetCachedWorldTransform(assets::NodeId leafInstance);
 
-    bool IsTransformCached(NodeInstance *leaf);
+    bool IsTransformCached(assets::NodeId leafInstance);
 
-    void SetDiscard(NodeInstance* meI, bool discard);
+    void SetDiscard(assets::NodeId nodeInstance, bool discard);
 
-    bool DiscardOrNot(NodeInstance* meI);
-    bool DiscardOrNot(Scene_T snapshot, const glm::mat4& transform) override;
+    // bool DiscardOrNot(assets::NodeId nodeInstance);
+    // bool DiscardOrNot(Scene_T snapshot, const glm::mat4& transform) override;
 
-    NodeInstance* GetRoot();
-    Model* GetModel();
+    const NodeInstance& GetRoot() const;
+    const ModelDesc& GetModelDesc() const;
 };
 
 }

@@ -21,12 +21,15 @@
 namespace axle::assets
 {
 
+using NodeId = int32_t;
+using MeshId = uint32_t;
+
 struct Node {
-    int32_t nodeId{-1};
+    NodeId nodeId{-1};
     std::string name{"ROOT"};
     utils::Coordination transform{};
 
-    std::vector<uint32_t> meshIds{};
+    std::vector<MeshId> meshIds{};
     std::vector<Node> children{};
     SharedPtr<void> misc{nullptr};
 };
