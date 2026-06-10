@@ -29,6 +29,7 @@ private:
 
     std::vector<NodeInstance> m_Children{};
     std::vector<uint32_t> m_MeshIds{};
+    std::string m_Name{};
 
     bool m_Dirty{true};
     std::mutex m_Mutex{};
