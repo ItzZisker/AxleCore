@@ -68,23 +68,13 @@ utils::ExError NodeInstance::GetMinMax(const NodeHandleParams& p) {
 }
 
 utils::ExError NodeInstance::Handle(const NodeHandleParams& p) {
-    for (auto& nMesh : rootNode.meshes) {
-        this->meshes.push_back(nMesh);
-    }
-    for (auto& child : rootNode.children) {
-        MeshInstance *childM = new MeshInstance(child);
-        this->children.push_back(childM);
-    }
-    this->name = rootNode.name;
-    this->decompose(rootNode.transform);
-    
-    bool unset = true;
-    glm::vec3 min(0.0f), max(0.0f);
-    // getMinMax(rootNode, min, max, unset);
+    // GetMinMax(rootNode, min, max, unset);
     // this->bounding = AABB(min, max);
 
     m_MeshIds = p.node.meshIds;
-    m_Coords = {p.node.transform};
+    m_Coords = p.node.transform;
+    m_Name = p.node.name;
+
     for (const auto& child : p.node.children) {
         Handle(p);
     }
@@ -137,7 +127,7 @@ const std::vector<uint32_t>& NodeInstance::GetMeshIds() {
 }
 
 std::string_view NodeInstance::GetName() const {
-    return GetRoot().name;
+    return m_Name;
 }
 
 }

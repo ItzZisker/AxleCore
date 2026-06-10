@@ -5,7 +5,9 @@
 namespace axle::scene
 {
 
-class ModelInstance : public Coordination, public SWDiscardable {
+// TODO: SWDiscardable
+
+class ModelInstance {
 private:
     Model* model;
 
