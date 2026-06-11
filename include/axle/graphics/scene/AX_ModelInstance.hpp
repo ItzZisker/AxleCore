@@ -12,14 +12,19 @@
 namespace axle::scene
 {
 
+struct PipelineBounds {
+    gfx::RenderPipelineHandle pipelineHandle;
+};
+
 struct MeshBounds {
-    std::unordered_map<assets::MeshId, utils::CowSpan<assets::AssetGpuMesh>> draw;
-    std::unordered_map<assets::MeshId, utils::CowSpan<assets::AssetGpuMaterial>> materials; 
+    std::unordered_map<assets::MeshId, assets::AssetGpuMesh> draw;
+    std::unordered_map<assets::MeshId, assets::AssetGpuMaterial> materials; 
 };
 
 struct ModelDesc {
-    MeshBounds bounds;
-    assets::Node root;
+    PipelineBounds pipelineBounds;
+    MeshBounds meshBounds;
+    assets::Node rootNode;
 };
 
 // RenderThread Owns This
@@ -53,8 +58,8 @@ public:
     // bool DiscardOrNot(assets::NodeId nodeInstance);
     // bool DiscardOrNot(Scene_T snapshot, const glm::mat4& transform) override;
 
-    const NodeInstance& GetRoot() const;
-    const ModelDesc& GetModelDesc() const;
+    ModelDesc& GetModelDesc() const;
+    NodeInstance& GetRoot() const;
 };
 
 }

@@ -10,6 +10,11 @@
 
 #include <vector>
 #include <type_traits>
+#include <unordered_set>
+#include <iostream>
+
+namespace axle::scene { class ModelInstance; }
+namespace axle::core { class ThreadContextGfx; }
 
 namespace axle::gfx
 {
@@ -20,19 +25,19 @@ enum class MeshMode : uint8_t {
 };
 
 struct DrawItem {
-    MeshMode meshMode;
+    MeshMode meshMode; // Raw vertices, Indexed vertices
 
-    RenderPipelineHandle pipeline;
+    RenderPipelineHandle pipeline; // Pipeline (shader, geometry, blending states, etc.)
 
-    BufferHandle vertices;
-    BufferHandle indices;
+    BufferHandle vertices; // Mesh
+    BufferHandle indices; // Mesh
 
-    ResourceSetHandle resources;
+    ResourceSetHandle resources; // Material + Additonal resources
 
-    uint32_t vertexCount, indexCount;
-    uint32_t firstVertex{0}, firstIndex{0};
+    uint32_t vertexCount, indexCount; // DrawCall Params
+    uint32_t firstVertex{0}, firstIndex{0}; // DrawCall Params
 
-    uint32_t sortKey;
+    uint32_t sortKey{0}; // User-defined sortKey (Optional)
 };
 
 const inline Predicate<DrawItem> RBATCH_SORT_BY_MINIMAL_STATE = [](const DrawItem& a, const DrawItem& b) {
@@ -53,17 +58,58 @@ const inline Predicate<DrawItem> RBATCH_SORT_BY_MINIMAL_STATE = [](const DrawIte
 
 using BatchErrorPredicate = std::function<bool(const utils::ExError&)>;
 
+const inline BatchErrorPredicate RBATCH_DEFAULT_ERROR_HANDLER = [](const utils::ExError& error) {
+    if (error.IsValid()) {
+        std::cerr << "Frame handler Error: " << error.GetMessage() << std::endl;
+        return false;
+    } else {
+        return true;
+    }
+};
+
+enum class RenderBatchType {
+    DirectDraw,
+    DirectInstancedDraw,
+    IndirectDraw
+};
+
+enum class TransformInput {
+    VertexInput,
+    Uniforms
+};
+
+struct UserSortKeyParams {
+    scene::ModelInstance& modelInstance;
+    scene::NodeInstance& nodeInstance;
+    uint32_t meshId;
+};
+
+using UserSortKeyAssigner = std::function<uint32_t(const UserSortKeyParams&)>;
+
+const inline UserSortKeyAssigner RBATCH_DEFAULT_USER_SORTKEY_ZERO = [](const UserSortKeyParams&) {
+    return 0u;
+};
+
 struct RenderBatchDesc {
-    SharedPtr<ICommandList> commandList;
-    BatchErrorPredicate frameErrorHandler;
-    bool autoSort{false};
+    SharedPtr<core::ThreadContextGfx> gfxThread{nullptr};
+    SharedPtr<ICommandList> commandList{nullptr};
+    
+    BatchErrorPredicate frameErrorHandler{RBATCH_DEFAULT_ERROR_HANDLER};
+    Predicate<DrawItem> itemsSort{RBATCH_SORT_BY_MINIMAL_STATE};
+    UserSortKeyAssigner userSortKeyAssigner{RBATCH_DEFAULT_USER_SORTKEY_ZERO};
+    
+    RenderBatchType batchType{RenderBatchType::DirectDraw};
+    TransformInput transformInput{TransformInput::VertexInput};
+    
+    bool separateSamplersFromTextures{false}; // Requires FeatureSet on Host device
+    bool autoSort{false}; // Sorts on run (Add/Remove/Modify Instances)
 };
 
 struct ModelInstanceTag {};
 struct ModelInstanceHandle : public utils::MagicHandleTagged<ModelInstanceTag> {};
 
 struct ModelInstanceWrapper : public utils::MagicInternal<ModelInstanceHandle> {
-    SharedPtr<ModelInstance> value;
+    SharedPtr<scene::ModelInstance> value;
 };
 
 class RenderBatch {
@@ -71,33 +117,40 @@ private:
     utils::MagicPool<ModelInstanceWrapper> m_Instances{};
 
     std::deque<DrawItem> m_Items{};
+    std::unordered_set<SharedPtr<scene::ModelInstance>> m_TrackingInstances{};
 
     std::unordered_map<RLHandle, SharedPtr<RenderLayer>> m_Registries{};
     std::unordered_map<SharedPtr<RenderLayer>, std::vector<RLHandle>> m_RegistriesRev{};
 
-    SharedPtr<ICommandList> m_RenderCmds;
-
     std::mutex m_Mutex{};
+
+    void TraverseNode(
+        scene::ModelInstance& modelInstance,
+        scene::NodeInstance& nodeInstance,
+        std::unordered_set<DrawItem>& results
+    );
+
+    void AddInstance0(SharedPtr<scene::ModelInstance> modelInstance);
+    void RebuildDrawItems();
 public:
     RenderBatch(const RenderBatchDesc& desc);
     ~RenderBatch();
 
-    void ResetItems();
+    void Clear();
 
-    void AddInstance(SharedPtr<> );
-    void AddInstances(utils::Span<DrawItem> itemsView);
-
-    void ResetAndSubmit(const DrawItem& item);
-    void ResetAndSubmit(utils::Span<DrawItem> itemsView);
+    void AddInstance(SharedPtr<scene::ModelInstance> modelInstance);
+    void AddInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances);
 
     utils::ExResult<RLHandle> Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey = 0);
     utils::ExError UnRegister(const RLHandle& handle);
 
-    void Sort(const Predicate<DrawItem>& pred = RBATCH_SORT_BY_MINIMAL_STATE);
+    void SetItemSort(const Predicate<DrawItem>& pred);
+    void SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner);
+    void SortItems();
 protected:
     friend RenderLayer;
 
-    BatchErrorPredicate m_ErrorHandler{};
+    RenderBatchDesc m_Desc{};
 
     static void Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void* userPtr);
 };

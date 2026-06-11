@@ -40,11 +40,20 @@ gfx::TextureFormat GetTexFormatOfImg(const gfx::ImageFormat& fmt);
 const char* GetAssetBindKey(const MaterialTextureType& type);
 uint32_t GetAssetBindSlot(const MaterialTextureType& type);
 
+// TODO: Later on 
+// struct AssetGpuSubMesh {
+//     uint32_t firstVertex{0};
+//     uint32_t firstIndex{0};
+// };
+
 struct AssetGpuMesh {
     gfx::MeshVertexLayout layout;
 
     gfx::BufferHandle vertices;
     gfx::BufferHandle indices;
+
+    uint32_t vertexCount{0};
+    uint32_t indexCount{0};
 
     bool indexed{false};
 };

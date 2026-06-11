@@ -22,34 +22,43 @@ public:
     virtual utils::ExResult<SwapchainHandle> CreateSwapchain(const SwapchainDesc& desc) = 0;
     virtual utils::ExError DestroySwapchain(const SwapchainHandle& desc) = 0;
     virtual utils::ExError ResizeSwapchain(const SwapchainHandle& desc, uint32_t width, uint32_t height) = 0;
+    virtual utils::ExResult<SwapchainDesc> DescribeSwapchain(const SwapchainHandle& handle) = 0;
 
     virtual utils::ExResult<BufferHandle> CreateBuffer(const BufferDesc& desc) = 0;
     virtual utils::ExError UpdateBuffer(const BufferHandle& handle, size_t offset, size_t size, const void* data) = 0;
     virtual utils::ExError DestroyBuffer(const BufferHandle& handle) = 0;
+    virtual utils::ExResult<BufferDesc> DescribeBuffer(const BufferHandle& handle) = 0;
 
     virtual utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) = 0;
     virtual utils::ExError UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) = 0;
     virtual utils::ExError DestroyTexture(const TextureHandle& handle) = 0;
+    virtual utils::ExResult<TextureDesc> DescribeTexture(const TextureHandle& handle) = 0;
 
     virtual utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) = 0;
     virtual utils::ExError DestroyFramebuffer(const FramebufferHandle& handle) = 0;
+    virtual utils::ExResult<FramebufferDesc> DescribeFramebuffer(const FramebufferHandle& handle) = 0;
 
     virtual utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) = 0;
     virtual utils::ExError DestroyProgram(const ShaderHandle& handle) = 0;
+    virtual utils::ExResult<ShaderDesc> DescribeProgram(const ShaderHandle& handle) = 0;
     
     virtual utils::ExResult<RenderPipelineHandle> CreateRenderPipeline(const RenderPipelineDesc& desc) = 0;
     virtual utils::ExError DestroyRenderPipeline(const RenderPipelineHandle& handle) = 0;
+    virtual utils::ExResult<RenderPipelineDesc> DescribeRenderPipeline(const RenderPipelineHandle& handle) = 0;
     
     virtual utils::ExResult<ComputePipelineHandle> CreateComputePipeline(const ComputePipelineDesc& desc) = 0;
     virtual utils::ExError DestroyComputePipeline(const ComputePipelineHandle& handle) = 0;
+    virtual utils::ExResult<ComputePipelineDesc> DescribeComputePipeline(const ComputePipelineHandle& handle) = 0;
 
     virtual utils::ExResult<RenderPassHandle> CreateDefaultRenderPass(const DefaultRenderPassDesc& desc) = 0;
     virtual utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) = 0;
     virtual utils::ExError DestroyRenderPass(const RenderPassHandle& handle) = 0;
+    virtual utils::ExResult<RenderPassDesc> DescribeRenderPass(const RenderPassHandle& handle) = 0;
 
     virtual utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) = 0;
     virtual utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, std::vector<Binding> bindings) = 0;
     virtual utils::ExError DestroyResourceSet(const ResourceSetHandle& handle) = 0;
+    virtual utils::ExResult<ResourceSetDesc> DescribeResourceSet(const ResourceSetHandle& handle) = 0;
 
     virtual utils::ExError Execute(ICommandList& cmd) = 0;
     virtual utils::ExError Dispatch(ICommandList& cmdlist, uint32_t x, uint32_t y, uint32_t z) = 0;

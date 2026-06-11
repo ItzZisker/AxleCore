@@ -118,12 +118,12 @@ utils::Coordination NodeInstance::UseCoords() {
     return m_Coords;
 }
 
-const std::vector<NodeInstance>& NodeInstance::GetChildren() {
-    return m_Children;
+utils::Span<NodeInstance> NodeInstance::GetChildren() {
+    return {m_Children.data(), m_Children.size()};
 }
 
-const std::vector<uint32_t>& NodeInstance::GetMeshIds() {
-    return m_MeshIds;
+utils::Span<uint32_t> NodeInstance::GetMeshIds() {
+    return {m_MeshIds.data(), m_MeshIds.size()};
 }
 
 std::string_view NodeInstance::GetName() const {

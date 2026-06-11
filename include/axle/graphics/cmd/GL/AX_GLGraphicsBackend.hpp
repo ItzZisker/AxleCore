@@ -101,15 +101,17 @@ struct GLCommandBinding {
     }
 };
 
-template <typename T_Extern>
-struct GLInternal : public utils::MagicInternal<T_Extern> {};
+template <typename T_Desc, typename T_Extern>
+struct GLInternal : public utils::MagicInternal<T_Extern> {
+    T_Desc userDesc;
+};
 
-struct GLProgram : public GLInternal<ShaderHandle> {
+struct GLProgram : public GLInternal<ShaderDesc, ShaderHandle> {
     GLuint id{0};
     ShaderInputState vertexBindings;
 };
 
-struct GLBuffer : public GLInternal<BufferHandle> {
+struct GLBuffer : public GLInternal<BufferDesc, BufferHandle> {
     GLuint id{0};
     BufferUsage usage;
     size_t size{0};
@@ -138,29 +140,26 @@ struct BindingSlotCache {
     std::vector<uint32_t> textureLocations;
 };
 
-struct GLRenderPipeline : public GLInternal<RenderPipelineHandle> {
-    RenderPipelineDesc desc;
+struct GLRenderPipeline : public GLInternal<RenderPipelineDesc, RenderPipelineHandle> {
     std::unordered_map<ResourceSetHandle, BindingSlotCache> bindingSlotCache{};
     std::unordered_map<VAOKey, GLuint, VAOKeyLookup> vaoCache{};
 };
 
-struct GLComputePipeline : public GLInternal<ComputePipelineHandle> {
+struct GLComputePipeline : public GLInternal<ComputePipelineDesc, ComputePipelineHandle> {
     ShaderHandle program;
-    ComputePipelineDesc desc;
 };
 
-struct GLTexture : public GLInternal<TextureHandle> {
+struct GLTexture : public GLInternal<TextureDesc, TextureHandle> {
     GLuint id{0};
     GLuint resolveId{0};
-    TextureDesc desc;
 };
 
-struct GLRenderPass : public GLInternal<RenderPassHandle> {
+struct GLRenderPass : public GLInternal<RenderPassDesc, RenderPassHandle> {
     RenderPassDesc desc;
     GLCommandBinding<FramebufferHandle> fbInUse{};
 };
 
-struct GLFramebuffer : public GLInternal<FramebufferHandle> {
+struct GLFramebuffer : public GLInternal<FramebufferDesc, FramebufferHandle> {
     GLuint fbo{0};
     
     bool hasDepth{false};
@@ -178,18 +177,7 @@ struct GLFramebuffer : public GLInternal<FramebufferHandle> {
     bool isSwapchain{false};
 };
 
-struct GLSwapchain {
-    uint32_t width{0};
-    uint32_t height{0};
-    TextureFormat format{TextureFormat::RGBA8_UINT};
-    FramebufferHandle backbuffer{};
-};
-
-struct GLResourceSet : public GLInternal<ResourceSetHandle> {
-    std::vector<Binding> bindings;
-    uint32_t layoutID{0};
-    uint32_t version{1};
-};
+struct GLResourceSet : public GLInternal<ResourceSetDesc, ResourceSetHandle> {};
 
 struct GLStateCache {
     GLuint program{0};
@@ -252,34 +240,43 @@ public:
     utils::ExResult<SwapchainHandle> CreateSwapchain(const SwapchainDesc& desc) override;
     utils::ExError DestroySwapchain(const SwapchainHandle& desc) override;
     utils::ExError ResizeSwapchain(const SwapchainHandle& desc, uint32_t width, uint32_t height) override;
+    utils::ExResult<SwapchainDesc> DescribeSwapchain(const SwapchainHandle& handle) override;
 
     utils::ExResult<BufferHandle> CreateBuffer(const BufferDesc& desc) override;
     utils::ExError UpdateBuffer(const BufferHandle& handle, size_t offset, size_t size, const void* data) override;
     utils::ExError DestroyBuffer(const BufferHandle& handle) override;
+    utils::ExResult<BufferDesc> DescribeBuffer(const BufferHandle& handle) override;
 
     utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) override;
     utils::ExError UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) override;
     utils::ExError DestroyTexture(const TextureHandle& handle) override;
+    utils::ExResult<TextureDesc> DescribeTexture(const TextureHandle& handle) override;
 
     utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) override;
     utils::ExError DestroyFramebuffer(const FramebufferHandle& handle) override;
+    utils::ExResult<FramebufferDesc> DescribeFramebuffer(const FramebufferHandle& handle) override;
 
     utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) override;
     utils::ExError DestroyProgram(const ShaderHandle& handle) override;
+    utils::ExResult<ShaderDesc> DescribeProgram(const ShaderHandle& handle) override;
 
     utils::ExResult<RenderPipelineHandle> CreateRenderPipeline(const RenderPipelineDesc& desc) override;
     utils::ExError DestroyRenderPipeline(const RenderPipelineHandle& handle) override;
+    utils::ExResult<RenderPipelineDesc> DescribeRenderPipeline(const RenderPipelineHandle& handle) override;
 
     utils::ExResult<ComputePipelineHandle> CreateComputePipeline(const ComputePipelineDesc& desc) override;
     utils::ExError DestroyComputePipeline(const ComputePipelineHandle& handle) override;
+    utils::ExResult<ComputePipelineDesc> DescribeComputePipeline(const ComputePipelineHandle& handle) override;
 
     utils::ExResult<RenderPassHandle> CreateDefaultRenderPass(const DefaultRenderPassDesc& desc) override;
     utils::ExResult<RenderPassHandle> CreateRenderPass(const RenderPassDesc& desc) override;
     utils::ExError DestroyRenderPass(const RenderPassHandle& handle) override;
+    utils::ExResult<RenderPassDesc> DescribeRenderPass(const RenderPassHandle& handle) override;
 
     utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) override;
     utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, std::vector<Binding> bindings) override;
     utils::ExError DestroyResourceSet(const ResourceSetHandle& handle) override;
+    utils::ExResult<ResourceSetDesc> DescribeResourceSet(const ResourceSetHandle& handle) override;
 
     utils::ExError Execute(ICommandList& cmd) override;
     utils::ExError Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, uint32_t z) override;
@@ -303,7 +300,6 @@ private:
     GLCommandBinding<ComputePipelineHandle>  m_CurrentComputePipeline{};
 
     FramebufferHandle  m_DefaultBackbuffer{};
-    GLSwapchain        m_Swapchain{};
 
     GLStateCache m_CurrentState{};
 

@@ -92,10 +92,12 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
             }
 
             bool indexed = immutableMeshRef.indexBufferIdx != UINT32_MAX;
+            uint32_t indexCount{0};
 
             if (indexed) {
                 auto& indices = desc.immutableImport.buffers[immutableMeshRef.indexBufferIdx];
                 indicesDesc.size = indices.raw.size();
+                indexCount = indices.count;
 
                 auto ires = gbgfx->CreateBuffer(indicesDesc);
                 if (!ires.has_value()) {
@@ -149,6 +151,8 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
             gpuMesh.vertices = vertexBuffer;
             gpuMesh.indices = indexBuffer;
             gpuMesh.layout = layout;
+            gpuMesh.vertexCount = vertices.count;
+            gpuMesh.indexCount = indexCount;
             gpuMesh.indexed = indexed;
 
             meshes.push_back(gpuMesh);

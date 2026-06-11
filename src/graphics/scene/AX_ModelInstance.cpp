@@ -39,11 +39,11 @@ void ModelInstance::SetDiscard(assets::NodeId nodeInstance, bool discard) {
 
 }
 
-const NodeInstance& ModelInstance::GetRoot() const {
+NodeInstance& ModelInstance::GetRoot() const {
 
 }
 
-ModelDesc ModelInstance::GetModelDesc() {
+ModelDesc& ModelInstance::GetModelDesc() const {
 
 }
 

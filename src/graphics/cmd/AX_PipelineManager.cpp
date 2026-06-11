@@ -20,11 +20,7 @@ PipelineManager::~PipelineManager() {
             backend->DestroyRenderPipeline(h);
         }
     };
-    if (m_GfxThread->ValidateThread()) {
-        lambdaFinalizer();
-    } else {
-        m_GfxThread->EnqueueTask(lambdaFinalizer);
-    }
+    core::InstaTaskOrQueue(*m_GfxThread, lambdaFinalizer);
 }
 
 ExResult<RenderPipelineHandle> PipelineManager::Create(const RenderPipelineDesc& desc) {
@@ -35,11 +31,7 @@ ExResult<RenderPipelineHandle> PipelineManager::Create(const RenderPipelineDesc&
         auto backend = gfxThread->GetContext();
         return backend->CreateRenderPipeline(descCpy);
     };
-    if (m_GfxThread->ValidateThread()) {
-        return lambdaCreator();
-    } else {
-        return m_GfxThread->EnqueueFuture(lambdaCreator).get();
-    }
+    return core::InstaFutureOrQueue(*m_GfxThread, lambdaCreator).get();
 }
 
 ExResult<RenderPipelineHandle> PipelineManager::GetOrCreate(const RenderPipelineDesc& desc) {
@@ -53,6 +45,46 @@ ExResult<RenderPipelineHandle> PipelineManager::GetOrCreate(const RenderPipeline
     m_PipelineLookup[hash] = handle;
 
     return handle;
+}
+
+utils::ExResult<RenderPipelineDesc> PipelineManager::Describe(const RenderPipelineHandle& handle) {
+    auto lambdaDescribe = [
+        handleCpy = handle,
+        gfxThread = m_GfxThread
+    ]() -> ExResult<RenderPipelineDesc> {
+        auto backend = gfxThread->GetContext();
+        return backend->DescribeRenderPipeline(handleCpy);
+    };
+    return core::InstaFutureOrQueue(*m_GfxThread, lambdaDescribe).get();
+}
+
+utils::ExResult<RenderPipelineDesc> PipelineManager::Describe(std::size_t pipelineHash) {
+    auto foundItr = m_PipelineLookup.find(pipelineHash);
+    if (foundItr == m_PipelineLookup.end()) {
+        return utils::ExError{"No pipeline handle found referencing hash"};
+    }
+    auto handle = foundItr->second;
+    return PipelineManager::Describe(handle);
+}
+
+utils::ExError PipelineManager::Destroy(const RenderPipelineHandle& handle) {
+    auto lambdaDescribe = [
+        handleCpy = handle,
+        gfxThread = m_GfxThread
+    ]() -> ExError {
+        auto backend = gfxThread->GetContext();
+        return backend->DestroyRenderPipeline(handleCpy);
+    };
+    return core::InstaFutureOrQueue(*m_GfxThread, lambdaDescribe).get();
+}
+
+utils::ExError PipelineManager::Destroy(std::size_t pipelineHash) {
+    auto foundItr = m_PipelineLookup.find(pipelineHash);
+    if (foundItr == m_PipelineLookup.end()) {
+        return utils::ExError{"No pipeline handle found referencing hash"};
+    }
+    auto handle = foundItr->second;
+    return PipelineManager::Destroy(handle);
 }
 
 std::size_t RPipeline_Hash_StencilOpState(const StencilOpState& s) {

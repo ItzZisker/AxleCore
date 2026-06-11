@@ -26,6 +26,12 @@ public:
     ~PipelineManager();
 
     utils::ExResult<RenderPipelineHandle> GetOrCreate(const RenderPipelineDesc& desc);
+    
+    utils::ExResult<RenderPipelineDesc> Describe(const RenderPipelineHandle& handle);
+    utils::ExResult<RenderPipelineDesc> Describe(std::size_t pipelineHash);
+    
+    utils::ExError Destroy(const RenderPipelineHandle& handle);
+    utils::ExError Destroy(std::size_t pipelineHash);
 };
 
 }

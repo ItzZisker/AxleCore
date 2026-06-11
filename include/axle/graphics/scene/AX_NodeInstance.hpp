@@ -55,8 +55,8 @@ public:
     void ApplyCoords(const std::function<void(utils::Coordination&)>& consumer);
     utils::Coordination GetCoords();
 
-    const std::vector<uint32_t>& GetMeshIds();
-    const std::vector<NodeInstance>& GetChildren();
+    utils::Span<uint32_t> GetMeshIds();
+    utils::Span<NodeInstance> GetChildren();
 
     std::string_view GetName() const;
 protected:

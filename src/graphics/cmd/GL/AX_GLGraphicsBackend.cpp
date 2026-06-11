@@ -73,11 +73,6 @@ GLGraphicsBackend::GLGraphicsBackend(IRenderContext* context) {
 
     m_DefaultBackbuffer = fb.External();
 
-    m_Swapchain.width = fb.width;
-    m_Swapchain.height = fb.height;
-    m_Swapchain.format = TextureFormat::RGBA8_UINT;
-    m_Swapchain.backbuffer = m_DefaultBackbuffer;
-
     m_Context->SetVSync(m_SurfaceInfo.vsync);
 }
 
@@ -210,19 +205,29 @@ ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
     return result;
 }
 
+// GL implicit
 utils::ExResult<SwapchainHandle> GLGraphicsBackend::CreateSwapchain(const SwapchainDesc&) {
     return SwapchainHandle{0, 1};
 }
 
+// GL implicit
 utils::ExError GLGraphicsBackend::DestroySwapchain(const SwapchainHandle&) {
-    // GL implicit
     return ExError::NoError();
 }
 
+// GL implicit
 utils::ExError GLGraphicsBackend::ResizeSwapchain(const SwapchainHandle&, uint32_t width, uint32_t height) {
-    m_Swapchain.width = width;
-    m_Swapchain.height = height;
+    m_SurfaceInfo.width = width;
+    m_SurfaceInfo.height = height;
     return ExError::NoError();
+}
+
+// GL implicit
+utils::ExResult<SwapchainDesc> GLGraphicsBackend::DescribeSwapchain(const SwapchainHandle& handle) {
+    SwapchainDesc desc;
+    desc.imageCount = 1;
+    desc.surface = m_SurfaceInfo;
+    return desc;
 }
 
 ExResult<BufferHandle> GLGraphicsBackend::CreateBuffer(const BufferDesc& desc) {
@@ -234,6 +239,7 @@ ExResult<BufferHandle> GLGraphicsBackend::CreateBuffer(const BufferDesc& desc) {
 
     // Staging buffer is fine in GL 3.3 (just normal array buffer with CPU updates)
     auto& buff = *m_Buffers.Reserve();
+    buff.userDesc = desc;
 
     GLuint id = 0;
     GLenum target = ToGLBufferTarget(desc.usage);
@@ -245,7 +251,7 @@ ExResult<BufferHandle> GLGraphicsBackend::CreateBuffer(const BufferDesc& desc) {
     buff.id = id;
     buff.usage = desc.usage;
     buff.size = desc.size;
-    buff.alive = true;
+    buff.Sign();
 
     return buff.External();
 }
@@ -279,6 +285,14 @@ ExError GLGraphicsBackend::DestroyBuffer(const BufferHandle& handle) {
     return ExError::NoError();
 }
 
+utils::ExResult<BufferDesc> GLGraphicsBackend::DescribeBuffer(const BufferHandle& handle) {
+    if (!m_Buffers.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_Buffers.Get(handle)->userDesc;
+    }
+}
+
 static uint32_t CalcFullMipCount(uint32_t w, uint32_t h, uint32_t d = 1) {
     uint32_t size = std::max({w, h, d});
     uint32_t levels = 1;
@@ -294,7 +308,7 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
         return ExError{"Invalid dimensions"};
 
     auto& tex = *m_Textures.Reserve();
-    tex.desc = desc;
+    tex.userDesc = desc;
 
     GLenum target = ToGLTextureTarget(desc.type);
     GLenum internalFormat = ToGLTextureInternalFormat(desc.format);
@@ -437,7 +451,7 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
 
     GL_CALL(m_GL->BindTexture(target, 0));
 
-    tex.alive = true;
+    tex.Sign();
     return tex.External();
 }
 
@@ -469,7 +483,7 @@ ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const Text
         return {"Invalid Handle"};
 
     auto& tex = *m_Textures.Get(handle);
-    auto& desc = tex.desc;
+    auto& desc = tex.userDesc;
 
     GLenum target = ToGLTextureTarget(desc.type);
     GLenum format = ToGLTextureFormat(desc.format);
@@ -613,7 +627,7 @@ ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const Text
     if (subDesc.generateMips)
         GL_CALL(m_GL->GenerateMipmap(target));
 
-    tex.desc.subDesc = subDesc;
+    tex.userDesc.subDesc = subDesc;
 
     GL_CALL(m_GL->BindTexture(target, 0));
     return ExError::NoError();
@@ -628,6 +642,14 @@ ExError GLGraphicsBackend::DestroyTexture(const TextureHandle& handle) {
     tex.id = 0;
     m_Textures.Delete(handle);
     return ExError::NoError();
+}
+
+ExResult<TextureDesc> GLGraphicsBackend::DescribeTexture(const TextureHandle& handle) {
+    if (!m_Textures.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_Textures.Get(handle)->userDesc;
+    }
 }
 
 ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const FramebufferDesc& desc) {
@@ -653,21 +675,21 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
         auto& tex = *m_Textures.Get(texHandle);
         const AttachmentDesc& rpAtt = rpDesc.colorAttachments[i];
 
-        if (tex.desc.samples != rpAtt.samples) {
+        if (tex.userDesc.samples != rpAtt.samples) {
             return ExError{
                 "Color attachment sample count mismatch at index " +
                 std::to_string(i)
             };
         }
 
-        if (tex.desc.format != rpAtt.format) {
+        if (tex.userDesc.format != rpAtt.format) {
             return ExError{
                 "Color attachment format mismatch at index " +
                 std::to_string(i)
             };
         }
 
-        GLenum glType = ToGLTextureType(tex.desc.format);
+        GLenum glType = ToGLTextureType(tex.userDesc.format);
 
         if (glType == GL_HALF_FLOAT && !m_Capabilities.Has(GraphicsCapEnum::HalfFloatColorBuffer)) {
             return ExError{"Host doesn't support 16 bit float Color buffers (Unwritable)"};
@@ -676,7 +698,7 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
             return ExError{"Host doesn't support 32 bit float Color buffers (Unwritable)"};
         }
 
-        if (tex.desc.width != desc.width || tex.desc.height != desc.height) {
+        if (tex.userDesc.width != desc.width || tex.userDesc.height != desc.height) {
             return ExError{
                 "Color attachment size mismatch at index " +
                 std::to_string(i)
@@ -708,15 +730,16 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
         auto& depthStencilTex = *m_Textures.Get(desc.depthStencilTexture);
         const AttachmentDesc& rpDepthStencil = rpDesc.depthStencilAttachment;
 
-        if (depthStencilTex.desc.format != rpDepthStencil.format)
+        if (depthStencilTex.userDesc.format != rpDepthStencil.format)
             return ExError{"Depth/Stencil attachment format mismatch"};
 
-        if (depthStencilTex.desc.width != desc.width ||
-            depthStencilTex.desc.height != desc.height)
+        if (depthStencilTex.userDesc.width != desc.width ||
+            depthStencilTex.userDesc.height != desc.height)
             return ExError{"Depth/Stencil attachment size mismatch"};
     }
 
     auto& fb = *m_Framebuffers.Reserve();
+    fb.userDesc = desc;
 
     GL_CALL(m_GL->GenFramebuffers(1, &fb.fbo));
     GL_CALL(m_GL->BindFramebuffer(GL_FRAMEBUFFER, fb.fbo));
@@ -727,7 +750,7 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
         GL_CALL(m_GL->FramebufferTexture2D(
             GL_FRAMEBUFFER,
             GL_COLOR_ATTACHMENT0 + i,
-            ToGLTextureTarget(tex.desc.type),
+            ToGLTextureTarget(tex.userDesc.type),
             tex.id,
             0
         ));
@@ -748,7 +771,7 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
         GL_CALL(m_GL->FramebufferTexture2D(
             GL_FRAMEBUFFER,
             attachmentGLType,
-            ToGLTextureTarget(depthStencilTex.desc.type),
+            ToGLTextureTarget(depthStencilTex.userDesc.type),
             depthStencilTex.id,
             0
         ));
@@ -769,14 +792,14 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
     bool needsDSResolve = false;
     for (size_t i{0}; i < desc.colorAttachments.size(); i++) {
         auto& tex = *m_Textures.Get(desc.colorAttachments[i]);
-        if (tex.desc.samples > SampleCount::Sample1 && rp.desc.colorAttachments[i].hasResolve) {
+        if (tex.userDesc.samples > SampleCount::Sample1 && rp.desc.colorAttachments[i].hasResolve) {
             needsResolve = true;
             break;
         }
     }
     if (hasDepth || hasStencil) {
         auto& dsTex = *m_Textures.Get(desc.depthStencilTexture);
-        if (dsTex.desc.samples > SampleCount::Sample1 && rp.desc.depthStencilAttachment.hasResolve) {
+        if (dsTex.userDesc.samples > SampleCount::Sample1 && rp.desc.depthStencilAttachment.hasResolve) {
             needsDSResolve = true;
         }
     }
@@ -814,8 +837,8 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
 
         for (uint32_t i = 0; i < desc.colorAttachments.size(); ++i) {
             auto& tex = *m_Textures.Get(desc.colorAttachments[i]);
-            if (tex.desc.samples > SampleCount::Sample1 && !tex.resolveId) {
-                GLuint resolveTex = createSingleSample(tex.desc);
+            if (tex.userDesc.samples > SampleCount::Sample1 && !tex.resolveId) {
+                GLuint resolveTex = createSingleSample(tex.userDesc);
                 GL_CALL(m_GL->FramebufferTexture2D(
                     GL_FRAMEBUFFER,
                     GL_COLOR_ATTACHMENT0 + i,
@@ -831,7 +854,7 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
         if (needsDSResolve) {
             auto& depthTex = *m_Textures.Get(desc.depthStencilTexture);
             if (!depthTex.resolveId) {
-                GLuint resolveTex = createSingleSample(depthTex.desc);
+                GLuint resolveTex = createSingleSample(depthTex.userDesc);
                 GL_CALL(m_GL->FramebufferTexture2D(
                     GL_FRAMEBUFFER,
                     hasDepth && hasStencil ? GL_DEPTH_STENCIL_ATTACHMENT
@@ -850,12 +873,12 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
         }
     }
 
-    fb.alive  = true;
     fb.hasDepth = hasDepth;
     fb.hasStencil = hasStencil;
     fb.width  = desc.width;
     fb.height = desc.height;
     fb.renderPass = desc.renderPass;
+    fb.Sign();
 
     return fb.External();
 }
@@ -872,6 +895,14 @@ ExError GLGraphicsBackend::DestroyFramebuffer(const FramebufferHandle& handle) {
     fb.fbo = 0;
     m_Framebuffers.Delete(handle);
     return ExError::NoError();
+}
+
+ExResult<FramebufferDesc> GLGraphicsBackend::DescribeFramebuffer(const FramebufferHandle& handle) {
+    if (!m_Framebuffers.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_Framebuffers.Get(handle)->userDesc;
+    }
 }
 
 ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) {
@@ -891,6 +922,7 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
     }
 
     auto& program = *m_Programs.Reserve();
+    program.userDesc = desc;
     program.id = m_GL->CreateProgram(); 
 
     int major = 0, minor = 0;
@@ -1053,7 +1085,7 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
         program.id = 0;
         return {error_msg.str()};
     }
-    program.alive = true;
+    program.Sign();
 
     return program.External();
 }
@@ -1071,13 +1103,21 @@ ExError GLGraphicsBackend::DestroyProgram(const ShaderHandle& handle) {
     return ExError::NoError();
 }
 
+ExResult<ShaderDesc> GLGraphicsBackend::DescribeProgram(const ShaderHandle& handle) {
+    if (!m_Programs.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_Programs.Get(handle)->userDesc;
+    }
+}
+
 ExResult<RenderPipelineHandle> GLGraphicsBackend::CreateRenderPipeline(const RenderPipelineDesc& desc) {
     if (!m_Programs.IsValid(desc.shader))
         return ExError("Invalid Pipeline Shader");
 
     auto& pipeline = *m_RenderPipelines.Reserve();
-    pipeline.desc = desc;
-    pipeline.alive = true;
+    pipeline.userDesc = desc;
+    pipeline.Sign();
 
     return pipeline.External();
 }
@@ -1101,10 +1141,17 @@ ExError GLGraphicsBackend::DestroyRenderPipeline(const RenderPipelineHandle& han
     return ExError::NoError();
 }
 
+ExResult<RenderPipelineDesc> GLGraphicsBackend::DescribeRenderPipeline(const RenderPipelineHandle& handle) {
+    if (!m_RenderPipelines.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_RenderPipelines.Get(handle)->userDesc;
+    }
+}
+
 ExResult<ComputePipelineHandle> GLGraphicsBackend::CreateComputePipeline(const ComputePipelineDesc& desc) {
     auto& pipeline = *m_ComputePipelines.Reserve();
-    
-    pipeline.desc = desc;
+    pipeline.userDesc = desc;
     pipeline.alive = true;
 
     return pipeline.External();
@@ -1116,6 +1163,14 @@ ExError GLGraphicsBackend::DestroyComputePipeline(const ComputePipelineHandle& h
 
     m_ComputePipelines.Delete(handle);
     return ExError::NoError();
+}
+
+ExResult<ComputePipelineDesc> GLGraphicsBackend::DescribeComputePipeline(const ComputePipelineHandle& handle) {
+    if (!m_ComputePipelines.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_ComputePipelines.Get(handle)->userDesc;
+    }
 }
 
 ExResult<RenderPassHandle> GLGraphicsBackend::CreateDefaultRenderPass(const DefaultRenderPassDesc& desc) {
@@ -1138,7 +1193,7 @@ ExResult<RenderPassHandle> GLGraphicsBackend::CreateDefaultRenderPass(const Defa
         rpdesc.depthStencilAttachment.hasResolve = false;
     }    
     pass.desc = rpdesc;
-    pass.alive = true;
+    pass.Sign();
 
     return pass.External();
 }
@@ -1146,7 +1201,7 @@ ExResult<RenderPassHandle> GLGraphicsBackend::CreateDefaultRenderPass(const Defa
 ExResult<RenderPassHandle> GLGraphicsBackend::CreateRenderPass(const RenderPassDesc& desc) {
     auto& pass = *m_RenderPasses.Reserve();
     pass.desc = desc;
-    pass.alive = true;
+    pass.Sign();
     return pass.External();
 }
 
@@ -1156,6 +1211,14 @@ ExError GLGraphicsBackend::DestroyRenderPass(const RenderPassHandle& handle) {
 
     m_RenderPasses.Delete(handle);
     return ExError::NoError();
+}
+
+ExResult<RenderPassDesc> GLGraphicsBackend::DescribeRenderPass(const RenderPassHandle& handle) {
+    if (!m_RenderPasses.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_RenderPasses.Get(handle)->userDesc;
+    }
 }
 
 ExError GLGraphicsBackend::Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, uint32_t z) {
@@ -1196,12 +1259,12 @@ ExResult<GLuint> GLGraphicsBackend::CreateVertexArray(GLRenderPipeline& pipeline
         GL_CALL(m_GL->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_CurrentState.currentEbo));
     }
 
-    auto& meshLayout = pipeline.desc.vertexLayout;
+    auto& meshLayout = pipeline.userDesc.vertexLayout;
 
-    if (!m_Programs.IsValid(pipeline.desc.shader)) {
+    if (!m_Programs.IsValid(pipeline.userDesc.shader)) {
         return ExError{"Invalid/Out-of-use Pipeline shader"};
     }
-    auto& shader = *m_Programs.Get(pipeline.desc.shader);
+    auto& shader = *m_Programs.Get(pipeline.userDesc.shader);
     auto& shaderVertexInputs = shader.vertexBindings.inputs;
 
     for (const auto& input : shaderVertexInputs) {
@@ -1472,10 +1535,10 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
             auto& pipeline = *m_RenderPipelines.Get(cmd.handle);
 
-            if (!m_Programs.IsValid(pipeline.desc.shader))
+            if (!m_Programs.IsValid(pipeline.userDesc.shader))
                 return {"GLCommand::Execute \"GLCommandType::BindRenderPipeline\" Failed: Invalid Pipeline shader program!"};
 
-            auto& desc = pipeline.desc;
+            auto& desc = pipeline.userDesc;
 
             if (
                 m_CurrentRenderPipeline.bound &&
@@ -1487,7 +1550,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
             m_CurrentRenderPipeline.Bind(cmd.handle);
 
-            auto& program = *m_Programs.Get(pipeline.desc.shader);
+            auto& program = *m_Programs.Get(pipeline.userDesc.shader);
             if (m_CurrentState.program != program.id) {
                 GL_CALL(m_GL->UseProgram(program.id));
                 m_CurrentState.program = program.id;
@@ -1691,23 +1754,23 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             bool implicitBinds = m_Capabilities.resourceBindingInternal ==
                     ResourceBindingInternal::BindImplicitlyByNames;
 
-            auto& shaderHandle = pipeline.desc.shader;
+            auto& shaderHandle = pipeline.userDesc.shader;
             if (!m_Programs.IsValid(shaderHandle)) {
                 return {"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Invalid Pipeline Shader handle"};
             }
             auto programId = m_Programs.Get(shaderHandle)->id;
         
             if (implicitBinds) {
-                auto& bindings = res.bindings;
+                auto& bindings = res.userDesc.bindings;
                 auto& slotCache = pipeline.bindingSlotCache;
 
                 auto lastCache = slotCache.find(cmd.handle);
                 auto found = lastCache != slotCache.end();
 
-                if (!found || (found && lastCache->second.resourceSetVersion != res.version)) {
+                if (!found || (found && lastCache->second.resourceSetVersion != res.userDesc.version)) {
                     if (!found) slotCache[cmd.handle] = {};
                     auto& cache = slotCache[cmd.handle];
-                    cache.resourceSetVersion = res.version; // Update version
+                    cache.resourceSetVersion = res.userDesc.version; // Update version
 
                     cache.blockIndices.clear();
                     cache.blockIndices.resize(bindings.size());
@@ -1732,8 +1795,8 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                 }
             }
 
-            for (uint32_t ib{0}; ib < res.bindings.size(); ib++) {
-                auto& b = res.bindings[ib];
+            for (uint32_t ib{0}; ib < res.userDesc.bindings.size(); ib++) {
+                auto& b = res.userDesc.bindings[ib];
                 uint32_t blockIndex, texUnit, texLoc;
 
                 if (implicitBinds) {
@@ -1819,7 +1882,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                             GL_FALSE,
                             0,
                             GL_READ_WRITE,
-                            ToGLTextureFormat(m_Textures.Get(b.resource.AsTexture())->desc.format)
+                            ToGLTextureFormat(m_Textures.Get(b.resource.AsTexture())->userDesc.format)
                         ));
 
                         if (implicitBinds) {
@@ -1838,7 +1901,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             auto& pipeline = *m_RenderPipelines.Get(m_CurrentRenderPipeline.handle);
             AX_PROPAGATE_ERROR(PrepVertexArray(pipeline));
             GL_CALL(m_GL->DrawArrays(
-                ToGLPolyMode(pipeline.desc.raster.polyMode),
+                ToGLPolyMode(pipeline.userDesc.raster.polyMode),
                 cmd.firstVertex,
                 cmd.vertexCount
             ));
@@ -1851,7 +1914,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             auto& pipeline = *m_RenderPipelines.Get(m_CurrentRenderPipeline.handle);
             AX_PROPAGATE_ERROR(PrepVertexArray(pipeline));
             GL_CALL(m_GL->DrawElements(
-                ToGLPolyMode(pipeline.desc.raster.polyMode),
+                ToGLPolyMode(pipeline.userDesc.raster.polyMode),
                 cmd.indexCount,
                 GL_UNSIGNED_INT,
                 (void*)(cmd.firstIndex * sizeof(uint32_t))
@@ -1865,7 +1928,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             auto& pipeline = *m_RenderPipelines.Get(m_CurrentRenderPipeline.handle);
             AX_PROPAGATE_ERROR(PrepVertexArray(pipeline));
             GL_CALL(m_GL->DrawArraysInstanced(
-                ToGLPolyMode(pipeline.desc.raster.polyMode),
+                ToGLPolyMode(pipeline.userDesc.raster.polyMode),
                 cmd.firstVertex,
                 cmd.vertexCount,
                 cmd.instanceCount
@@ -1879,7 +1942,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             auto& pipeline = *m_RenderPipelines.Get(m_CurrentRenderPipeline.handle);
             AX_PROPAGATE_ERROR(PrepVertexArray(pipeline));
             GL_CALL(m_GL->DrawElementsInstanced(
-                ToGLPolyMode(pipeline.desc.raster.polyMode),
+                ToGLPolyMode(pipeline.userDesc.raster.polyMode),
                 cmd.indexCount,
                 GL_UNSIGNED_INT,
                 (void*)cmd.firstIndex,
@@ -1903,7 +1966,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
                 AX_PROPAGATE_ERROR(PrepVertexArray(pipeline));
                 GL_CALL(m_GL->MultiDrawArraysIndirect(
-                    ToGLPolyMode(pipeline.desc.raster.polyMode),
+                    ToGLPolyMode(pipeline.userDesc.raster.polyMode),
                     (void*)cmd.offset,
                     drawCount,
                     cmd.stride
@@ -1911,7 +1974,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             } else {
                 AX_PROPAGATE_ERROR(PrepVertexArray(pipeline));
                 GL_CALL(m_GL->DrawArraysIndirect(
-                    ToGLPolyMode(pipeline.desc.raster.polyMode),
+                    ToGLPolyMode(pipeline.userDesc.raster.polyMode),
                     (void*)cmd.offset
                 ));
             }
@@ -1933,7 +1996,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
                 AX_PROPAGATE_ERROR(PrepVertexArray(pipeline));
                 GL_CALL(m_GL->MultiDrawElementsIndirect(
-                    ToGLPolyMode(pipeline.desc.raster.polyMode),
+                    ToGLPolyMode(pipeline.userDesc.raster.polyMode),
                     GL_UNSIGNED_INT,
                     (void*)(cmd.firstIndex * sizeof(uint32_t)),
                     drawCount,
@@ -1942,7 +2005,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             } else {
                 AX_PROPAGATE_ERROR(PrepVertexArray(pipeline));
                 GL_CALL(m_GL->DrawElementsIndirect(
-                    ToGLPolyMode(pipeline.desc.raster.polyMode),
+                    ToGLPolyMode(pipeline.userDesc.raster.polyMode),
                     GL_UNSIGNED_INT,
                     (void*)(cmd.firstIndex * sizeof(uint32_t))
                 ));
@@ -2010,13 +2073,7 @@ utils::ExError GLGraphicsBackend::Present(uint32_t imageIndex) {
 
 utils::ExResult<ResourceSetHandle> GLGraphicsBackend::CreateResourceSet(const ResourceSetDesc& desc) {
     auto& handle = *m_ResourceSets.Reserve();
-    
-    handle.bindings.resize(desc.bindings.size());
-    for (size_t i{0}; i < desc.bindings.size(); i++) {
-        handle.bindings[i] = desc.bindings[i];
-    }
-    handle.layoutID = desc.layoutID;
-    handle.version = 1;
+    handle.userDesc = desc;
     handle.alive = true;
 
     return handle.External();
@@ -2027,11 +2084,10 @@ utils::ExError GLGraphicsBackend::UpdateResourceSet(const ResourceSetHandle& han
         return {"Invalid handle"};
     auto& res = *m_ResourceSets.Get(handle);
 
-    res.bindings.resize(bindings.size());
-    for (size_t i{0}; i < bindings.size(); i++) {
-        res.bindings[i] = bindings[i];
-    }
-    res.version++;
+    auto cpy = bindings;
+    res.userDesc.bindings = {std::move(cpy)};
+    res.userDesc.version++;
+
     return ExError::NoError();
 }
 
@@ -2041,6 +2097,14 @@ utils::ExError GLGraphicsBackend::DestroyResourceSet(const ResourceSetHandle& ha
 
     m_ResourceSets.Delete(handle);
     return ExError::NoError();
+}
+
+ExResult<ResourceSetDesc> GLGraphicsBackend::DescribeResourceSet(const ResourceSetHandle& handle) {
+    if (!m_ResourceSets.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_ResourceSets.Get(handle)->userDesc;
+    }
 }
 
 GLenum ToGLTextureWrap(TextureWrap wrap) {

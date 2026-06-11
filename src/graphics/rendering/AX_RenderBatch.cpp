@@ -1,5 +1,11 @@
 #include "axle/graphics/rendering/AX_RenderBatch.hpp"
 
+#include "axle/graphics/scene/AX_ModelInstance.hpp"
+
+#include "axle/core/concurrency/AX_ThreadCycler.hpp"
+
+#include <exception>
+
 #define ACT_EXERR_BATCH_PRED(statement, errorHandler)   \
 auto __err = (statement);                               \
 if (__err.IsValid())                                    \
@@ -9,7 +15,12 @@ namespace axle::gfx
 {
 
 RenderBatch::RenderBatch(const RenderBatchDesc& desc)
-    : m_ErrorHandler(desc.frameErrorHandler), m_RenderCmds(desc.commandList) {}
+    : m_Desc(desc) {
+    if (!desc.gfxThread)
+        throw std::runtime_error("RenderBatch: ThreadContextGfx is NULL");
+    if (!desc.commandList)
+        throw std::runtime_error("RenderBatch: CommandList is NULL");
+}
 
 RenderBatch::~RenderBatch() {
     std::lock_guard<std::mutex> lock(m_Mutex);
@@ -102,65 +113,107 @@ void RenderBatch::Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void*
     RenderPipelineHandle currentPipeline{UINT32_MAX, UINT32_MAX};
     ResourceSetHandle currentResources{UINT32_MAX, UINT32_MAX};
 
-    rp.m_RenderCmds->Begin();
+    rp.m_Desc.commandList->Begin();
 
     for (auto& item : rp.m_Items) {
         if (currentPipeline != item.pipeline) {
-            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindRenderPipeline({item.pipeline}), rp.m_ErrorHandler);
+            ACT_EXERR_BATCH_PRED(rp.m_Desc.commandList->BindRenderPipeline({item.pipeline}), rp.m_Desc.frameErrorHandler);
             currentPipeline = item.pipeline;
             currentResources = {UINT32_MAX, UINT32_MAX};
         }
 
-        rp.m_RenderCmds->BindVertexBuffer({item.vertices});
+        rp.m_Desc.commandList->BindVertexBuffer({item.vertices});
         if (item.meshMode == MeshMode::Indexed) {
-            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindIndexBuffer({item.vertices}), rp.m_ErrorHandler);
+            ACT_EXERR_BATCH_PRED(rp.m_Desc.commandList->BindIndexBuffer({item.vertices}), rp.m_Desc.frameErrorHandler);
         }
 
         if (currentResources != item.resources) {
-            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->BindResourceSet({item.resources}), rp.m_ErrorHandler);
+            ACT_EXERR_BATCH_PRED(rp.m_Desc.commandList->BindResourceSet({item.resources}), rp.m_Desc.frameErrorHandler);
             currentResources = item.resources;
         }
 
         if (item.meshMode == MeshMode::Indexed) {
-            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->DrawIndexed({item.indexCount, item.firstIndex}), rp.m_ErrorHandler);
+            ACT_EXERR_BATCH_PRED(rp.m_Desc.commandList->DrawIndexed({item.indexCount, item.firstIndex}), rp.m_Desc.frameErrorHandler);
         } else {
-            ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->Draw({item.vertexCount, item.indexCount}), rp.m_ErrorHandler);
+            ACT_EXERR_BATCH_PRED(rp.m_Desc.commandList->Draw({item.vertexCount, item.indexCount}), rp.m_Desc.frameErrorHandler);
         }
     }
 
-    ACT_EXERR_BATCH_PRED(rp.m_RenderCmds->End(), rp.m_ErrorHandler);
-    ACT_EXERR_BATCH_PRED(gbgfx->Execute(*rp.m_RenderCmds), rp.m_ErrorHandler);
+    ACT_EXERR_BATCH_PRED(rp.m_Desc.commandList->End(), rp.m_Desc.frameErrorHandler);
+    ACT_EXERR_BATCH_PRED(gbgfx->Execute(*rp.m_Desc.commandList), rp.m_Desc.frameErrorHandler);
 }
 
-void RenderBatch::ResetItems() {
+void RenderBatch::RebuildDrawItems() {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+
+}
+
+void RenderBatch::Clear() {
     std::lock_guard<std::mutex> lock(m_Mutex);
     m_Items.clear();
+    m_TrackingInstances.clear();
 }
 
-void RenderBatch::Submit(const DrawItem& item) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    m_Items.push_back(item);
-}
+void RenderBatch::TraverseNode(
+    scene::ModelInstance& modelInstance,
+    scene::NodeInstance& nodeInstance,
+    std::unordered_set<DrawItem>& results
+) {
+    auto& modelDesc = modelInstance.GetModelDesc();
+    for (uint32_t meshId : nodeInstance.GetMeshIds()) {
+        DrawItem drawItem;
 
-void RenderBatch::Submit(utils::Span<DrawItem> itemsView) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    for (auto& item : itemsView) {
-        m_Items.push_back(item);
+        auto& gpuMesh = modelDesc.meshBounds.draw[meshId];
+        auto& gpuMat = modelDesc.meshBounds.materials[meshId];
+        
+        drawItem.meshMode = gpuMesh.indexed ? MeshMode::Indexed : MeshMode::Vertices;
+        drawItem.pipeline = modelDesc.pipelineBounds.pipelineHandle;
+        drawItem.vertices = gpuMesh.vertices;
+        drawItem.indices = gpuMesh.indices;
+        drawItem.resources = gpuMat.resourcesHandle;
+        drawItem.vertexCount = gpuMesh.vertexCount;
+        drawItem.indexCount = gpuMesh.indexCount;
+        drawItem.sortKey = m_Desc.userSortKeyAssigner({modelInstance, nodeInstance, meshId});
+
+        results.insert(drawItem);
+    }
+    for (auto& child : nodeInstance.GetChildren()) {
+        TraverseNode(modelInstance, child, results);
     }
 }
 
-void RenderBatch::ResetAndSubmit(const DrawItem& item) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    m_Items.clear();
-    m_Items.push_back(item);
+void RenderBatch::AddInstance0(SharedPtr<scene::ModelInstance> modelInstance) {
+    m_TrackingInstances.insert(modelInstance);
+    std::unordered_set<DrawItem> drawItems{};
+    TraverseNode(*modelInstance, modelInstance->GetRoot(), drawItems);
+    m_Items.insert(
+        m_Items.end(),
+        std::make_move_iterator(drawItems.begin()),
+        std::make_move_iterator(drawItems.end())
+    );
 }
 
-void RenderBatch::ResetAndSubmit(utils::Span<DrawItem> itemsView) {
+void RenderBatch::AddInstance(SharedPtr<scene::ModelInstance> modelInstance) {
     std::lock_guard<std::mutex> lock(m_Mutex);
-    m_Items.clear();
-    for (auto& item : itemsView) {
-        m_Items.push_back(item);
-    }
+    AddInstance0(modelInstance);
+    if (m_Desc.autoSort) RenderBatch::SortItems();
+}
+
+void RenderBatch::AddInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    for (auto& modelInstance : modelInstances) 
+        AddInstance0(modelInstance);
+    if (m_Desc.autoSort) RenderBatch::SortItems();
+}
+
+void RenderBatch::SetItemSort(const Predicate<DrawItem>& pred) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_Desc.itemsSort = pred;
+}
+
+void RenderBatch::SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_Desc.userSortKeyAssigner = assigner;
 }
 
 utils::ExResult<RLHandle> RenderBatch::Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey) {
@@ -194,9 +247,9 @@ utils::ExError RenderBatch::UnRegister(const RLHandle& rlh) {
     m_Registries.erase(rlh);
 }
 
-void RenderBatch::Sort(const Predicate<DrawItem>& pred) {
+void RenderBatch::SortItems() {
     std::lock_guard<std::mutex> lock(m_Mutex);
-    std::sort(m_Items.begin(), m_Items.end(), pred);
+    std::sort(m_Items.begin(), m_Items.end(), m_Desc.itemsSort);
 }
 
 }
