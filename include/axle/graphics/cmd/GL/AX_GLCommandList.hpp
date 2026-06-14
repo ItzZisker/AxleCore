@@ -9,6 +9,9 @@
 #include <vector>
 #include <mutex>
 
+namespace axle::core { class ThreadContextGfx; }
+namespace axle::gfx { class GLGraphicsBackend; }
+
 namespace axle::gfx {
 
 const uint16_t CMDL_BEGIN = 1111;
@@ -18,28 +21,15 @@ const uint16_t CMD_FOOTER = 1771;
 
 const uint16_t CMDL_END = 1991;
 
-class GLCommandGuard {
-private:
-    std::mutex& m_CmdListMutex;
-public:
-    const SharedPtr<data::BufferDataStream> m_Buffer{nullptr};
-
-    explicit GLCommandGuard(std::mutex& cmdListMutex, SharedPtr<data::BufferDataStream> commandBuffer);
-    ~GLCommandGuard();
-
-    GLCommandGuard(const GLCommandGuard&) = delete;
-    GLCommandGuard& operator=(const GLCommandGuard&) = delete;
-
-    GLCommandGuard(GLCommandGuard&&) = delete;
-    GLCommandGuard& operator=(GLCommandGuard&&) = delete;
-};
-
 class GLCommandList final : public ICommandList {
 private:
     SharedPtr<data::BufferDataStream> m_CommandBuffer{nullptr};
-    std::mutex m_Mutex;
+
+    friend GLGraphicsBackend;
 public:
-    GLCommandList();
+    GLCommandList(SharedPtr<core::ThreadContextGfx> gfxThread);
+
+    bool ValidateThread() override;
 
     utils::ExError Begin() override;
     utils::ExError End() override;
@@ -64,10 +54,6 @@ public:
     utils::ExError DrawIndexedInstanced(const CommandDrawIndexedInstanced&) override;
     utils::ExError DrawIndirect(const CommandDrawIndirect&) override;
     utils::ExError DrawIndirectIndexed(const CommandDrawIndirectIndexed&) override;
-protected:
-    GLCommandGuard CommandGuard() { return GLCommandGuard(m_Mutex, m_CommandBuffer); }
-
-    friend class GLGraphicsBackend;
 };
 
 } // namespace axle::gfx

@@ -25,6 +25,8 @@
 #include <cstring>
 #include <vector>
 
+// TODO: Add Timings (A good portable timing system and implement it in code using AI)
+
 using namespace axle::utils;
 
 namespace axle::gfx {
@@ -1785,46 +1787,65 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
                     for (uint32_t i{0}; i < bindings.size(); i++) { // Update uniform block indices
                         auto& binding = bindings[i];
-                        if (binding.type == BindingType::SampledTexture || binding.type == BindingType::StorageTexture) {
-                            cache.textureUnits[i] = texUnit++;
-                            cache.textureLocations[i] = m_GL->GetUniformLocation(programId, binding.bindName.c_str());
-                        } else {
-                            cache.blockIndices[i] = m_GL->GetUniformBlockIndex(programId, binding.bindName.c_str());
+                        auto& resources = binding.resources;
+
+                        bool IsTexResource {
+                            binding.type == BindingType::SampledTexture ||
+                            binding.type == BindingType::StorageTexture
+                        };
+
+                        if (IsTexResource) {
+                            auto& iTexUnitsCache = cache.textureUnits[i];
+                            auto& iTexLocsCache = cache.textureLocations[i];
+                            
+                            iTexUnitsCache.resize(resources.size());
+                            iTexLocsCache.resize(resources.size());
+
+                            for (uint32_t j{0}; j < resources.size(); i++) {
+                                iTexUnitsCache[j] = texUnit++;
+                                iTexLocsCache[j] = m_GL->GetUniformLocation(programId, binding.bindName.c_str());
+                            }
+                        } else { // ETC. Uniforms, SSBOs... (Blocks)
+                            auto& iBlockIdxCache = cache.blockIndices[i];
+
+                            iBlockIdxCache.resize(resources.size());
+
+                            for (uint32_t j{0}; j < resources.size(); i++) {
+                                iBlockIdxCache[j] = m_GL->GetUniformBlockIndex(programId, binding.bindName.c_str());
+                            }
                         }
                     }
                 }
             }
 
-            for (uint32_t ib{0}; ib < res.userDesc.bindings.size(); ib++) {
-                auto& b = res.userDesc.bindings[ib];
-                uint32_t blockIndex, texUnit, texLoc;
+            for (uint32_t iBind{0}; iBind < res.userDesc.bindings.size(); iBind++) {
+                auto& b = res.userDesc.bindings[iBind];
+                auto& resources = b.resources;
 
-                if (implicitBinds) {
-                    if (b.type == BindingType::SampledTexture || b.type == BindingType::StorageTexture) {
-                        texUnit = pipeline.bindingSlotCache[cmd.handle].textureUnits[ib];
-                        texLoc = pipeline.bindingSlotCache[cmd.handle].textureLocations[ib];
-                    } else {
-                        blockIndex = pipeline.bindingSlotCache[cmd.handle].blockIndices[ib];
+                for (uint32_t jArr{0}; jArr < resources.size(); jArr++) {
+                    uint32_t blockIndex, texUnit, texLoc;
+                    auto& resource = resources[jArr];
+
+                    if (implicitBinds) {
+                        if (b.type == BindingType::SampledTexture || b.type == BindingType::StorageTexture) {
+                            texUnit = pipeline.bindingSlotCache[cmd.handle].textureUnits[iBind][jArr];
+                            texLoc = pipeline.bindingSlotCache[cmd.handle].textureLocations[iBind][jArr];
+                        } else {
+                            blockIndex = pipeline.bindingSlotCache[cmd.handle].blockIndices[iBind][jArr];
+                        }
                     }
-                }
 
-                switch (b.type) {
-                    case BindingType::UniformBuffer: {
-                        for (auto& resource : b.resources) {
+                    switch (b.type) {
+                        case BindingType::UniformBuffer: {
                             if (!m_Buffers.IsValid(resource.index, resource.generation))
                                 return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle"};
-                            if (resource.kind == ResourceKind::Buffer) {
+                            if (resource.kind != ResourceKind::Buffer)
                                 return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle, ResourceKind != Buffer"};
-                            }
-                        }
-
-                        for (auto& resource : b.resources) {
-                            
 
                             GL_CALL(m_GL->BindBufferRange(
                                 GL_UNIFORM_BUFFER,
                                 b.slot,
-                                m_Buffers.Get(b.resource.AsBuffer())->id,
+                                m_Buffers.Get(resource.AsBuffer())->id,
                                 b.offset,
                                 b.range
                             ));
@@ -1832,63 +1853,60 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                             if (implicitBinds) {
                                 GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
                             }
+                            break;
                         }
-                        
-                        break;
-                    }
-                    case BindingType::StorageBuffer: {
-                        if (!m_Buffers.IsValid(b.resource.index, b.resource.generation))
-                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageBuffer\" Failed: Invalid Buffer handle"};
+                        case BindingType::StorageBuffer: {
+                            if (!m_Buffers.IsValid(resource.index, resource.generation))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageBuffer\" Failed: Invalid Buffer handle"};
 
-                        GL_CALL(m_GL->BindBufferRange(
-                            GL_SHADER_STORAGE_BUFFER,
-                            b.slot,
-                            m_Buffers.Get(b.resource.AsBuffer())->id,
-                            b.offset,
-                            b.range
-                        ));
+                            GL_CALL(m_GL->BindBufferRange(
+                                GL_SHADER_STORAGE_BUFFER,
+                                b.slot,
+                                m_Buffers.Get(resource.AsBuffer())->id,
+                                b.offset,
+                                b.range
+                            ));
 
-                        if (implicitBinds) {
-                            GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
+                            if (implicitBinds) {
+                                GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
+                            }
+                            break;
                         }
-                        break;
-                    }
-                    case BindingType::SampledTexture: {
-                        if (!m_Textures.IsValid(b.resource.index, b.resource.generation))
-                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::SampledTexture\" Failed: Invalid Texture handle"};
-                        
-                        auto texSlot = implicitBinds ? texUnit : b.slot;
-                        GL_CALL(m_GL->ActiveTexture(GL_TEXTURE0 + texSlot));
-                        GL_CALL(m_GL->BindTexture(GL_TEXTURE_2D, m_Textures.Get(b.resource.AsTexture())->id));
+                        case BindingType::SampledTexture: {
+                            if (!m_Textures.IsValid(resource.index, resource.generation))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::SampledTexture\" Failed: Invalid Texture handle"};
+                            
+                            auto texSlot = implicitBinds ? texUnit : b.slot;
+                            GL_CALL(m_GL->ActiveTexture(GL_TEXTURE0 + texSlot));
+                            GL_CALL(m_GL->BindTexture(GL_TEXTURE_2D, m_Textures.Get(resource.AsTexture())->id));
 
-                        if (implicitBinds) {
-                            GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
+                            if (implicitBinds) {
+                                GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
+                            }
+                            break;
                         }
-                        break;
-                    }
-                    case BindingType::StorageTexture: {
-                        if (!m_Textures.IsValid(b.resource.index, b.resource.generation))
-                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Invalid Texture handle"};
+                        case BindingType::StorageTexture: {
+                            if (!m_Textures.IsValid(resource.index, resource.generation))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Invalid Texture handle"};
+                            if (!m_Capabilities.Has(GraphicsCapEnum::ImageLoadStore))
+                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Host: Image Load/Store Unsupported"};
 
-                        if (!m_Capabilities.Has(GraphicsCapEnum::ImageLoadStore)) {
-                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Host: Image Load/Store Unsupported"};
+                            auto texSlot = implicitBinds ? texUnit : b.slot;
+                            GL_CALL(m_GL->BindImageTexture(
+                                texSlot,
+                                m_Textures.Get(resource.AsTexture())->id,
+                                0,
+                                GL_FALSE,
+                                0,
+                                GL_READ_WRITE,
+                                ToGLTextureFormat(m_Textures.Get(resource.AsTexture())->userDesc.format)
+                            ));
+
+                            if (implicitBinds) {
+                                GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
+                            }
+                            break;
                         }
-
-                        auto texSlot = implicitBinds ? texUnit : b.slot;
-                        GL_CALL(m_GL->BindImageTexture(
-                            texSlot,
-                            m_Textures.Get(b.resource.AsTexture())->id,
-                            0,
-                            GL_FALSE,
-                            0,
-                            GL_READ_WRITE,
-                            ToGLTextureFormat(m_Textures.Get(b.resource.AsTexture())->userDesc.format)
-                        ));
-
-                        if (implicitBinds) {
-                            GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
-                        }
-                        break;
                     }
                 }
             }
@@ -2019,8 +2037,11 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 ExError GLGraphicsBackend::Execute(ICommandList& cmd) {
     auto& glCmd = static_cast<GLCommandList&>(cmd);
 
-    auto cmdGuard = glCmd.CommandGuard();
-    auto& cmdBuffer = *cmdGuard.m_Buffer.get();
+    if (!glCmd.ValidateThread()) {
+        return {"GLCommand::Execute Failed: CommandList is owned by a different Graphics-Thread!"};
+    }
+
+    auto& cmdBuffer = *glCmd.m_CommandBuffer;
 
     CommandType lastType{0};
     uint16_t lastSec{0};

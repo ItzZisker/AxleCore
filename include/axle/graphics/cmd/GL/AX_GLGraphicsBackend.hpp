@@ -135,9 +135,9 @@ struct VAOKeyLookup {
 
 struct BindingSlotCache {
     uint32_t resourceSetVersion;
-    std::vector<uint32_t> blockIndices;
-    std::vector<uint32_t> textureUnits;
-    std::vector<uint32_t> textureLocations;
+    std::vector<std::vector<uint32_t>> blockIndices;
+    std::vector<std::vector<uint32_t>> textureUnits;
+    std::vector<std::vector<uint32_t>> textureLocations;
 };
 
 struct GLRenderPipeline : public GLInternal<RenderPipelineDesc, RenderPipelineHandle> {

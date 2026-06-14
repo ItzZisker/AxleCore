@@ -7,10 +7,6 @@
 #include <cstdint>
 #include <variant>
 
-namespace axle::core {
-    class ThreadContextGfx;   
-}
-
 namespace axle::gfx {
 
 enum class CommandType : uint32_t {
@@ -121,12 +117,17 @@ struct CommandDrawIndirectIndexed {
 };
 
 class ICommandList {
+protected:
+    SharedPtr<core::ThreadContextGfx> m_GfxThread{nullptr};
 public:
+    ICommandList(SharedPtr<core::ThreadContextGfx> gfxThread) : m_GfxThread(gfxThread) {}
     virtual ~ICommandList() = default;
 
     Future<utils::ExError> Submit(SharedPtr<core::ThreadContextGfx> gfxThread);
 
     static SharedPtr<gfx::ICommandList> Create(SharedPtr<core::ThreadContextGfx> gfxThread);
+
+    virtual bool ValidateThread() = 0;
 
     virtual utils::ExError Begin() = 0;
     virtual utils::ExError End() = 0;

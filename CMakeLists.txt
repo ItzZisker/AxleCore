@@ -66,7 +66,7 @@ set(GFX_SRC
     src/graphics/scene/AX_Camera.cpp
     src/graphics/scene/AX_SWFrustumCulling.cpp
     src/graphics/scene/AX_NodeInstance.cpp
-    src/graphics/scene/AX_Model.cpp
+    # src/graphics/scene/AX_Model.cpp
     src/graphics/scene/AX_ModelInstance.cpp
 
     src/graphics/text/AX_BitmapFont.cpp

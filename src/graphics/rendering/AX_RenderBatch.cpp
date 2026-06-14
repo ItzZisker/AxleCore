@@ -154,11 +154,12 @@ void RenderBatch::Clear() {
     m_TrackingInstances.clear();
 }
 
-void RenderBatch::TraverseNode(
-    scene::ModelInstance& modelInstance,
-    scene::NodeInstance& nodeInstance,
-    std::unordered_set<DrawItem>& results
-) {
+void RenderBatch::TraverseNode(const NodeTraversalParams& params) {
+    auto& modelInstance = params.modelInstance;
+    auto& nodeInstance = params.nodeInstance;
+
+    auto& results = params.results;
+
     auto& modelDesc = modelInstance.GetModelDesc();
     for (uint32_t meshId : nodeInstance.GetMeshIds()) {
         DrawItem drawItem;
@@ -175,17 +176,17 @@ void RenderBatch::TraverseNode(
         drawItem.indexCount = gpuMesh.indexCount;
         drawItem.sortKey = m_Desc.userSortKeyAssigner({modelInstance, nodeInstance, meshId});
 
-        results.insert(drawItem);
+        results.push_back(drawItem);
     }
     for (auto& child : nodeInstance.GetChildren()) {
-        TraverseNode(modelInstance, child, results);
+        TraverseNode({modelInstance, child, results});
     }
 }
 
 void RenderBatch::AddInstance0(SharedPtr<scene::ModelInstance> modelInstance) {
     m_TrackingInstances.insert(modelInstance);
-    std::unordered_set<DrawItem> drawItems{};
-    TraverseNode(*modelInstance, modelInstance->GetRoot(), drawItems);
+    std::deque<DrawItem> drawItems{};
+    TraverseNode({*modelInstance, modelInstance->GetRoot(), drawItems});
     m_Items.insert(
         m_Items.end(),
         std::make_move_iterator(drawItems.begin()),

@@ -112,6 +112,12 @@ struct ModelInstanceWrapper : public utils::MagicInternal<ModelInstanceHandle> {
     SharedPtr<scene::ModelInstance> value;
 };
 
+struct NodeTraversalParams {
+    scene::ModelInstance& modelInstance;
+    scene::NodeInstance& nodeInstance;
+    std::deque<DrawItem>& results;
+};
+
 class RenderBatch {
 private:
     utils::MagicPool<ModelInstanceWrapper> m_Instances{};
@@ -124,11 +130,7 @@ private:
 
     std::mutex m_Mutex{};
 
-    void TraverseNode(
-        scene::ModelInstance& modelInstance,
-        scene::NodeInstance& nodeInstance,
-        std::unordered_set<DrawItem>& results
-    );
+    void TraverseNode(const NodeTraversalParams& params);
 
     void AddInstance0(SharedPtr<scene::ModelInstance> modelInstance);
     void RebuildDrawItems();
