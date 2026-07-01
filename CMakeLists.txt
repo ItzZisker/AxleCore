@@ -50,8 +50,6 @@ set(GFX_SRC
     src/graphics/ctx/GL/AX_RenderContextGLWin32.cpp
     src/graphics/ctx/GL/AX_RenderContextGLX11.cpp
 
-    src/graphics/rendering/AX_RenderResources.cpp
-    src/graphics/rendering/AX_RenderItemBuilder.cpp
     src/graphics/rendering/AX_RenderBatch.cpp
     src/graphics/rendering/AX_RenderLayer.cpp
 
@@ -66,8 +64,8 @@ set(GFX_SRC
     src/graphics/scene/AX_Camera.cpp
     src/graphics/scene/AX_SWFrustumCulling.cpp
     src/graphics/scene/AX_NodeInstance.cpp
-    # src/graphics/scene/AX_Model.cpp
     src/graphics/scene/AX_ModelInstance.cpp
+    src/graphics/scene/AX_Scene.cpp
 
     src/graphics/text/AX_BitmapFont.cpp
 )

@@ -39,8 +39,6 @@ struct RLIntern : public utils::MagicInternal<RLHandle> {
 struct RLRegistry {
     FramebufferHandle framebuffer{};
     core::WorkHandle workHandle{};
-    SharedPtr<core::ThreadContextGfx> gfxThread{nullptr};
-    
     bool active{false};
 };
 
@@ -48,32 +46,31 @@ const inline Predicate<RLIntern> RL_SORT_BY_WEIGHT = [](const RLIntern& a, const
     return a.sortKey > b.sortKey;
 };
 
-class RenderLayer {
+class RenderLayer : AX_THR_RENDER_OWNED {
 private:
     RLRegistry m_RLRegistry{};
 
     utils::MagicPool<RLIntern> m_RLPool{utils::MagicPool<RLIntern>(true)};
     SharedPtr<void> m_shUserPtr{nullptr};
     void *m_UserPtr{nullptr};
-
-    std::mutex m_Mutex{};
-
+    
+    // These will run on the render thread, so becareful with your user data!
     void Update(float dT);
-    void Draw(float dT);
+    void Draw(float dT); 
 public:
-    RenderLayer(void* userPtr = nullptr);
-    RenderLayer(SharedPtr<void> userPtr = nullptr);
+    RenderLayer(ThreadGfxScope gfxThread, void* userPtr = nullptr);
+    RenderLayer(ThreadGfxScope gfxThread, SharedPtr<void> userPtr = nullptr);
     ~RenderLayer();
 
-    utils::ExResult<RLHandle> CreateLayer(const RLDesc& desc);
-    utils::ExError RemoveLayer(const RLHandle& handle);
+    ThreadInvocation<RLHandle> CreateLayer(const RLDesc& desc);
+    ThreadInvocation<utils::ExError> RemoveLayer(const RLHandle& handle);
 
-    void SortLayers(const Predicate<RLIntern>& pred = RL_SORT_BY_WEIGHT);
+    ThreadInvocationVoid SortLayers(const Predicate<RLIntern>& pred = RL_SORT_BY_WEIGHT);
 
-    const utils::ExResult<RLRegistry> GetCurrentRegistry();
+    ThreadInvocation<utils::ExResult<RLRegistry>> GetCurrentRegistry();
 
-    utils::ExError RegisterWork(FramebufferHandle fb, SharedPtr<core::ThreadContextGfx> thrCtx);
-    utils::ExError UnRegisterWork();
+    ThreadInvocation<utils::ExError> RegisterWork(FramebufferHandle fb);
+    ThreadInvocation<utils::ExError> UnRegisterWork();
 };
 
 }

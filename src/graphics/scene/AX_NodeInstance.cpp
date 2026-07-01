@@ -41,7 +41,8 @@ utils::ExError NodeInstance::Handle(const NodeHandleParams& p) {
     }
 }
 
-NodeInstance::NodeInstance(const NodeInstanceParams& p) : m_Params(p) {
+NodeInstance::NodeInstance(ThreadGfxScope gfxThread, const NodeInstanceParams& p) :
+    m_Params(p), ThreadOwned(gfxThread) {
     const auto& root = GetRoot();
     glm::vec3 min, max;
     bool unset{true};
@@ -53,30 +54,38 @@ NodeInstance::~NodeInstance() {
     m_Children.clear();
 }
 
+const assets::NodeId NodeInstance::GetId() const {
+    return m_Params.assetNodeIdx;
+}
+
 const assets::Node& NodeInstance::GetRoot() const {
     return m_Params.immutableImport.nodes[m_Params.assetNodeIdx];
 }
 
-bool NodeInstance::IsDirty() {
-    std::lock_guard<std::mutex> mutex(m_Mutex);
-    return m_Dirty;
+ThreadInvocation<bool> NodeInstance::IsDirty() {
+    return ThreadInvocation<bool>(m_Thread, [&](){
+        return m_Dirty;
+    });
 }
 
-void NodeInstance::ApplyCoords(const std::function<void(utils::Coordination&)>& consumer) {
-    std::lock_guard<std::mutex> mutex(m_Mutex);
-    consumer(m_Coords);
-    m_Dirty = true;
+ThreadInvocationVoid NodeInstance::SetCoords(const utils::Coordination& coords) {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        m_Coords = coords;
+        return VoidInvoke{};
+    });
 }
 
-utils::Coordination NodeInstance::GetCoords() {
-    std::lock_guard<std::mutex> mutex(m_Mutex);
-    return m_Coords;
+ThreadInvocation<utils::Coordination> NodeInstance::GetCoords() {
+    return ThreadInvocation<utils::Coordination>(m_Thread, [&](){
+        return m_Coords;
+    });
 }
 
-utils::Coordination NodeInstance::UseCoords() {
-    std::lock_guard<std::mutex> mutex(m_Mutex);
-    m_Dirty = false;
-    return m_Coords;
+ThreadInvocation<utils::Coordination> NodeInstance::UseCoords() {
+    return ThreadInvocation<utils::Coordination>(m_Thread, [&](){
+        m_Dirty = false;
+        return m_Coords;
+    });
 }
 
 utils::Span<NodeInstance> NodeInstance::GetChildren() {

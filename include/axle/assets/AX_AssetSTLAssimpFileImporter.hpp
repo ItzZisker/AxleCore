@@ -32,41 +32,48 @@ private:
     std::filesystem::path m_Path;
     std::vector<utils::ExError> m_Errors;
 
-private:
-    void ProcessNode(
-        const aiNode* node,
-        const aiScene* scene,
-        Node& outNode,
-        AssetImportResult& result,
-        uint32_t& meshIdx,
-        uint32_t& buffIdx
-    );
+    struct AssimpNodeProcessParams {
+        const aiNode* node;
+        const aiScene* scene;
+        Node& outNode;
+        AssetImportResult& result;
+        uint32_t& meshIdx;
+        uint32_t& buffIdx;
+        uint32_t& nodeIdx;
+    };
 
-    void ProcessLights(
-        const aiScene* scene,
-        AssetImportResult& result,
-        uint32_t& lightIdx
-    );
+    struct AssimpLightProcessParams {
+        const aiScene* scene;
+        AssetImportResult& result;
+        uint32_t& lightIdx;
+    };
 
-    void ProcessCameras(
-        const aiScene* scene,
-        AssetImportResult& result,
-        uint32_t& cameraIdx
-    );
+    struct AssimpCameraProcessParams {
+        const aiScene* scene;
+        AssetImportResult& result;
+        uint32_t& cameraIdx;
+    };
 
-    void ProcessMesh(
-        const aiMesh* mesh,
-        AssetImportResult& result,
-        uint32_t& meshIdx,
-        uint32_t& buffIdx
-    );
+    struct AssimpMeshProcessParams {
+        const aiMesh* mesh;
+        AssetImportResult& result;
+        uint32_t& meshIdx;
+        uint32_t& buffIdx;
+    };
 
-    utils::ExError ProcessMaterial(
-        const aiScene* scene,
-        AssetImportResult& result,
-        const uint32_t& matIdx,
-        std::vector<AssetTexture>& asset_texs
-    );
+    struct AssimpMaterialProcessParams {
+        const aiScene* scene;
+        AssetImportResult& result;
+        const uint32_t& matIdx;
+        std::vector<AssetTexture>& asset_texs;
+    };
+
+    void ProcessNode(const AssimpNodeProcessParams& params);
+    void ProcessLights(const AssimpLightProcessParams& params);
+    void ProcessCameras(const AssimpCameraProcessParams& params);
+    void ProcessMesh(const AssimpMeshProcessParams& params);
+
+    utils::ExError ProcessMaterial(const AssimpMaterialProcessParams& params);
 };
 
 }

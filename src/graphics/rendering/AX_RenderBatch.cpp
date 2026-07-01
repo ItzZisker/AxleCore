@@ -14,8 +14,8 @@ if (__err.IsValid())                                    \
 namespace axle::gfx
 {
 
-RenderBatch::RenderBatch(const RenderBatchDesc& desc)
-    : m_Desc(desc) {
+RenderBatch::RenderBatch(ThreadGfxScope gfxThread, const RenderBatchDesc& desc)
+    : ThreadOwned(gfxThread), m_Desc(desc) {
     if (!desc.gfxThread)
         throw std::runtime_error("RenderBatch: ThreadContextGfx is NULL");
     if (!desc.commandList)
@@ -23,12 +23,14 @@ RenderBatch::RenderBatch(const RenderBatchDesc& desc)
 }
 
 RenderBatch::~RenderBatch() {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    for (auto& [rl, rlh_s] : m_RegistriesRev) {
-        for (auto& rlh : rlh_s) {
-            rl->RemoveLayer(rlh);
+    ThreadInvocationVoid(m_Thread, [&](){
+        for (auto& [rl, rlh_s] : m_RegistriesRev) {
+            for (auto& rlh : rlh_s) {
+                rl->RemoveLayer(rlh);
+            }
         }
-    }
+        return VoidInvoke{};
+    }).SyncCall();
 }
 
 /*
@@ -102,12 +104,10 @@ RenderBatch::~RenderBatch() {
                 - Issue Indirect Instanced Draw/DrawIndexed Calls (whether RenderItemType is Indexed/Vertices)
                 - Submit Commands and let GPU draw based off IBO Draw Parameters.
 */
-void RenderBatch::Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void* userPtr) {
+void RenderBatch::Draw(ThreadGfxScope thrCtx, float dT, void* userPtr) {
     if (!thrCtx->ValidateThread()) return;
 
     auto& rp = *((RenderBatch*)userPtr);
-    std::lock_guard<std::mutex> lock(rp.m_Mutex);
-
     auto gbgfx = thrCtx->GetContext();
 
     RenderPipelineHandle currentPipeline{UINT32_MAX, UINT32_MAX};
@@ -143,15 +143,22 @@ void RenderBatch::Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void*
     ACT_EXERR_BATCH_PRED(gbgfx->Execute(*rp.m_Desc.commandList), rp.m_Desc.frameErrorHandler);
 }
 
-void RenderBatch::RebuildDrawItems() {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-
+ThreadInvocationVoid RenderBatch::RebuildDrawItems() {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        m_Items.clear();
+        for (auto& trackingInstance : m_TrackingInstances)
+            AddInstance0(trackingInstance);
+        if (m_Desc.autoSort) RenderBatch::SortItems();
+        return VoidInvoke{};
+    });
 }
 
-void RenderBatch::Clear() {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    m_Items.clear();
-    m_TrackingInstances.clear();
+ThreadInvocationVoid RenderBatch::Clear() {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        m_Items.clear();
+        m_TrackingInstances.clear();
+        return VoidInvoke{};
+    });
 }
 
 void RenderBatch::TraverseNode(const NodeTraversalParams& params) {
@@ -164,9 +171,9 @@ void RenderBatch::TraverseNode(const NodeTraversalParams& params) {
     for (uint32_t meshId : nodeInstance.GetMeshIds()) {
         DrawItem drawItem;
 
-        auto& gpuMesh = modelDesc.meshBounds.draw[meshId];
-        auto& gpuMat = modelDesc.meshBounds.materials[meshId];
-        
+        const auto& gpuMesh = modelDesc.meshBounds.draw.at(meshId);
+        const auto& gpuMat = modelDesc.meshBounds.materials.at(meshId);
+
         drawItem.meshMode = gpuMesh.indexed ? MeshMode::Indexed : MeshMode::Vertices;
         drawItem.pipeline = modelDesc.pipelineBounds.pipelineHandle;
         drawItem.vertices = gpuMesh.vertices;
@@ -183,74 +190,106 @@ void RenderBatch::TraverseNode(const NodeTraversalParams& params) {
     }
 }
 
-void RenderBatch::AddInstance0(SharedPtr<scene::ModelInstance> modelInstance) {
+utils::ExError RenderBatch::AddInstance0(SharedPtr<scene::ModelInstance> modelInstance) {
     m_TrackingInstances.insert(modelInstance);
     std::deque<DrawItem> drawItems{};
-    TraverseNode({*modelInstance, modelInstance->GetRoot(), drawItems});
+    auto resRootNode = modelInstance->GetRootNode().SyncCall();
+    if (!resRootNode.has_value()) {
+        return utils::ExError{"resRootNode has no value, error: " + std::string(resRootNode.error().GetMessage())};
+    }
+    TraverseNode({*modelInstance, *resRootNode.value(), drawItems});
     m_Items.insert(
         m_Items.end(),
         std::make_move_iterator(drawItems.begin()),
         std::make_move_iterator(drawItems.end())
     );
+    return utils::ExError::NoError();
 }
 
-void RenderBatch::AddInstance(SharedPtr<scene::ModelInstance> modelInstance) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    AddInstance0(modelInstance);
-    if (m_Desc.autoSort) RenderBatch::SortItems();
-}
-
-void RenderBatch::AddInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    for (auto& modelInstance : modelInstances) 
+ThreadInvocation<utils::ExError> RenderBatch::AddInstance(SharedPtr<scene::ModelInstance> modelInstance) {
+    return ThreadInvocation<utils::ExError>(m_Thread, [&](){
         AddInstance0(modelInstance);
-    if (m_Desc.autoSort) RenderBatch::SortItems();
+        if (m_Desc.autoSort) RenderBatch::SortItems();
+        return utils::ExError::NoError();
+    });
 }
 
-void RenderBatch::SetItemSort(const Predicate<DrawItem>& pred) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    m_Desc.itemsSort = pred;
+ThreadInvocation<utils::ExError> RenderBatch::AddInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances) {
+    return ThreadInvocation<utils::ExError>(m_Thread, [&](){
+        for (auto& modelInstance : modelInstances) {
+            auto err = AddInstance0(modelInstance);
+            if (err.IsValid()) {
+                return utils::ExError{
+                    "Failed to AddInstance for ModelInstance RootNodeId=" +
+                    std::to_string(modelInstance->GetModelDesc().rootNode.nodeId) +
+                    "Error: " +
+                    std::string(err.GetMessage())
+                };
+            }
+        }
+        if (m_Desc.autoSort) RenderBatch::SortItems();
+        return utils::ExError::NoError();
+    });
 }
 
-void RenderBatch::SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    m_Desc.userSortKeyAssigner = assigner;
+ThreadInvocationVoid RenderBatch::SetItemSort(const Predicate<DrawItem>& pred) {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        m_Desc.itemsSort = pred;
+        return VoidInvoke{};
+    });
 }
 
-utils::ExResult<RLHandle> RenderBatch::Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    RLDesc desc;
-    desc.stage = stage;
-    desc.sortKey = sortKey;
-    desc.drawFunc = RenderBatch::Draw;
-    desc.updateFunc = nullptr;
-    AX_DECL_OR_PROPAGATE(rlh, rl->CreateLayer(desc));
-
-    m_Registries[rlh] = rl;
-    if (m_RegistriesRev.find(rl) == m_RegistriesRev.end()) {
-        m_RegistriesRev[rl] = {};
-    } else {
-        m_RegistriesRev[rl].push_back(rlh);
-    }
-    return rlh;
+ThreadInvocationVoid RenderBatch::SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner) {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        m_Desc.userSortKeyAssigner = assigner;
+        return VoidInvoke{};
+    });
 }
 
-utils::ExError RenderBatch::UnRegister(const RLHandle& rlh) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    if (m_Registries.find(rlh) == m_Registries.end()) {
-        return {"RenderLayer handle is not registered"};
-    }
-    {
-        auto rl = m_Registries[rlh];
-        rl->RemoveLayer(rlh);
-        m_RegistriesRev.erase(rl);
-    }
-    m_Registries.erase(rlh);
+ThreadInvocation<utils::ExResult<RLHandle>> RenderBatch::Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey) {
+    return ThreadInvocation<utils::ExResult<RLHandle>>(m_Thread, [&](){
+        RLDesc desc;
+        desc.stage = stage;
+        desc.sortKey = sortKey;
+        desc.drawFunc = RenderBatch::Draw;
+        desc.updateFunc = nullptr;
+
+        auto rlhRes = rl->CreateLayer(desc).SyncCall();
+        if (!rlhRes.has_value()) {
+            return utils::ExResult<RLHandle>(rlhRes.error());
+        }
+        auto rlh = rlhRes.value();
+
+        m_Registries[rlh] = rl;
+        if (m_RegistriesRev.find(rl) == m_RegistriesRev.end()) {
+            m_RegistriesRev[rl] = {};
+        } else {
+            m_RegistriesRev[rl].push_back(rlh);
+        }
+        return rlhRes;
+    });
 }
 
-void RenderBatch::SortItems() {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    std::sort(m_Items.begin(), m_Items.end(), m_Desc.itemsSort);
+ThreadInvocation<utils::ExError> RenderBatch::UnRegister(const RLHandle& rlh) {
+    return ThreadInvocation<utils::ExError>(m_Thread, [&](){
+        if (m_Registries.find(rlh) == m_Registries.end()) {
+            return utils::ExError{"RenderLayer handle is not registered"};
+        }
+        {
+            auto rl = m_Registries[rlh];
+            rl->RemoveLayer(rlh);
+            m_RegistriesRev.erase(rl);
+        }
+        m_Registries.erase(rlh);
+        return utils::ExError::NoError();
+    });
+}
+
+ThreadInvocationVoid RenderBatch::SortItems() {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        std::sort(m_Items.begin(), m_Items.end(), m_Desc.itemsSort);
+        return VoidInvoke{};
+    });
 }
 
 }

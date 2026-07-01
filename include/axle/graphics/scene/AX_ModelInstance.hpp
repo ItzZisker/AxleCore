@@ -22,44 +22,51 @@ struct MeshBounds {
 };
 
 struct ModelDesc {
+    const assets::AssetImportResult& immutableImport;
     PipelineBounds pipelineBounds;
     MeshBounds meshBounds;
     assets::Node rootNode;
 };
 
 // RenderThread Owns This
-
-// TODO: NodeInstance : public SWDiscardable
-class ModelInstance {
+class ModelInstance : AX_THR_RENDER_OWNED {
 private:
-    ModelDesc m_Desc;
+    const ModelDesc m_Desc;
     utils::Coordination m_Coords;
 
+    std::unordered_map<assets::NodeId, SharedPtr<scene::NodeInstance>> m_NodeInstancesById;
     std::unordered_map<assets::NodeId, std::vector<assets::NodeId>> m_LeafParents;
     std::unordered_map<assets::NodeId, glm::mat4> m_CachedLeafFinalTransform;
 
     std::unordered_set<assets::NodeId> m_Discards;
+
+    SharedPtr<NodeInstance> m_RootNodeInstance;
 protected:
-    explicit ModelInstance(const ModelDesc& desc);
+    void TraverseNode(assets::Node root);
+
+    explicit ModelInstance(ThreadGfxScope gfxThread, const ModelDesc& desc);
 public:
-    void PushLeafParents(assets::NodeId, std::vector<assets::NodeId> parentList);
+    const ModelDesc& GetModelDesc() const;
 
-    void ClearCachedTransforms();
-    void ClearLeafParents();
-    void ClearDiscarded();
+    ThreadInvocation<SharedPtr<NodeInstance>> GetNode(assets::NodeId id) const;
+    ThreadInvocation<SharedPtr<NodeInstance>> GetRootNode() const;
 
-    glm::mat4 GetWorldTransform(assets::NodeId leafInstance, bool cacheFinalTransform = true);
-    glm::mat4 GetCachedWorldTransform(assets::NodeId leafInstance);
+    ThreadInvocationVoid PushLeafParents(assets::NodeId, std::vector<assets::NodeId> parentList);
 
-    bool IsTransformCached(assets::NodeId leafInstance);
+    ThreadInvocationVoid ClearCachedTransforms();
+    ThreadInvocationVoid ClearLeafParents();
+    ThreadInvocationVoid ClearDiscarded();
 
-    void SetDiscard(assets::NodeId nodeInstance, bool discard);
+    ThreadInvocation<glm::mat4> GetWorldTransform(assets::NodeId leafInstance, bool cacheFinalTransform = true);
+    ThreadInvocation<glm::mat4> GetCachedWorldTransform(assets::NodeId leafInstance);
 
+    ThreadInvocation<bool> IsTransformCached(assets::NodeId leafInstance);
+
+    ThreadInvocationVoid SetDiscard(assets::NodeId nodeInstance, bool discard);
+
+    // TODO: Software frustum discardable in future
     // bool DiscardOrNot(assets::NodeId nodeInstance);
     // bool DiscardOrNot(Scene_T snapshot, const glm::mat4& transform) override;
-
-    ModelDesc& GetModelDesc() const;
-    NodeInstance& GetRoot() const;
 };
 
 }

@@ -7,14 +7,6 @@ using namespace axle::utils;
 namespace axle::gfx
 {
 
-// class BitmapFont {
-// private:
-//     utils::MagicPool<CharacterAtlas> m_Pages{};
-
-//     std::map<wchar_t, CharGlyph> m_Glyphs{};
-//     bool m_Transformed{false};
-// public:
-
 namespace FT {
     ExResult<FT_Library> Get() {
         static FT_Library local{};

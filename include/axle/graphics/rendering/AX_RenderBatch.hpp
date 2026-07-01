@@ -118,7 +118,7 @@ struct NodeTraversalParams {
     std::deque<DrawItem>& results;
 };
 
-class RenderBatch {
+class RenderBatch : AX_THR_RENDER_OWNED {
 private:
     utils::MagicPool<ModelInstanceWrapper> m_Instances{};
 
@@ -128,33 +128,31 @@ private:
     std::unordered_map<RLHandle, SharedPtr<RenderLayer>> m_Registries{};
     std::unordered_map<SharedPtr<RenderLayer>, std::vector<RLHandle>> m_RegistriesRev{};
 
-    std::mutex m_Mutex{};
-
     void TraverseNode(const NodeTraversalParams& params);
 
-    void AddInstance0(SharedPtr<scene::ModelInstance> modelInstance);
-    void RebuildDrawItems();
+    utils::ExError AddInstance0(SharedPtr<scene::ModelInstance> modelInstance);
 public:
-    RenderBatch(const RenderBatchDesc& desc);
+    RenderBatch(ThreadGfxScope gfxThread, const RenderBatchDesc& desc);
     ~RenderBatch();
 
-    void Clear();
+    ThreadInvocationVoid RebuildDrawItems();
+    ThreadInvocationVoid Clear();
 
-    void AddInstance(SharedPtr<scene::ModelInstance> modelInstance);
-    void AddInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances);
+    ThreadInvocation<utils::ExError> AddInstance(SharedPtr<scene::ModelInstance> modelInstance);
+    ThreadInvocation<utils::ExError> AddInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances);
 
-    utils::ExResult<RLHandle> Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey = 0);
-    utils::ExError UnRegister(const RLHandle& handle);
+    ThreadInvocation<utils::ExResult<RLHandle>> Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey = 0);
+    ThreadInvocation<utils::ExError> UnRegister(const RLHandle& handle);
 
-    void SetItemSort(const Predicate<DrawItem>& pred);
-    void SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner);
-    void SortItems();
+    ThreadInvocationVoid SetItemSort(const Predicate<DrawItem>& pred);
+    ThreadInvocationVoid SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner);
+    ThreadInvocationVoid SortItems();
 protected:
     friend RenderLayer;
 
     RenderBatchDesc m_Desc{};
 
-    static void Draw(SharedPtr<core::ThreadContextGfx> thrCtx, float dT, void* userPtr);
+    static void Draw(ThreadGfxScope gfx, float dT, void* userPtr);
 };
 
 }

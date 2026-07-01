@@ -13,6 +13,9 @@
 #include <iostream>
 #include <mutex>
 
+#define AX_THR_RENDER_OWNED public core::ThreadOwned<core::ThreadContextGfx>
+#define AX_THR_WINDOW_OWNED public core::ThreadOwned<core::ThreadContextWnd>
+
 namespace axle::core {
 
 using WorkId = utils::MagicId;
@@ -93,6 +96,56 @@ protected:
     void DoCycle();
 };
 
+template<typename TResult>
+class ThreadInvocation {
+    using Function = std::function<TResult()>;
+private:
+    WeakPtr<ThreadCycler> m_Thread;
+    Function m_Function;
+public:
+    template<typename F>
+    requires std::invocable<F> &&
+             std::same_as<std::invoke_result_t<F>, TResult>
+    ThreadInvocation(SharedPtr<ThreadCycler> thread, F&& func)
+        : m_Thread(std::move(thread)),
+          m_Function(std::forward<F>(func)) {}
+
+    utils::ExResult<TResult> Call() {
+        if (auto thr = m_Thread.lock()) {
+            if (thr->ValidateThread()) {
+                return m_Function();
+            } else {
+                return utils::ExError("Invalid caller thread. Call() executes only on the owner thread.");
+            }
+        }
+        return utils::ExError("Thread unavailable.");
+    }
+
+    utils::ExResult<TResult> SyncCall() {
+        if (auto thr = m_Thread.lock()) {
+            if (thr->ValidateThread()) {
+                return m_Function();
+            } else {
+                return thr->EnqueueFuture(m_Function).get();
+            }
+        }
+        return utils::ExError("Thread unavailable.");
+    }
+
+    utils::ExResult<Future<TResult>> PostCall() {
+        if (auto thr = m_Thread.lock()) {
+            if (thr->ValidateThread()) {
+                auto task = std::packaged_task<TResult()>(std::forward<Function>(func));
+                task();
+                return task->get_future();
+            } else {
+                return thr->EnqueueFuture(m_Function);
+            }
+        }
+        return utils::ExError("Thread unavailable.");
+    }
+};
+
 template<typename F>
 inline auto InstaFutureOrQueue(ThreadCycler& thread, F&& func) {
     if (thread.ValidateThread()) {
@@ -156,6 +209,35 @@ public:
     }
 };
 
+template<typename T_ThreadCycler>
+requires std::derived_from<T_ThreadCycler, ThreadCycler>
+class ThreadOwned {
+protected:
+    SharedPtr<T_ThreadCycler> m_Thread;
+public:
+    explicit ThreadOwned(SharedPtr<T_ThreadCycler> eCycler)
+        : m_Thread(std::move(eCycler)) {}
+protected:
+    T_ThreadCycler& Thread() {
+        return *m_Thread;
+    }
+
+    const T_ThreadCycler& Thread() const {
+        return *m_Thread;
+    }
+
+    bool OnOwnerThread() const {
+        return m_Thread->ValidateThread();
+    }
+
+    void AssertOwnerThread() const {
+#ifdef AX_DEBUG
+        if (!OnOwnerThread())
+            throw std::runtime_error("Invalid owner thread.");
+#endif
+    }
+};
+
 class ThreadContextGeneric : public ThreadContext<EmptyStruct> {
 protected:
     std::function<void(EmptyStruct& gctx)> m_SubCycle;
@@ -191,4 +273,19 @@ public:
     void SetFrameCap(float frameCap) { m_FrameCap.store(frameCap); }
 };
 
+}
+
+namespace axle {
+    template <typename T_Thr>
+    requires std::is_base_of_v<axle::core::ThreadCycler, T_Thr>
+    using ThreadScope = SharedPtr<T_Thr>;
+
+    using ThreadGfxScope = ThreadScope<axle::core::ThreadContextGfx>;
+    using ThreadWndScope = ThreadScope<axle::core::ThreadContextWnd>;
+
+    struct VoidInvoke {};
+
+    template <typename F>
+    using ThreadInvocation = axle::core::ThreadInvocation<F>;
+    using ThreadInvocationVoid = axle::core::ThreadInvocation<VoidInvoke>;
 }

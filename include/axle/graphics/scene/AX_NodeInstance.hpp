@@ -3,36 +3,34 @@
 #include "axle/assets/AX_AssetImporter.hpp"
 #include "axle/assets/AX_AssetGpu.hpp"
 
+#include "axle/core/concurrency/AX_ThreadCycler.hpp"
+
 #include "axle/graphics/scene/AX_SWFrustumCulling.hpp"
 
 #include "axle/utils/AX_Coordination.hpp"
 #include "axle/utils/AX_Types.hpp"
 
 namespace axle::gfx { class RenderBatch; }
+namespace axle::scene { class ModelInstance; }
 
 namespace axle::scene
 {
 
 struct NodeInstanceParams {
     const assets::AssetImportResult& immutableImport;
-    uint32_t assetNodeIdx;
+    const uint32_t assetNodeIdx;
 };
 
 // RenderThread Owns This
-
-// TODO: NodeInstance : public SWFrustumDiscardable
-class NodeInstance {
+class NodeInstance : AX_THR_RENDER_OWNED {
 private:
     NodeInstanceParams m_Params;
-
-    utils::Coordination m_Coords;
 
     std::vector<NodeInstance> m_Children{};
     std::vector<uint32_t> m_MeshIds{};
     std::string m_Name{};
 
     bool m_Dirty{true};
-    std::mutex m_Mutex{};
     
     typedef struct {
         NodeInstance& nodeInstance;
@@ -45,24 +43,28 @@ private:
     utils::ExError GetMinMax(const NodeHandleParams& params);
     utils::ExError Handle(const NodeHandleParams& params);
 public:
-    NodeInstance(const NodeInstanceParams& params);
     ~NodeInstance();
 
+    const assets::NodeId GetId() const;
     const assets::Node& GetRoot() const;
 
-    bool IsDirty();
+    ThreadInvocation<bool> IsDirty();
 
-    void ApplyCoords(const std::function<void(utils::Coordination&)>& consumer);
-    utils::Coordination GetCoords();
+    ThreadInvocationVoid SetCoords(const utils::Coordination& coords);
+    ThreadInvocation<utils::Coordination> GetCoords();
+    ThreadInvocation<utils::Coordination> UseCoords();
 
     utils::Span<uint32_t> GetMeshIds();
     utils::Span<NodeInstance> GetChildren();
 
     std::string_view GetName() const;
 protected:
-    friend gfx::RenderBatch;
+    utils::Coordination m_Coords;
 
-    utils::Coordination UseCoords();
+    friend gfx::RenderBatch;
+    friend scene::ModelInstance;
+    
+    explicit NodeInstance(ThreadGfxScope gfxThread, const NodeInstanceParams& params);
 };
 
 }

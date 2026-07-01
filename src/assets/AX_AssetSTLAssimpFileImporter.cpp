@@ -33,7 +33,7 @@ utils::ExResult<AssetImportResult> AssetSTLAssimpFileImporter::Import() {
     std::vector<AssetTexture> asset_texs;
     result.materials = {std::vector<AssetMaterial>(scene->mNumMaterials)};
     for (uint32_t matIdx{0}; matIdx < scene->mNumMaterials; matIdx++) {
-        auto err = ProcessMaterial(scene, result, matIdx, asset_texs);
+        auto err = ProcessMaterial({scene, result, matIdx, asset_texs});
         if (err.IsValid()) return err;
     }
     result.textures = {std::move(asset_texs)};
@@ -41,53 +41,56 @@ utils::ExResult<AssetImportResult> AssetSTLAssimpFileImporter::Import() {
     Node root;
     root.name = "ROOT";
 
-    uint32_t meshIdx{0}, buffIdx{0};
+    uint32_t meshIdx{0}, buffIdx{0}, nodeIdx{0};
     result.meshes = {std::vector<AssetMesh>(scene->mNumMeshes)};
     result.buffers = {std::vector<AssetBuffer>(2 * scene->mNumMeshes)};
-    ProcessNode(scene->mRootNode, scene, root, result, meshIdx, buffIdx);
+    ProcessNode({scene->mRootNode, scene, root, result, meshIdx, buffIdx, nodeIdx});
     result.nodes = {std::vector<Node>{root}};
 
     return result;
 }
 
-void AssetSTLAssimpFileImporter::ProcessNode(
-    const aiNode* node,
-    const aiScene* scene,
-    Node& outNode,
-    AssetImportResult& result,
-    uint32_t& meshIdx,
-    uint32_t& buffIdx
-) {
+void AssetSTLAssimpFileImporter::ProcessNode(const AssimpNodeProcessParams& params) {
+    const auto* scene = params.scene;
+    const auto* node = params.node;
+
+    auto& nodeIdx = params.nodeIdx;
+    auto& meshIdx = params.meshIdx;
+    auto& buffIdx = params.buffIdx;
+
+    auto& outNode = params.outNode;
+    auto& result = params.result;
+    
+    outNode.nodeId = nodeIdx++;
     outNode.name = node->mName.C_Str();
     outNode.transform = utils::Coordination{utils::Assimp_ToGLM(node->mTransformation)};
 
     for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
-        ProcessMesh(scene->mMeshes[node->mMeshes[i]], result, meshIdx, buffIdx);
+        ProcessMesh({scene->mMeshes[node->mMeshes[i]], result, meshIdx, buffIdx});
         outNode.meshIds.push_back(meshIdx);
     }
     for (uint32_t i = 0; i < node->mNumChildren; ++i) {
         Node child;
-        ProcessNode(node->mChildren[i], scene, child, result, meshIdx, buffIdx);
+        ProcessNode({node->mChildren[i], scene, child, result, meshIdx, buffIdx, nodeIdx});
         outNode.children.push_back(std::move(child));
     }
 }
 
 uint32_t GetMeshUvCount(const aiMesh* mesh) {
     uint32_t count = 0;
-
-    for (uint32_t i = 0; i < 8; i++) {
-        if (mesh->mTextureCoords[i] != nullptr)
-            count++;
-    }
+    for (uint32_t i = 0; i < 8; i++)
+        if (mesh->mTextureCoords[i] != nullptr) count++;
     return count;
 }
 
-void AssetSTLAssimpFileImporter::ProcessMesh(
-    const aiMesh* mesh,
-    AssetImportResult& result,
-    uint32_t& meshIdx,
-    uint32_t& buffIdx
-) {
+void AssetSTLAssimpFileImporter::ProcessMesh(const AssimpMeshProcessParams& params) {
+    const auto* mesh = params.mesh;
+
+    auto& buffIdx = params.buffIdx;
+    auto& meshIdx = params.meshIdx;
+
+    auto& result = params.result;
+
     std::vector<uint8_t> vertexBuffer;
     auto fmt = GetVertexFormat(GetMeshUvCount(mesh), HasFlag(AssetImportFlag::CalcTangents));
     auto fmtDesc = GetVertexFormatDesc(fmt);
@@ -207,12 +210,14 @@ void SwapAssimp_BGRA8888_To_RGBA8888(const aiTexture* assimp_tex) {
     }
 }
 
-utils::ExError AssetSTLAssimpFileImporter::ProcessMaterial(
-    const aiScene* scene,
-    AssetImportResult& result,
-    const uint32_t& matIdx,
-    std::vector<AssetTexture>& asset_texs
-) {
+utils::ExError AssetSTLAssimpFileImporter::ProcessMaterial(const AssimpMaterialProcessParams& params) {
+    const auto* scene = params.scene;
+
+    auto& asset_texs = params.asset_texs;
+    auto& matIdx = params.matIdx;
+
+    auto& result = params.result;
+
     auto material = scene->mMaterials[matIdx];
     AssetMaterial mat{};
     mat.name = material->GetName().C_Str();
