@@ -12,20 +12,17 @@
 namespace axle::scene
 {
 
-struct PipelineBounds {
-    gfx::RenderPipelineHandle pipelineHandle;
-};
+struct MeshBinds {
+    std::unordered_map<assets::MeshId, gfx::RenderPipelineHandle> pipeline;
 
-struct MeshBounds {
     std::unordered_map<assets::MeshId, assets::AssetGpuMesh> draw;
     std::unordered_map<assets::MeshId, assets::AssetGpuMaterial> materials; 
 };
 
 struct ModelDesc {
     const assets::AssetImportResult& immutableImport;
-    PipelineBounds pipelineBounds;
-    MeshBounds meshBounds;
     assets::Node rootNode;
+    MeshBinds meshBinds;
 };
 
 // RenderThread Owns This

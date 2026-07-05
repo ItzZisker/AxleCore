@@ -36,7 +36,7 @@ ThreadInvocationVoid ModelInstance::PushLeafParents(assets::NodeId nodeId, std::
         if (node->GetMeshIds().size() > 0) {
             m_LeafParents.insert({nodeId, parentList});
         }
-        for (auto& child : node->m_Children) {
+        for (auto& child : node->GetChildren()) {
             auto childId = child.GetId();
 
             parentList.push_back(childId);
@@ -100,13 +100,19 @@ ThreadInvocation<glm::mat4> ModelInstance::GetWorldTransform(assets::NodeId leaf
                 return glm::mat4(1.0f);
             }
             auto node = it->second;
+            auto coordsRes = node->UseCoords().SyncCall();
 
-            world *= node->m_Coords.GetTransform();
-            node->m_Dirty = false;
+            if (!coordsRes.has_value()) {
+                return glm::mat4(1.0f);
+            }
+            world *= coordsRes.value();
         }
 
-        world *= leaf->m_Coords.GetTransform();
-        leaf->m_Dirty = false;
+        auto leafCoordsRes = leaf->UseCoords().SyncCall();
+        if (!leafCoordsRes.has_value()) {
+            return glm::mat4(1.0f);
+        }
+        world *= leafCoordsRes.value();
 
         if (cacheFinalTransform) {
             m_CachedLeafFinalTransform.emplace(leafId, world);

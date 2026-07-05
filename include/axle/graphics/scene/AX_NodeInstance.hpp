@@ -45,6 +45,9 @@ private:
 public:
     ~NodeInstance();
 
+    NodeInstance(const NodeInstance&) = delete;
+    NodeInstance& operator=(const NodeInstance&) = delete;
+
     const assets::NodeId GetId() const;
     const assets::Node& GetRoot() const;
 
@@ -61,9 +64,6 @@ public:
 protected:
     utils::Coordination m_Coords;
 
-    friend gfx::RenderBatch;
-    friend scene::ModelInstance;
-    
     explicit NodeInstance(ThreadGfxScope gfxThread, const NodeInstanceParams& params);
 };
 
