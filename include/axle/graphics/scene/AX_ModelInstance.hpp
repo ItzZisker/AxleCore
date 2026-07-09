@@ -13,8 +13,6 @@ namespace axle::scene
 {
 
 struct MeshBinds {
-    std::unordered_map<assets::MeshId, gfx::RenderPipelineHandle> pipeline;
-
     std::unordered_map<assets::MeshId, assets::AssetGpuMesh> draw;
     std::unordered_map<assets::MeshId, assets::AssetGpuMaterial> materials; 
 };

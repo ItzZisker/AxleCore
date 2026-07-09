@@ -907,7 +907,7 @@ ExResult<FramebufferDesc> GLGraphicsBackend::DescribeFramebuffer(const Framebuff
     }
 }
 
-ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) {
+ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc, ShaderInputState& out_VertexBindingsDesc) {
 
     if (desc.pipelineType == PipelineType::Graphics) {
         if (desc.entryPointVertex.empty()) {
@@ -941,22 +941,37 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
     slang::SessionDesc sdesc{};
     sdesc.targets = &target;
     sdesc.targetCount = 1;
-    sdesc.searchPaths = &desc.sourcePath; // or directory
-    sdesc.searchPathCount = 1;
 
     Slang::ComPtr<slang::ISession> session{};
     m_SlangGlobal->createSession(sdesc, session.writeRef());
 
-    Slang::ComPtr<slang::IBlob> errorBlob{};
-    Slang::ComPtr<slang::IModule> module{
-        session->loadModule(desc.sourcePath, errorBlob.writeRef())
-    };
+    std::vector<Slang::ComPtr<slang::IModule>> modules(desc.modules.size());
 
-    if (!module) {
-        std::stringstream error_msg{};
-        std::string start = "Failed to load Slang module\n\n";
-        error_msg.write(start.c_str(), start.size());
-        error_msg.write((const char*)errorBlob->getBufferPointer(), errorBlob->getBufferSize());
+    bool failed{false};
+
+    std::stringstream error_msg{};
+    std::string start = "Failed to load Slang module: modName=";
+    std::string nn = "\n\n";
+
+    for (uint32_t mi{0}; mi < desc.modules.size(); mi++) {
+        auto md = desc.modules[mi];
+        const char* modNameCstr = md.modName.data();
+        
+        Slang::ComPtr<ISlangBlob> codeBlob(slang_createBlob(md.codeBlob.data(), md.codeBlob.size()));
+        Slang::ComPtr<slang::IBlob> errorBlob;
+
+        modules[mi] = {session->loadModuleFromSource(modNameCstr, modNameCstr, codeBlob, errorBlob.writeRef())};
+
+        if (!modules[mi]) {
+            failed = true;
+            error_msg.write(start.c_str(), start.size());
+            error_msg.write(modNameCstr, md.modName.size());
+            error_msg.write(nn.c_str(), nn.size());
+            error_msg.write((const char*)errorBlob->getBufferPointer(), errorBlob->getBufferSize());
+        }
+    }
+
+    if (failed) {
         GL_CALL(m_GL->DeleteProgram(program.id));
         program.id = 0;
         return {error_msg.str()};
@@ -970,25 +985,31 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
 
     std::unordered_map<ShaderStage, StageValue> entryPoints;
     std::vector<slang::IComponentType*> components;
-    components.push_back(module.get());
+    
+    for (uint32_t modIdx{0}; modIdx < modules.size(); modIdx++) {
+        auto& mod = modules[modIdx];
+        components.push_back(mod.get());
 
-    uint32_t entryIndex{0};
-    if (desc.pipelineType == PipelineType::Graphics) {
-        Slang::ComPtr<slang::IEntryPoint> entryVertex, entryFragment;
+        if (modIdx == desc.entryPointModuleIdx) {
+            uint32_t entryIndex{0};
+            if (desc.pipelineType == PipelineType::Graphics) {
+                Slang::ComPtr<slang::IEntryPoint> entryVertex, entryFragment;
 
-        module->findEntryPointByName(desc.entryPointVertex.data(), entryVertex.writeRef());
-        components.push_back(entryVertex.get());
-        entryPoints[ShaderStage::Vertex] = {desc.entryPointVertex, std::move(entryVertex), entryIndex++};
+                mod->findEntryPointByName(desc.entryPointVertex.data(), entryVertex.writeRef());
+                components.push_back(entryVertex.get());
+                entryPoints[ShaderStage::Vertex] = {desc.entryPointVertex, std::move(entryVertex), entryIndex++};
 
-        module->findEntryPointByName(desc.entryPointFragment.data(), entryFragment.writeRef());
-        components.push_back(entryFragment.get());
-        entryPoints[ShaderStage::Fragment] = {desc.entryPointFragment, std::move(entryFragment), entryIndex++};
-    } else {
-        Slang::ComPtr<slang::IEntryPoint> entryCompute;
+                mod->findEntryPointByName(desc.entryPointFragment.data(), entryFragment.writeRef());
+                components.push_back(entryFragment.get());
+                entryPoints[ShaderStage::Fragment] = {desc.entryPointFragment, std::move(entryFragment), entryIndex++};
+            } else {
+                Slang::ComPtr<slang::IEntryPoint> entryCompute;
 
-        module->findEntryPointByName(desc.entryPointCompute.data(), entryCompute.writeRef());
-        components.push_back(entryCompute.get());
-        entryPoints[ShaderStage::Compute] = {desc.entryPointCompute, std::move(entryCompute), entryIndex++};
+                mod->findEntryPointByName(desc.entryPointCompute.data(), entryCompute.writeRef());
+                components.push_back(entryCompute.get());
+                entryPoints[ShaderStage::Compute] = {desc.entryPointCompute, std::move(entryCompute), entryIndex++};
+            }
+        }
     }
 
     Slang::ComPtr<slang::IComponentType> linked;
@@ -1088,6 +1109,7 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc) 
         return {error_msg.str()};
     }
     program.Sign();
+    out_VertexBindingsDesc = program.vertexBindings;
 
     return program.External();
 }

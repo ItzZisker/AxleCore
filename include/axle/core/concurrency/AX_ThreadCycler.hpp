@@ -100,7 +100,7 @@ template<typename TResult>
 class ThreadInvocation {
     using Function = std::function<TResult()>;
 private:
-    WeakPtr<ThreadCycler> m_Thread;
+    SharedPtr<ThreadCycler> m_Thread;
     Function m_Function;
 public:
     template<typename F>
@@ -111,38 +111,29 @@ public:
           m_Function(std::forward<F>(func)) {}
 
     utils::ExResult<TResult> Call() {
-        if (auto thr = m_Thread.lock()) {
-            if (thr->ValidateThread()) {
-                return m_Function();
-            } else {
-                return utils::ExError("Invalid caller thread. Call() executes only on the owner thread.");
-            }
+        if (m_Thread->ValidateThread()) {
+            return m_Function();
+        } else {
+            return utils::ExError("Invalid caller thread. Call() executes only on the owner thread.");
         }
-        return utils::ExError("Thread unavailable.");
     }
 
-    utils::ExResult<TResult> SyncCall() {
-        if (auto thr = m_Thread.lock()) {
-            if (thr->ValidateThread()) {
-                return m_Function();
-            } else {
-                return thr->EnqueueFuture(m_Function).get();
-            }
+    TResult SyncCall() {
+        if (m_Thread->ValidateThread()) {
+            return m_Function();
+        } else {
+            return thr->EnqueueFuture(m_Function).get();
         }
-        return utils::ExError("Thread unavailable.");
     }
 
-    utils::ExResult<Future<TResult>> PostCall() {
-        if (auto thr = m_Thread.lock()) {
-            if (thr->ValidateThread()) {
-                auto task = std::packaged_task<TResult()>(std::forward<Function>(func));
-                task();
-                return task->get_future();
-            } else {
-                return thr->EnqueueFuture(m_Function);
-            }
+    Future<TResult> PostCall() {
+        if (m_Thread->ValidateThread()) {
+            auto task = std::packaged_task<TResult()>(std::forward<Function>(func));
+            task();
+            return task->get_future();
+        } else {
+            return m_Thread->EnqueueFuture(m_Function);
         }
-        return utils::ExError("Thread unavailable.");
     }
 };
 

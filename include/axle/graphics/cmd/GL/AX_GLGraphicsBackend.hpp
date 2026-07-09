@@ -256,7 +256,7 @@ public:
     utils::ExError DestroyFramebuffer(const FramebufferHandle& handle) override;
     utils::ExResult<FramebufferDesc> DescribeFramebuffer(const FramebufferHandle& handle) override;
 
-    utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) override;
+    utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc, ShaderInputState& out_VertexBindingsDesc) override;
     utils::ExError DestroyProgram(const ShaderHandle& handle) override;
     utils::ExResult<ShaderDesc> DescribeProgram(const ShaderHandle& handle) override;
 

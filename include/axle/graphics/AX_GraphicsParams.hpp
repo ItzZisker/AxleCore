@@ -322,18 +322,29 @@ inline PipelineType ToPipelineType(ShaderStage stg) {
     }
 }
 
+struct ShaderModuleDesc {
+    std::string_view modName{"Default"};
+    utils::URaw codeBlob;
+};
+
+struct ShaderSpecialization {
+    std::string_view interfaceName;
+    std::string_view implementationName;
+};
+
 struct ShaderDesc {
     PipelineType pipelineType;
 
-    const char* sourcePath; // .slang file
-    
+    utils::CowSpan<ShaderModuleDesc> modules;
+    utils::CowSpan<ShaderSpecialization> specializations;
+
+    utils::CowSpan<const char*> defines{};
+
     std::string_view entryPointVertex{""};
     std::string_view entryPointFragment{""};
     std::string_view entryPointCompute{""};
 
-    // Optional compile defines
-    utils::CowSpan<const char*> defines{};
-    utils::CowSpan<std::pair<const char*, const char*>> variables{};
+    uint32_t entryPointModuleIdx{0};
 };
 
 enum class VertexSemantic : uint8_t {

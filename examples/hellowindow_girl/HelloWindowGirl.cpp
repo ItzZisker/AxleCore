@@ -52,10 +52,10 @@ struct Uniforms {
         if (fheight == 0) fheight = 1.0f;
 
         MVP[0] = glm::mat4(1.0f);
-        MVP[1] = camera.GetViewMatrix();
+        MVP[1] = camera.GetViewMatrix().Call().value();
         MVP[2] = glm::perspective(glm::radians(70.0f), fwidth / fheight, 0.1f, 100.0f);
 
-        cameraPos = camera.GetPosition();
+        cameraPos = camera.GetCoords().Call().value().GetPosition();
     }
 
     void UpdateLook(float dT) {
@@ -113,7 +113,7 @@ void Girl_Init(SharedPtr<RenderData> rdrData) {
         }
     }
 
-    AssetMesh& mesh_ch03 = asset_asf->meshes[node_ch03.meshId];
+    AssetMesh& mesh_ch03 = asset_asf->meshes[node_ch03.meshIds[0]];
     AssetBuffer& mesh_ch03_vertices = asset_asf->buffers[mesh_ch03.vertexBufferIdx];
     AssetBuffer& mesh_ch03_indices = asset_asf->buffers[mesh_ch03.indexBufferIdx];
 
@@ -214,12 +214,12 @@ void Girl_Init(SharedPtr<RenderData> rdrData) {
 
     Binding girlUboBinding{};
     girlUboBinding.type = BindingType::UniformBuffer;
-    girlUboBinding.resource = ResourceHandle(rdrData->girlUniforms);
+    girlUboBinding.resources = {std::vector<ResourceHandle>{ResourceHandle(rdrData->girlUniforms)}};
     girlUboBinding.range = girlUboDesc.size;
 
     Binding girlAlbedoBinding{};
     girlAlbedoBinding.type = BindingType::SampledTexture;
-    girlAlbedoBinding.resource = ResourceHandle(rdrData->girlAlbedoMap);
+    girlAlbedoBinding.resources = {std::vector<ResourceHandle>{ResourceHandle(rdrData->girlAlbedoMap)}};
     girlAlbedoBinding.slot = 1;
 
     ResourceSetDesc girlResourceSetDesc{};

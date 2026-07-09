@@ -5,6 +5,7 @@
 
 #include "axle/utils/AX_Types.hpp"
 #include "axle/utils/AX_Expected.hpp"
+#include "axle/utils/AX_UUID.hpp"
 
 #include <glm/glm.hpp>
 
@@ -27,7 +28,7 @@ enum class MeshMode : uint8_t {
 struct DrawItem {
     MeshMode meshMode; // Raw vertices, Indexed vertices
 
-    RenderPipelineHandle pipeline; // Pipeline (shader, geometry, blending states, etc.)
+    RenderPipelineHandle pipeline{utils::INVALID_HANDLE}; // Pipeline (shader, geometry, blending states, etc.)
 
     BufferHandle vertices; // Mesh
     BufferHandle indices; // Mesh
@@ -91,10 +92,6 @@ const inline UserSortKeyAssigner RBATCH_DEFAULT_USER_SORTKEY_ZERO = [](const Use
 };
 
 struct RenderBatchDesc {
-    SharedPtr<core::ThreadContextGfx> gfxThread{nullptr};
-    SharedPtr<ICommandList> commandList{nullptr};
-    
-    BatchErrorPredicate frameErrorHandler{RBATCH_DEFAULT_ERROR_HANDLER};
     Predicate<DrawItem> itemsSort{RBATCH_SORT_BY_MINIMAL_STATE};
     UserSortKeyAssigner userSortKeyAssigner{RBATCH_DEFAULT_USER_SORTKEY_ZERO};
     
@@ -102,14 +99,6 @@ struct RenderBatchDesc {
     TransformInput transformInput{TransformInput::VertexInput};
     
     bool separateSamplersFromTextures{false}; // Requires FeatureSet on Host device
-    bool autoSort{false}; // Sorts on run (Add/Remove/Modify Instances)
-};
-
-struct ModelInstanceTag {};
-struct ModelInstanceHandle : public utils::MagicHandleTagged<ModelInstanceTag> {};
-
-struct ModelInstanceWrapper : public utils::MagicInternal<ModelInstanceHandle> {
-    SharedPtr<scene::ModelInstance> value;
 };
 
 struct NodeTraversalParams {
@@ -118,41 +107,37 @@ struct NodeTraversalParams {
     std::deque<DrawItem>& results;
 };
 
+class RenderProcedure;
+
 class RenderBatch : AX_THR_RENDER_OWNED {
 private:
-    utils::MagicPool<ModelInstanceWrapper> m_Instances{};
-
-    std::deque<DrawItem> m_Items{};
     std::unordered_set<SharedPtr<scene::ModelInstance>> m_TrackingInstances{};
-
-    std::unordered_map<RLHandle, SharedPtr<RenderLayer>> m_Registries{};
-    std::unordered_map<SharedPtr<RenderLayer>, std::vector<RLHandle>> m_RegistriesRev{};
 
     void TraverseNode(const NodeTraversalParams& params);
 
-    utils::ExError AddInstance0(SharedPtr<scene::ModelInstance> modelInstance);
+    void AddInstance0(SharedPtr<scene::ModelInstance> modelInstance);
+    void RemoveInstance0(SharedPtr<scene::ModelInstance> modelInstance);
+
+    void GenerateDrawCalls(SharedPtr<scene::ModelInstance> modelInstance, std::deque<DrawItem>& out);
 public:
     RenderBatch(ThreadGfxScope gfxThread, const RenderBatchDesc& desc);
-    ~RenderBatch();
 
-    ThreadInvocationVoid RebuildDrawItems();
-    ThreadInvocationVoid Clear();
+    ThreadInvocationVoid ClearInstances();
 
-    ThreadInvocation<utils::ExError> AddInstance(SharedPtr<scene::ModelInstance> modelInstance);
-    ThreadInvocation<utils::ExError> AddInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances);
+    ThreadInvocationVoid AddInstance(SharedPtr<scene::ModelInstance> modelInstance);
+    ThreadInvocationVoid AddInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances);
 
-    ThreadInvocation<utils::ExResult<RLHandle>> Register(SharedPtr<RenderLayer> rl, const RLStage& stage, uint32_t sortKey = 0);
-    ThreadInvocation<utils::ExError> UnRegister(const RLHandle& handle);
+    ThreadInvocationVoid RemoveInstance(SharedPtr<scene::ModelInstance> modelInstance);
+    ThreadInvocationVoid RemoveInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances);
 
     ThreadInvocationVoid SetItemSort(const Predicate<DrawItem>& pred);
     ThreadInvocationVoid SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner);
-    ThreadInvocationVoid SortItems();
 protected:
-    friend RenderLayer;
+    friend class RenderProcedure;
 
     RenderBatchDesc m_Desc{};
 
-    static void Draw(ThreadGfxScope gfx, float dT, void* userPtr);
+    void Record(const RenderProcedure& renderProc);
 };
 
 }

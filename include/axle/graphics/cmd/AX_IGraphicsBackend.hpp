@@ -38,7 +38,7 @@ public:
     virtual utils::ExError DestroyFramebuffer(const FramebufferHandle& handle) = 0;
     virtual utils::ExResult<FramebufferDesc> DescribeFramebuffer(const FramebufferHandle& handle) = 0;
 
-    virtual utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc) = 0;
+    virtual utils::ExResult<ShaderHandle> CreateProgram(const ShaderDesc& desc, ShaderInputState& out_VertexBindingsDesc) = 0;
     virtual utils::ExError DestroyProgram(const ShaderHandle& handle) = 0;
     virtual utils::ExResult<ShaderDesc> DescribeProgram(const ShaderHandle& handle) = 0;
     
