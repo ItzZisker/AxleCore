@@ -86,25 +86,17 @@ struct AssetMaterialsUploadDesc {
     const utils::CowSpan<AssetMaterialDesc>& immutableMaterials;
 };
 
-class AssetGpu {
+class AssetGpu : AX_THR_RENDER_OWNED {
 private:
-    SharedPtr<core::ThreadContextGfx> m_GfxThread;
-
-    std::unordered_map<gfx::ResourceSetHandle, gfx::ResourceSetDesc> m_ResourcesDescs;
-    std::unordered_map<gfx::TextureHandle, gfx::TextureDesc> m_TextureDescs;
-    std::unordered_map<gfx::BufferHandle, gfx::BufferDesc> m_BufferDescs;
-
-    std::mutex m_Mutex{};
+    std::vector<gfx::BufferHandle> m_HeldBuffers;
+    std::vector<gfx::TextureHandle> m_HeldTextures;
+    std::vector<gfx::ResourceSetHandle> m_HeldResources;
 public:
-    explicit AssetGpu(SharedPtr<core::ThreadContextGfx> gfxThread);
+    explicit AssetGpu(ThreadGfxScope gfxThread);
     ~AssetGpu();
 
-    Future<utils::ExResult<AssetGpuMeshes>> UploadMeshes(AssetMeshesUploadDesc& desc);
-    Future<utils::ExResult<AssetGpuMaterials>> UploadMaterials(AssetMaterialsUploadDesc& desc);
-    
-    utils::ExResult<gfx::ResourceSetDesc> DescribeBindings(const gfx::ResourceSetHandle& handle);
-    utils::ExResult<gfx::TextureDesc> DescribeTexture(const gfx::TextureHandle& handle);
-    utils::ExResult<gfx::BufferDesc> DescribeBuffer(const gfx::BufferHandle& handle);
+    ThreadInvocation<utils::ExResult<AssetGpuMeshes>> UploadMeshes(AssetMeshesUploadDesc& desc);
+    ThreadInvocation<utils::ExResult<AssetGpuMaterials>> UploadMaterials(AssetMaterialsUploadDesc& desc);
 };
 
 }

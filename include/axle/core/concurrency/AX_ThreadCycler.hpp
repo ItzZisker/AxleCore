@@ -118,6 +118,14 @@ public:
         }
     }
 
+    TResult Immediate() {
+        if (m_Thread->ValidateThread()) {
+            return m_Function();
+        } else {
+            throw std::runtime_error("Invalid caller thread. Immediate() executes only on the owner thread.");
+        }
+    }
+
     TResult SyncCall() {
         if (m_Thread->ValidateThread()) {
             return m_Function();
@@ -206,8 +214,14 @@ class ThreadOwned {
 protected:
     SharedPtr<T_ThreadCycler> m_Thread;
 public:
-    explicit ThreadOwned(SharedPtr<T_ThreadCycler> eCycler)
-        : m_Thread(std::move(eCycler)) {}
+    explicit ThreadOwned(SharedPtr<T_ThreadCycler> eCycler) : m_Thread(std::move(eCycler)) {
+        if (!m_Thread->ValidateThread())
+            throw std::runtime_error("AX FATAL: Thread validation failure: upon construction (Constructor's caller is not the same as ThreadCycler Context)");
+    }
+
+    bool OnOwnerThread() const {
+        return m_Thread->ValidateThread();
+    }
 protected:
     T_ThreadCycler& Thread() {
         return *m_Thread;
@@ -217,14 +231,10 @@ protected:
         return *m_Thread;
     }
 
-    bool OnOwnerThread() const {
-        return m_Thread->ValidateThread();
-    }
-
     void AssertOwnerThread() const {
 #ifdef AX_DEBUG
         if (!OnOwnerThread())
-            throw std::runtime_error("Invalid owner thread.");
+            throw std::runtime_error("AX FATAL (DEBUG): Invalid owner thread.");
 #endif
     }
 };

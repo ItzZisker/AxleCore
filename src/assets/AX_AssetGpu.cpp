@@ -32,31 +32,29 @@ using namespace axle::utils;
 namespace axle::assets
 {
 
-AssetGpu::AssetGpu(SharedPtr<core::ThreadContextGfx> gfxThread)
-    : m_GfxThread(gfxThread) {}
+AssetGpu::AssetGpu(ThreadGfxScope gfxThread)
+    : ThreadOwned(gfxThread) {}
 
 AssetGpu::~AssetGpu() {
-    auto lambdaFinalizer = [
-        bufferLookup = std::move(m_BufferDescs),
-        textureLookup = std::move(m_TextureDescs),
-        resourcesLookup = std::move(m_ResourcesDescs),
-        gfxThread = m_GfxThread
-    ]() {
-        auto backend = gfxThread->GetContext();
-        for (auto& [h, _] : resourcesLookup) backend->DestroyResourceSet(h);
-        for (auto& [h, _] : textureLookup) backend->DestroyTexture(h);
-        for (auto& [h, _] : bufferLookup) backend->DestroyBuffer(h);
-    };
-    core::InstaTaskOrQueue(*m_GfxThread.get(), lambdaFinalizer);
+    ThreadInvocationVoid(m_Thread, [&](){
+        auto gbgfx = m_Thread->GetContext();
+
+        for (auto& h : m_HeldBuffers) gbgfx->DestroyBuffer(h);
+        for (auto& h : m_HeldTextures) gbgfx->DestroyTexture(h);
+        for (auto& h : m_HeldResources) gbgfx->DestroyResourceSet(h);
+
+        return VoidInvoke{};
+    }).SyncCall();
 }
 
-Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& desc) {
-    auto lambdaUploader = [&, desc]() -> ExResult<AssetGpuMeshes> {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        auto gbgfx = m_GfxThread->GetContext();
+ThreadInvocation<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& desc) {
+    ThreadInvocation<ExResult<AssetGpuMeshes>>(m_Thread, [&]() -> ExResult<AssetGpuMeshes> {
+        auto gbgfx = m_Thread->GetContext();
 
         std::vector<ExError> errors;
         std::vector<AssetGpuMesh> meshes;
+
+        std::vector<gfx::BufferHandle> localHeldBuffers;
 
         gfx::BufferDesc verticesDesc;
         verticesDesc.access = gfx::BufferAccess::Immutable;
@@ -88,7 +86,7 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
                 });
             } else {
                 vertexBuffer = vres.value();
-                m_BufferDescs[vertexBuffer] = verticesDesc;
+                localHeldBuffers.push_back(vertexBuffer);
             }
 
             bool indexed = immutableMeshRef.indexBufferIdx != UINT32_MAX;
@@ -108,7 +106,7 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
                     });
                 } else {
                     indexBuffer = ires.value();
-                    m_BufferDescs[indexBuffer] = indicesDesc;
+                    localHeldBuffers.push_back(indexBuffer);
                 }
             }
 
@@ -160,9 +158,6 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
 
         if (!errors.empty()) {
             for (auto& mesh : meshes) {
-                m_BufferDescs.erase(mesh.vertices);
-                if (mesh.indexed) m_BufferDescs.erase(mesh.indices);
-
                 gbgfx->DestroyBuffer(mesh.vertices);
                 if (mesh.indexed) gbgfx->DestroyBuffer(mesh.indices);
             }
@@ -174,18 +169,26 @@ Future<ExResult<AssetGpuMeshes>> AssetGpu::UploadMeshes(AssetMeshesUploadDesc& d
             return ExError{error_str_stream.str()};
         }
 
+        m_HeldBuffers.insert(
+            m_HeldBuffers.end(),
+            std::make_move_iterator(localHeldBuffers.begin()),
+            std::make_move_iterator(localHeldBuffers.end())
+        );
+
         return AssetGpuMeshes{{std::move(meshes)}};
-    };
-    return core::InstaFutureOrQueue(*m_GfxThread.get(), lambdaUploader);
+    });
 }
 
-Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUploadDesc& desc) {
-    auto lambdaUploader = [&, desc]() -> ExResult<AssetGpuMaterials> {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        auto gbgfx = m_GfxThread->GetContext();
+ThreadInvocation<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUploadDesc& desc) {
+    return ThreadInvocation<ExResult<AssetGpuMaterials>>(m_Thread, [&, desc]() -> ExResult<AssetGpuMaterials> {
+        auto gbgfx = m_Thread->GetContext();
 
         std::vector<AssetGpuMaterial> materials;
         std::vector<ExError> errors;
+
+        std::vector<gfx::BufferHandle> localHeldBuffers;
+        std::vector<gfx::TextureHandle> localHeldTextures;
+        std::vector<gfx::ResourceSetHandle> localHeldResources;
         
         for (uint32_t matIdx{0}; matIdx < desc.immutableMaterials.size(); matIdx++) {
             auto& argMat = desc.immutableMaterials[matIdx];
@@ -218,7 +221,7 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
                 });
             } else {
                 propsUbo = uboCRes.value();
-                m_BufferDescs[propsUbo] = std::move(propsUboDesc);
+                localHeldBuffers.push_back(propsUbo);
 
                 gfx::ResourceHandle uboResH(propsUbo);
                 gfx::Binding uboBind;
@@ -282,7 +285,7 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
                         auto val = texRes.value();
 
                         textureHandles.push_back(val);
-                        m_TextureDescs[val] = std::move(texDesc);
+                        localHeldTextures.push_back(val);
 
                         gfx::ResourceHandle texResH(val);
                         gfx::Binding texBind;
@@ -323,7 +326,7 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
                 }
             } else {
                 auto resHandle = resRes.value();
-                m_ResourcesDescs[resHandle] = std::move(rDesc);
+                localHeldResources.push_back(resHandle);
 
                 AssetGpuMaterial gpuMat;
 
@@ -336,6 +339,15 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
         
         if (!errors.empty()) {
             for (auto& material : materials) {
+                for (auto& binding : material.bindings) {
+                    for (auto& resource : binding.resources) {
+                        if (binding.type == gfx::BindingType::UniformBuffer || binding.type == gfx::BindingType::StorageBuffer) {
+                            gbgfx->DestroyBuffer(resource.AsBuffer());
+                        } else { // if (binding.type == Texture)
+                            gbgfx->DestroyTexture(resource.AsTexture());
+                        }
+                    }
+                }
                 gbgfx->DestroyResourceSet(material.resourcesHandle);
             }
             std::stringstream error_str_stream;
@@ -346,30 +358,26 @@ Future<ExResult<AssetGpuMaterials>> AssetGpu::UploadMaterials(AssetMaterialsUplo
             return ExError{error_str_stream.str()};
         }
 
+        m_HeldBuffers.insert(
+            m_HeldBuffers.end(),
+            std::make_move_iterator(localHeldBuffers.begin()),
+            std::make_move_iterator(localHeldBuffers.end())
+        );
+
+        m_HeldTextures.insert(
+            m_HeldTextures.end(),
+            std::make_move_iterator(localHeldTextures.begin()),
+            std::make_move_iterator(localHeldTextures.end())
+        );
+
+        m_HeldResources.insert(
+            m_HeldResources.end(),
+            std::make_move_iterator(localHeldResources.begin()),
+            std::make_move_iterator(localHeldResources.end())
+        );
+
         return AssetGpuMaterials{{std::move(materials)}};
-    };
-    return core::InstaFutureOrQueue(*m_GfxThread.get(), lambdaUploader);
-}
-
-ExResult<gfx::ResourceSetDesc> AssetGpu::DescribeBindings(const gfx::ResourceSetHandle& handle) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    auto found = m_ResourcesDescs.find(handle);
-    if (found == m_ResourcesDescs.end()) return ExError{"Invalid ResourceSetHandle"};
-    return found->second;
-}
-
-ExResult<gfx::TextureDesc> AssetGpu::DescribeTexture(const gfx::TextureHandle& handle) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    auto found = m_TextureDescs.find(handle);
-    if (found == m_TextureDescs.end()) return ExError{"Invalid TextureHandle"};
-    return found->second;
-}
-
-ExResult<gfx::BufferDesc> AssetGpu::DescribeBuffer(const gfx::BufferHandle& handle) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    auto found = m_BufferDescs.find(handle);
-    if (found == m_BufferDescs.end()) return ExError{"Invalid BufferHandle"};
-    return found->second;
+    });
 }
 
 gfx::TextureFormat GetTexFormatOfImg(const gfx::ImageFormat& fmt) {

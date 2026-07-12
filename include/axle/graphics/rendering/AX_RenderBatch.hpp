@@ -25,7 +25,10 @@ enum class MeshMode : uint8_t {
     Indexed
 };
 
-struct DrawItem {
+struct DrawCallContext {
+    assets::MeshId meshId;
+    assets::NodeId nodeId;
+
     MeshMode meshMode; // Raw vertices, Indexed vertices
 
     RenderPipelineHandle pipeline{utils::INVALID_HANDLE}; // Pipeline (shader, geometry, blending states, etc.)
@@ -41,7 +44,7 @@ struct DrawItem {
     uint32_t sortKey{0}; // User-defined sortKey (Optional)
 };
 
-const inline Predicate<DrawItem> RBATCH_SORT_BY_MINIMAL_STATE = [](const DrawItem& a, const DrawItem& b) {
+const inline Predicate<DrawCallContext> RBATCH_SORT_BY_MINIMAL_STATE = [](const DrawCallContext& a, const DrawCallContext& b) {
     if (a.pipeline != b.pipeline) return a.pipeline < b.pipeline;
     if (a.resources != b.resources) return a.resources < b.resources;
     if (a.vertices != b.vertices) return a.vertices < b.vertices;
@@ -92,7 +95,7 @@ const inline UserSortKeyAssigner RBATCH_DEFAULT_USER_SORTKEY_ZERO = [](const Use
 };
 
 struct RenderBatchDesc {
-    Predicate<DrawItem> itemsSort{RBATCH_SORT_BY_MINIMAL_STATE};
+    Predicate<DrawCallContext> drawCallsSort{RBATCH_SORT_BY_MINIMAL_STATE};
     UserSortKeyAssigner userSortKeyAssigner{RBATCH_DEFAULT_USER_SORTKEY_ZERO};
     
     RenderBatchType batchType{RenderBatchType::DirectDraw};
@@ -104,7 +107,7 @@ struct RenderBatchDesc {
 struct NodeTraversalParams {
     scene::ModelInstance& modelInstance;
     scene::NodeInstance& nodeInstance;
-    std::deque<DrawItem>& results;
+    std::deque<DrawCallContext>& results;
 };
 
 class RenderProcedure;
@@ -118,7 +121,7 @@ private:
     void AddInstance0(SharedPtr<scene::ModelInstance> modelInstance);
     void RemoveInstance0(SharedPtr<scene::ModelInstance> modelInstance);
 
-    void GenerateDrawCalls(SharedPtr<scene::ModelInstance> modelInstance, std::deque<DrawItem>& out);
+    void GenerateDrawCalls(SharedPtr<scene::ModelInstance> modelInstance, std::deque<DrawCallContext>& out);
 public:
     RenderBatch(ThreadGfxScope gfxThread, const RenderBatchDesc& desc);
 
@@ -130,7 +133,7 @@ public:
     ThreadInvocationVoid RemoveInstance(SharedPtr<scene::ModelInstance> modelInstance);
     ThreadInvocationVoid RemoveInstances(utils::Span<SharedPtr<scene::ModelInstance>> modelInstances);
 
-    ThreadInvocationVoid SetItemSort(const Predicate<DrawItem>& pred);
+    ThreadInvocationVoid SetItemSort(const Predicate<DrawCallContext>& pred);
     ThreadInvocationVoid SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner);
 protected:
     friend class RenderProcedure;

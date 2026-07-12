@@ -7,31 +7,23 @@ using namespace axle::utils;
 namespace axle::gfx
 {
 
-PipelineManager::PipelineManager(SharedPtr<core::ThreadContextGfx> gfxThr)
-    : m_GfxThread(gfxThr) {}
+PipelineManager::PipelineManager(ThreadGfxScope gfxThr)
+    : ThreadOwned(gfxThr) {}
 
 PipelineManager::~PipelineManager() {
-    auto lambdaFinalizer = [
-        pipelineLookup = std::move(m_PipelineLookup),
-        gfxThread = m_GfxThread
-    ]() {
-        auto backend = gfxThread->GetContext();
-        for (auto& [_, h] : pipelineLookup) {
-            backend->DestroyRenderPipeline(h);
-        }
-    };
-    core::InstaTaskOrQueue(*m_GfxThread, lambdaFinalizer);
+    ThreadInvocationVoid(m_Thread, [&](){
+        auto gbgfx = m_Thread->GetContext();
+        for (auto& [_, h] : m_PipelineLookup)
+            gbgfx->DestroyRenderPipeline(h);
+        return VoidInvoke{};
+    }).SyncCall();
 }
 
 ExResult<RenderPipelineHandle> PipelineManager::Create(const RenderPipelineDesc& desc) {
-    auto lambdaCreator = [
-        descCpy = desc,
-        gfxThread = m_GfxThread
-    ]() -> ExResult<RenderPipelineHandle> {
-        auto backend = gfxThread->GetContext();
-        return backend->CreateRenderPipeline(descCpy);
-    };
-    return core::InstaFutureOrQueue(*m_GfxThread, lambdaCreator).get();
+    ThreadInvocation<ExResult<RenderPipelineHandle>>(m_Thread, [&, descCpy = desc]() -> ExResult<RenderPipelineHandle> {
+        auto gbgfx = m_Thread->GetContext();
+        return gbgfx->CreateRenderPipeline(descCpy);
+    });
 }
 
 ExResult<RenderPipelineHandle> PipelineManager::GetOrCreate(const RenderPipelineDesc& desc) {

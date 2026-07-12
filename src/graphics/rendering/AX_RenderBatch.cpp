@@ -93,23 +93,25 @@ void RenderBatch::TraverseNode(const NodeTraversalParams& params) {
     auto& results = params.results;
 
     auto& modelDesc = modelInstance.GetModelDesc();
-    for (uint32_t meshId : nodeInstance.GetMeshIds()) {
-        DrawItem drawItem;
+    for (assets::MeshId meshId : nodeInstance.GetMeshIds()) {
+        DrawCallContext drawCall;
 
         const auto& meshBinds = modelDesc.meshBinds;
 
         const auto& gpuMesh = meshBinds.draw.at(meshId);
         const auto& gpuMat = meshBinds.materials.at(meshId);
 
-        drawItem.meshMode = gpuMesh.indexed ? MeshMode::Indexed : MeshMode::Vertices;
-        drawItem.vertices = gpuMesh.vertices;
-        drawItem.indices = gpuMesh.indices;
-        drawItem.resources = gpuMat.resourcesHandle;
-        drawItem.vertexCount = gpuMesh.vertexCount;
-        drawItem.indexCount = gpuMesh.indexCount;
-        drawItem.sortKey = m_Desc.userSortKeyAssigner({modelInstance, nodeInstance, meshId});
+        drawCall.meshId = meshId;
+        drawCall.nodeId = nodeInstance.GetId();
+        drawCall.meshMode = gpuMesh.indexed ? MeshMode::Indexed : MeshMode::Vertices;
+        drawCall.vertices = gpuMesh.vertices;
+        drawCall.indices = gpuMesh.indices;
+        drawCall.resources = gpuMat.resourcesHandle;
+        drawCall.vertexCount = gpuMesh.vertexCount;
+        drawCall.indexCount = gpuMesh.indexCount;
+        drawCall.sortKey = m_Desc.userSortKeyAssigner({modelInstance, nodeInstance, meshId});
 
-        results.push_back(drawItem);
+        results.push_back(drawCall);
     }
 
     for (auto& child : nodeInstance.GetChildren()) {
@@ -117,8 +119,8 @@ void RenderBatch::TraverseNode(const NodeTraversalParams& params) {
     }
 }
 
-void RenderBatch::GenerateDrawCalls(SharedPtr<scene::ModelInstance> modelInstance, std::deque<DrawItem>& out_all) {
-    std::deque<DrawItem> part{};
+void RenderBatch::GenerateDrawCalls(SharedPtr<scene::ModelInstance> modelInstance, std::deque<DrawCallContext>& out_all) {
+    std::deque<DrawCallContext> part{};
     TraverseNode({*modelInstance, *modelInstance->GetRootNode().SyncCall(), part});
     out_all.insert(
         out_all.end(),
@@ -128,21 +130,47 @@ void RenderBatch::GenerateDrawCalls(SharedPtr<scene::ModelInstance> modelInstanc
 }
 
 void RenderBatch::Record(const RenderProcedure& renderProc) {
-    if (!m_Thread->ValidateThread()) return;
+    if (!m_Thread->ValidateThread() || !renderProc.OnOwnerThread())
+        return;
 
     auto commandList = renderProc.m_Desc.commandList;
+    auto pipelineResolver = renderProc.m_Desc.pipelineResolver;
+    auto currentPass = renderProc.m_CurrentPass;
+
     auto gbgfx = m_Thread->GetContext();
+
+    std::deque<DrawCallContext> allDrawCalls;
+
+    for (auto& modelInstance : m_TrackingInstances) {
+        std::deque<DrawCallContext> mdDrawCalls;
+        GenerateDrawCalls(modelInstance, mdDrawCalls);
+
+        for (auto& mdDrawCall : mdDrawCalls) {
+            RPPipelineResolveContext resolveContext{
+                .renderPass = currentPass,
+                .modelInstance = modelInstance,
+                .drawItem = mdDrawCall
+            };
+            mdDrawCall.pipeline = pipelineResolver->Resolve(resolveContext).Immediate();
+        }
+
+        allDrawCalls.insert(
+            allDrawCalls.end(),
+            std::make_move_iterator(mdDrawCalls.begin()),
+            std::make_move_iterator(mdDrawCalls.end())
+        );
+    }
+
+    std::sort(
+        allDrawCalls.begin(),
+        allDrawCalls.end(),
+        m_Desc.drawCallsSort
+    );
 
     RenderPipelineHandle currentPipeline{utils::INVALID_HANDLE};
     ResourceSetHandle currentResources{utils::INVALID_HANDLE};
 
-    std::deque<DrawItem> items;
-
-    for (auto& modelInstance : m_TrackingInstances) {
-        GenerateDrawCalls(modelInstance, items);
-    }
-
-    for (auto& item : items) {
+    for (auto& item : allDrawCalls) {
         if (currentPipeline != item.pipeline) {
             commandList->BindRenderPipeline({item.pipeline});
             currentPipeline = item.pipeline;
@@ -151,7 +179,7 @@ void RenderBatch::Record(const RenderProcedure& renderProc) {
 
         commandList->BindVertexBuffer({item.vertices});
         if (item.meshMode == MeshMode::Indexed) {
-            commandList->BindIndexBuffer({item.vertices});
+            commandList->BindIndexBuffer({item.indices});
         }
 
         if (currentResources != item.resources) {
@@ -212,16 +240,16 @@ ThreadInvocationVoid RenderBatch::RemoveInstances(utils::Span<SharedPtr<scene::M
     });
 }
 
-ThreadInvocationVoid RenderBatch::SetItemSort(const Predicate<DrawItem>& pred) {
-    return ThreadInvocationVoid(m_Thread, [&](){
-        m_Desc.itemsSort = pred;
+ThreadInvocationVoid RenderBatch::SetItemSort(const Predicate<DrawCallContext>& pred) {
+    return ThreadInvocationVoid(m_Thread, [&, predCpy = pred](){
+        m_Desc.drawCallsSort = predCpy;
         return VoidInvoke{};
     });
 }
 
 ThreadInvocationVoid RenderBatch::SetUserSortKeyAssigner(const UserSortKeyAssigner& assigner) {
-    return ThreadInvocationVoid(m_Thread, [&](){
-        m_Desc.userSortKeyAssigner = assigner;
+    return ThreadInvocationVoid(m_Thread, [&, assignerCpy = assigner](){
+        m_Desc.userSortKeyAssigner = assignerCpy;
         return VoidInvoke{};
     });
 }

@@ -20,8 +20,7 @@ ThreadInvocation<SharedPtr<NodeInstance>> ModelInstance::GetNode(assets::NodeId 
     });
 }
 
-ModelInstance::ModelInstance(ThreadGfxScope gfxThread, const ModelDesc& desc)
-    : ThreadOwned(gfxThread), m_Desc(desc) {
+ModelInstance::ModelInstance(const ModelDesc& desc) : ThreadOwned(desc.gfxThread), m_Desc(desc) {
     TraverseNode(desc.rootNode);
     m_RootNodeInstance = m_NodeInstancesById[desc.rootNode.nodeId];
 }
@@ -100,19 +99,10 @@ ThreadInvocation<glm::mat4> ModelInstance::GetWorldTransform(assets::NodeId leaf
                 return glm::mat4(1.0f);
             }
             auto node = it->second;
-            auto coordsRes = node->UseCoords().SyncCall();
-
-            if (!coordsRes.has_value()) {
-                return glm::mat4(1.0f);
-            }
-            world *= coordsRes.value();
+            world *= node->UseCoords().SyncCall();
         }
 
-        auto leafCoordsRes = leaf->UseCoords().SyncCall();
-        if (!leafCoordsRes.has_value()) {
-            return glm::mat4(1.0f);
-        }
-        world *= leafCoordsRes.value();
+        world *= leaf->UseCoords().SyncCall();
 
         if (cacheFinalTransform) {
             m_CachedLeafFinalTransform.emplace(leafId, world);
@@ -137,14 +127,52 @@ ThreadInvocation<bool> ModelInstance::IsTransformCached(assets::NodeId leafId) {
     });
 }
 
+void ModelInstance::SetDiscard0(assets::NodeId nodeId, bool discard) {
+    auto it = m_Discards.find(nodeId);
+    if (!discard && it != m_Discards.end()) {
+        m_Discards.erase(it);
+    } else if (discard && it == m_Discards.end()) {
+        m_Discards.insert(nodeId);
+    }
+}
+
 ThreadInvocationVoid ModelInstance::SetDiscard(assets::NodeId nodeId, bool discard) {
     return ThreadInvocationVoid(m_Thread, [&](){
-        auto it = m_Discards.find(nodeId);
-        if (!discard && it != m_Discards.end()) {
-            m_Discards.erase(it);
-        } else if (discard && it == m_Discards.end()) {
-            m_Discards.insert(nodeId);
-        }
+        ModelInstance::SetDiscard0(nodeId, discard);
+        return VoidInvoke{};
+    });
+}
+
+ThreadInvocationVoid ModelInstance::SetDiscards(const std::unordered_map<assets::NodeId, bool>& map) {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        for (const auto& [nodeId, discard] : map)
+            ModelInstance::SetDiscard0(nodeId, discard);
+        return VoidInvoke{};
+    });
+}
+
+void ModelInstance::SetMeshState0(assets::MeshId meshId, const MaterialStateMesh& matState) {
+    m_MeshStates[meshId] = matState;
+}
+
+ThreadInvocationVoid ModelInstance::SetMeshState(assets::MeshId meshId, const MaterialStateMesh& matState) {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        ModelInstance::SetMeshState0(meshId, matState);
+        return VoidInvoke{};
+    });
+}
+
+ThreadInvocationVoid ModelInstance::SetMeshesStates(const std::unordered_map<assets::MeshId, MaterialStateMesh>& map) {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        for (const auto& [meshId, meshState] : map)
+            ModelInstance::SetMeshState0(meshId, meshState);
+        return VoidInvoke{};
+    });
+}
+
+ThreadInvocationVoid ModelInstance::SetFallbackMeshState(const MaterialStateMesh& matState) {
+    return ThreadInvocationVoid(m_Thread, [&](){
+        m_FallbackMeshState = matState;
         return VoidInvoke{};
     });
 }

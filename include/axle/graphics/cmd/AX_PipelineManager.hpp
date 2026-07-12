@@ -15,23 +15,22 @@ std::size_t RPipeline_Hash_Raster(const RasterState& r);
 std::size_t RPipeline_Hash_VertexLayout(const MeshVertexLayout& layout);
 std::size_t RPipeline_Hash_PipelineDesc(const RenderPipelineDesc& desc);
 
-class PipelineManager {
+class PipelineManager : AX_THR_RENDER_OWNED {
 private:
-    SharedPtr<core::ThreadContextGfx> m_GfxThread;
     std::unordered_map<std::size_t, RenderPipelineHandle> m_PipelineLookup;
 
     utils::ExResult<RenderPipelineHandle> Create(const RenderPipelineDesc& desc);
 public:
-    PipelineManager(SharedPtr<core::ThreadContextGfx> gfxThr);
+    PipelineManager(ThreadGfxScope gfxThr);
     ~PipelineManager();
 
-    utils::ExResult<RenderPipelineHandle> GetOrCreate(const RenderPipelineDesc& desc);
+    ThreadInvocation<utils::ExResult<RenderPipelineHandle>> GetOrCreate(const RenderPipelineDesc& desc);
     
-    utils::ExResult<RenderPipelineDesc> Describe(const RenderPipelineHandle& handle);
-    utils::ExResult<RenderPipelineDesc> Describe(std::size_t pipelineHash);
-    
-    utils::ExError Destroy(const RenderPipelineHandle& handle);
-    utils::ExError Destroy(std::size_t pipelineHash);
+    ThreadInvocation<utils::ExResult<RenderPipelineDesc>> Describe(const RenderPipelineHandle& handle);
+    ThreadInvocation<utils::ExResult<RenderPipelineDesc>> Describe(std::size_t pipelineHash);
+
+    ThreadInvocation<utils::ExError> Destroy(const RenderPipelineHandle& handle);
+    ThreadInvocation<utils::ExError> Destroy(std::size_t pipelineHash);
 };
 
 }

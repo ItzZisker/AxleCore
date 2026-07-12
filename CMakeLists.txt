@@ -53,6 +53,7 @@ set(GFX_SRC
     src/graphics/rendering/AX_RenderProcedure.cpp
     src/graphics/rendering/AX_RenderBatch.cpp
     src/graphics/rendering/AX_RenderLayer.cpp
+    src/graphics/rendering/AX_RenderProcedureShader.cpp
 
     src/graphics/cmd/AX_PipelineManager.cpp
     src/graphics/cmd/AX_ICommandList.cpp

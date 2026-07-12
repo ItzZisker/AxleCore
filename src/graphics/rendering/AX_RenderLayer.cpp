@@ -5,6 +5,7 @@ namespace axle::gfx
 
 RenderLayer::RenderLayer(ThreadGfxScope gfxThread, SharedPtr<void> userPtr)
     : ThreadOwned(gfxThread), m_shUserPtr(userPtr), m_UserPtr(userPtr.get()) {}
+
 RenderLayer::RenderLayer(ThreadGfxScope gfxThread, void* userPtr)
     : ThreadOwned(gfxThread), m_UserPtr(userPtr) {}
 
