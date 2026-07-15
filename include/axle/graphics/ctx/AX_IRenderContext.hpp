@@ -91,6 +91,8 @@ class IRenderContext {
 public:
     virtual ~IRenderContext() = default;
 
+    AX_NON_COPYABLE_NON_MOVABLE(IRenderContext);
+
     virtual utils::ExError Init(SharedPtr<core::IWindow> window, SurfaceDesc desc) = 0;
 
     virtual void SwapBuffers() = 0;

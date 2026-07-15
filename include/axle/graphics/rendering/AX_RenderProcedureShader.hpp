@@ -21,26 +21,40 @@ struct RPShaderDesc {
     uint32_t entryPointModuleIdx{0};
 };
 
-// key : Mesh Vertex Layout Hash -> std::size_t
-// value : MVL = Mesh Vertex Layout
-using ShaderByMVL = std::unordered_map<std::size_t, gfx::ShaderHandle>;
+enum class RPShaderTransformInputType {
+    Uniform,
+    Instanced,
+    GpuDriven
+};
+
+struct RPShaderContext {
+    const utils::UUID& shaderId;
+    const MeshVertexLayout& vertexLayout;
+    RPShaderTransformInputType transformInput;
+    bool skinned;
+};
+
+std::size_t RPShaderContext_Hash(const RPShaderContext& ctx);
 
 class RPShaderManager : AX_THR_RENDER_OWNED {
 private:
     std::unordered_map<utils::UUID, RPShaderDesc> m_DescsById;
-    std::unordered_map<utils::UUID, ShaderByMVL> m_ShaderCache;
-
-    std::vector<gfx::ShaderHandle> m_HeldHandles;
+    std::unordered_map<std::size_t, gfx::ShaderHandle> m_ShaderCache; // Keyed by hashed RPShaderContext
 
     utils::UUID m_Transaction{utils::UUID::Generate()};
 public:
+    RPShaderManager(ThreadGfxScope gfxThread);
+    ~RPShaderManager() = default;
+
+    AX_NON_COPYABLE_NON_MOVABLE(RPShaderManager);
+
     ThreadInvocation<utils::ExError> DescPush(const utils::UUID& id, const RPShaderDesc& desc);
     ThreadInvocation<utils::ExError> DescRemove(const utils::UUID& id);
     ThreadInvocation<utils::ExResult<RPShaderDesc>> DescGet(const utils::UUID& id);
 
-    virtual utils::ExResult<gfx::ShaderHandle> GetOrGenerateUnsafe(const utils::UUID& shaderId, const MeshVertexLayout& layout);
+    virtual utils::ExResult<gfx::ShaderHandle> GetOrGenerateUnsafe(const RPShaderContext& ctx);
 
-    ThreadInvocation<utils::ExResult<gfx::ShaderHandle>> GetOrGenerate(const utils::UUID& shaderId, const MeshVertexLayout& layout);
+    ThreadInvocation<utils::ExResult<gfx::ShaderHandle>> GetOrGenerate(const RPShaderContext& ctx);
 
     utils::UUID GetTransaction() const { return m_Transaction; }
 };

@@ -13,6 +13,8 @@ class IGraphicsBackend {
 public:
     virtual ~IGraphicsBackend() = default;
 
+    AX_NON_COPYABLE_NON_MOVABLE(IGraphicsBackend);
+
     virtual SharedPtr<gfx::IRenderContext> GetContext() const = 0;
 
     virtual bool SupportsCap(GraphicsCapEnum cap) = 0;

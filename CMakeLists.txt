@@ -143,6 +143,8 @@ endif()
 #     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/src/AX_CorePCH.hpp>"
 # )
 
+include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/external/axshaders)
+
 if (AX_BUILD_EMWEB)
     add_library(${PROJECT_NAME} STATIC ${PROJECT_SRC})
 else()

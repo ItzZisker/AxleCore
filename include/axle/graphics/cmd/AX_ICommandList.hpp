@@ -123,6 +123,8 @@ public:
     ICommandList(SharedPtr<core::ThreadContextGfx> gfxThread) : m_GfxThread(gfxThread) {}
     virtual ~ICommandList() = default;
 
+    AX_NON_COPYABLE_NON_MOVABLE(ICommandList);
+
     Future<utils::ExError> Submit(SharedPtr<core::ThreadContextGfx> gfxThread);
 
     static SharedPtr<gfx::ICommandList> Create(SharedPtr<core::ThreadContextGfx> gfxThread);

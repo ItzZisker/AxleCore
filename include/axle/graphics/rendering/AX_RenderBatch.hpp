@@ -125,6 +125,8 @@ private:
 public:
     RenderBatch(ThreadGfxScope gfxThread, const RenderBatchDesc& desc);
 
+    AX_NON_COPYABLE_NON_MOVABLE(RenderBatch);
+
     ThreadInvocationVoid ClearInstances();
 
     ThreadInvocationVoid AddInstance(SharedPtr<scene::ModelInstance> modelInstance);

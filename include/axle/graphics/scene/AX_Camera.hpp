@@ -17,6 +17,8 @@ public:
     Camera(ThreadGfxScope gfxThread, glm::vec3 position, glm::vec3 target);
     Camera(ThreadGfxScope gfxThread, glm::vec3 position, float yaw, float pitch);
 
+    AX_NON_COPYABLE_NON_MOVABLE(Camera);
+
     ThreadInvocationVoid SetPosition(const glm::vec3& position);
     ThreadInvocationVoid SetDirection(const glm::vec3& direction, const glm::vec3 upHint = glm::vec3(0, 1, 0));
     

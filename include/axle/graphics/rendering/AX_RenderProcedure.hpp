@@ -36,6 +36,8 @@ public:
     RPPipelineResolver(const RPPipelineResolverDesc& desc);
     ~RPPipelineResolver(); // Delete Holding Handles by PipelineManager
 
+    AX_NON_COPYABLE_NON_MOVABLE(RPPipelineResolver);
+
     // Get Or Create New one and put it in holding handles set
     virtual RenderPipelineHandle ResolveUnsafe(const RPPipelineResolveContext& drawCall);
 
@@ -60,6 +62,8 @@ private:
 public:
     RenderProcedure(const RenderProcedureDesc& desc);
     ~RenderProcedure();
+
+    AX_NON_COPYABLE_NON_MOVABLE(RenderProcedure);
 protected:
     friend class RenderBatch;
 

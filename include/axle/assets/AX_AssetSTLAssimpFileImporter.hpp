@@ -19,6 +19,8 @@ class AssetSTLAssimpFileImporter : public IAssetImporter {
 public:
     explicit AssetSTLAssimpFileImporter(const AssetImportDesc& desc, const std::filesystem::path& path);
 
+    AX_NON_COPYABLE_NON_MOVABLE(AssetSTLAssimpFileImporter)
+
     utils::ExResult<AssetImportResult> Import() override;
 
     std::string GetImporterName() const override {

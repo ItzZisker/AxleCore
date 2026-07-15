@@ -6,6 +6,12 @@
 #include <memory>
 #include <thread>
 
+#define AX_NON_COPYABLE_NON_MOVABLE(Type)    \
+    Type(const Type&) = delete;              \
+    Type& operator=(const Type&) = delete;   \
+    Type(Type&&) = delete;                   \
+    Type& operator=(Type&&) = delete;
+
 namespace axle
 {
 
@@ -37,6 +43,11 @@ template <typename T>
 using UniquePtr = std::unique_ptr<T>;
 template <typename T>
 using WeakPtr = std::weak_ptr<T>;
+
+template <typename T>
+using Scope = SharedPtr<T>;
+template <typename T>
+using View = WeakPtr<T>;
 
 using ThreadId = std::thread::id;
 

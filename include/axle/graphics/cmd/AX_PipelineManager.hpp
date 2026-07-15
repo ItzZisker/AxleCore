@@ -24,6 +24,8 @@ public:
     PipelineManager(ThreadGfxScope gfxThr);
     ~PipelineManager();
 
+    AX_NON_COPYABLE_NON_MOVABLE(PipelineManager);
+
     ThreadInvocation<utils::ExResult<RenderPipelineHandle>> GetOrCreate(const RenderPipelineDesc& desc);
     
     ThreadInvocation<utils::ExResult<RenderPipelineDesc>> Describe(const RenderPipelineHandle& handle);

@@ -73,6 +73,8 @@ protected:
 public:
     explicit ModelInstance(const ModelDesc& desc);
 
+    AX_NON_COPYABLE_NON_MOVABLE(ModelInstance);
+
     const ModelDesc& GetModelDesc() const;
 
     ThreadInvocation<SharedPtr<NodeInstance>> GetNode(assets::NodeId id) const;

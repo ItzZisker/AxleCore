@@ -62,6 +62,8 @@ public:
     RenderLayer(ThreadGfxScope gfxThread, SharedPtr<void> userPtr = nullptr);
     ~RenderLayer();
 
+    AX_NON_COPYABLE_NON_MOVABLE(RenderLayer);
+
     ThreadInvocation<RLHandle> CreateLayer(const RLDesc& desc);
     ThreadInvocation<utils::ExError> RemoveLayer(const RLHandle& handle);
 

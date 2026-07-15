@@ -22,7 +22,13 @@ private:
 public:
     BufferDataStream(utils::URawView bufferView); // Held an object view (Span) refers to data (no ownership)
     BufferDataStream(uint64_t length); // Creates and owns data itself
-    ~BufferDataStream() override;
+    ~BufferDataStream() override = default;
+
+    BufferDataStream(const BufferDataStream&) = default;
+    BufferDataStream& operator=(const BufferDataStream&) = default;
+
+    BufferDataStream(BufferDataStream&&) = default;
+    BufferDataStream& operator=(BufferDataStream&&) = default;
 
     utils::ExError Open() override;
     bool EndOfStream() const override;

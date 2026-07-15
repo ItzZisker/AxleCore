@@ -20,6 +20,12 @@ public:
     FileDataStream(const std::filesystem::path& path, bool read, bool write);
     ~FileDataStream() override;
 
+    FileDataStream(const FileDataStream&) = delete;
+    FileDataStream& operator=(const FileDataStream&) = delete;
+
+    FileDataStream(FileDataStream&&) = default;
+    FileDataStream& operator=(FileDataStream&&) = default;
+
     utils::ExError Open() override;
     bool EndOfStream() const override;
 

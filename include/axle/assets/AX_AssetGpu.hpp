@@ -95,6 +95,8 @@ public:
     explicit AssetGpu(ThreadGfxScope gfxThread);
     ~AssetGpu();
 
+    AX_NON_COPYABLE_NON_MOVABLE(AssetGpu)
+
     ThreadInvocation<utils::ExResult<AssetGpuMeshes>> UploadMeshes(AssetMeshesUploadDesc& desc);
     ThreadInvocation<utils::ExResult<AssetGpuMaterials>> UploadMaterials(AssetMaterialsUploadDesc& desc);
 };

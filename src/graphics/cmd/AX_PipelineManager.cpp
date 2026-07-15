@@ -19,8 +19,8 @@ PipelineManager::~PipelineManager() {
     }).SyncCall();
 }
 
-ExResult<RenderPipelineHandle> PipelineManager::Create(const RenderPipelineDesc& desc) {
-    ThreadInvocation<ExResult<RenderPipelineHandle>>(m_Thread, [&, descCpy = desc]() -> ExResult<RenderPipelineHandle> {
+ThreadInvocation<ExResult<RenderPipelineHandle>> PipelineManager::Create(const RenderPipelineDesc& desc) {
+    return ThreadInvocation<ExResult<RenderPipelineHandle>>(m_Thread, [&, descCpy = desc]() -> ExResult<RenderPipelineHandle> {
         auto gbgfx = m_Thread->GetContext();
         return gbgfx->CreateRenderPipeline(descCpy);
     });

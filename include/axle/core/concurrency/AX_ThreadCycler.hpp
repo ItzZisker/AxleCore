@@ -289,4 +289,14 @@ namespace axle {
     template <typename F>
     using ThreadInvocation = axle::core::ThreadInvocation<F>;
     using ThreadInvocationVoid = axle::core::ThreadInvocation<VoidInvoke>;
+
+    template<typename F>
+    auto MThreadInvocation(
+        SharedPtr<axle::core::ThreadCycler> thread,
+        F&& func
+    ) {
+        return ThreadInvocation<std::invoke_result_t<F>>(
+            std::move(thread),
+            std::forward<F>(func));
+    }
 }

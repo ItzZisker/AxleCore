@@ -74,6 +74,8 @@ private:
 public:
     ~BitmapFont();
 
+    AX_NON_COPYABLE_NON_MOVABLE(BitmapFont);
+
     const std::vector<CharacterAtlas>& GetPages();
     CharacterAtlas* GetPage(wchar_t _char);
 
