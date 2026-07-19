@@ -383,6 +383,16 @@ struct VertexTypeDesc {
     VertexAttributeType type;
 };
 
+enum class ResourceType {
+    UniformBuffer,
+    StorageBuffer,
+    Texture,
+    StorageTexture,
+    Sampler,
+    PushConstants,
+    Unknown
+};
+
 struct ShaderVertexInput {
     VertexSemantic semantic;
     uint32_t semanticIndex;
@@ -393,8 +403,18 @@ struct ShaderVertexInput {
     VertexTypeDesc typeDesc;
 };
 
+struct ShaderResource {
+    std::string name;
+    ResourceType type;
+    uint32_t bindingIndex{0};
+    uint32_t bindingSpace{0};
+    uint32_t arraySize{0};
+};
+
 struct ShaderInputState {
     std::vector<ShaderVertexInput> inputs{};
+    std::vector<ShaderResource> resources{};
+    std::unordered_map<std::string, uint32_t> resIdByName{};
 };
 
 struct ShaderTag {};
@@ -700,44 +720,16 @@ struct ComputePipelineTag {};
 
 using ComputePipelineHandle = ExternalHandle<ComputePipelineTag>;
 
-enum class BindingType {
-    UniformBuffer,
-    StorageBuffer,
-    SampledTexture,
-    StorageTexture,
-    //Sampler
-};
-
-enum BindingStage {
-    BindingStage_Vertex   = 1 << 0,
-    BindingStage_Fragment = 1 << 1,
-    BindingStage_Compute  = 1 << 2,
-};
-
-struct Binding {
-    std::string bindName; // required; backend is responsible either to use the implicit (Get-uniform-index-by-name) method or binding directly to that specific index
-    uint32_t slot{0}; // required; backend is responsible to either use the direct bind index method or legacy get-uniform-index-by-name method
-    // thus bindName and slot must be explicitly defined
-
-    BindingType type{};
-    utils::CowSpan<ResourceHandle> resources; // BufferHandle, TextureHandle, etc.
-    // the length of resources will be arraySize of the elements you bind to
-    // so, you should take care that arraySize of 1 means singular element
-    // thus more, means an array of elements with size of resources.length in the shader
-
-    uint64_t offset{0}; // for buffer bindings
-    uint64_t range{0};  // 0 = full size
-
-    uint32_t stageMask{BindingStage_Vertex | BindingStage_Fragment}; // required; backend decides at which stage, target should be bound
-
-    ResourceHandle sampler; // optional (for SampledTexture)
+struct ResourceBinding {
+    std::string bindPoint;
+    uint32_t arrayIndex{0};
+    ResourceHandle resourceHandle;
 };
 
 struct ResourceSetDesc {
-    utils::CowSpan<Binding> bindings{};
+    utils::CowSpan<ResourceBinding> bindings{};
 
     uint32_t layoutID{0}; // layout compatibility id
-    uint32_t setIndex{0}; // descriptor set index
     uint32_t version{1};  // increments on update
 };
 
@@ -807,5 +799,7 @@ struct TextureImageDescriptor {
 
 VertexSemantic ParseSemantic(const char* semanticName);
 uint32_t CalcImageSize(const TextureImageDescriptor& desc);
+ResourceType ToResourceType(const slang::BindingType& type);
+
 
 }

@@ -108,7 +108,7 @@ struct GLInternal : public utils::MagicInternal<T_Extern> {
 
 struct GLProgram : public GLInternal<ShaderDesc, ShaderHandle> {
     GLuint id{0};
-    ShaderInputState vertexBindings;
+    ShaderInputState bindings;
 };
 
 struct GLBuffer : public GLInternal<BufferDesc, BufferHandle> {
@@ -274,7 +274,7 @@ public:
     utils::ExResult<RenderPassDesc> DescribeRenderPass(const RenderPassHandle& handle) override;
 
     utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) override;
-    utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, std::vector<Binding> bindings) override;
+    utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, std::vector<ResourceBinding> bindings) override;
     utils::ExError DestroyResourceSet(const ResourceSetHandle& handle) override;
     utils::ExResult<ResourceSetDesc> DescribeResourceSet(const ResourceSetHandle& handle) override;
 

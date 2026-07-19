@@ -100,7 +100,7 @@ utils::ExResult<gfx::ShaderHandle> RPShaderManager::GetOrGenerateUnsafe(const RP
 
     auto gbgfx = m_Thread->GetContext();
 
-    gbgfx->CreateProgram()
+    gbgfx->CreateProgram(shaderDesc);
 }
 
 ThreadInvocation<utils::ExResult<gfx::ShaderHandle>> RPShaderManager::GetOrGenerate(const RPShaderContext& ctx) {

@@ -92,4 +92,39 @@ uint32_t CalcImageSize(const TextureImageDescriptor& desc) {
     }
 }
 
+ResourceType ToResourceType(const slang::BindingType& type) {
+    using SB = slang::BindingType;
+
+    switch (type) {
+        case SB::ConstantBuffer:
+            return ResourceType::UniformBuffer;
+        case SB::Texture:
+        case SB::CombinedTextureSampler:
+            return ResourceType::Texture;
+        case SB::Sampler:
+            return ResourceType::Sampler;
+        case SB::TypedBuffer:
+        case SB::RawBuffer:
+            return ResourceType::StorageBuffer;
+        case SB::PushConstant:
+            return ResourceType::PushConstants;
+
+        case SB::ParameterBlock:
+        case SB::InputRenderTarget:
+        case SB::InlineUniformData:
+        case SB::RayTracingAccelerationStructure:
+        case SB::VaryingInput:
+        case SB::VaryingOutput:
+        case SB::ExistentialValue:
+        case SB::MutableTexture:
+        case SB::MutableTypedBuffer:
+        case SB::MutableRawBuffer:
+        case SB::MutableFlag:
+        case SB::BaseMask:
+        case SB::ExtMask:
+        case SB::Unknown:
+            return ResourceType::Unknown;
+    }
+}
+
 }

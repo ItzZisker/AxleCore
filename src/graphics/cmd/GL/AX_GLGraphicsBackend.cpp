@@ -1012,22 +1012,57 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc, 
         }
     }
 
+    Slang::ComPtr<slang::IBlob> linkErrors;
     Slang::ComPtr<slang::IComponentType> linked;
     session->createCompositeComponentType(
         components.data(),
         (SlangInt) components.size(),
         linked.writeRef(),
-        nullptr
+        linkErrors.writeRef()
     );
+
+    std::stringstream error_msg;
+    std::string linkerr_start = "Failed to link Slang modules:\n\n";
+
+    if (!linked) {
+        error_msg.write(linkerr_start.c_str(), linkerr_start.size());
+        error_msg.write((const char*)linkErrors->getBufferPointer(), linkErrors->getBufferSize());
+
+        GL_CALL(m_GL->DeleteProgram(program.id));
+        program.id = 0;
+        return {error_msg.str()};
+    }
+
+    auto* programLayout = linked->getLayout();
+    auto& bindings = program.bindings;
+
+    for (SlangInt i = 0; i < programLayout->getParameterCount(); ++i) {
+        auto* param = programLayout->getParameterByIndex(i);
+        auto* type = param->getTypeLayout();
+
+        if (type->getBindingRangeCount() == 0)
+            continue;
+
+        auto resourceType = ToResourceType(type->getBindingRangeType(0));
+
+        ShaderResource resource;
+        resource.name = param->getName();
+        resource.type = resourceType;
+        resource.bindingIndex = uint32_t(param->getBindingIndex());
+        resource.bindingSpace = uint32_t(param->getBindingSpace());
+        resource.arraySize = type->isArray()
+            ? uint32_t(type->getTotalArrayElementCount())
+            : 1;
+
+        bindings.resIdByName.emplace(resource.name, bindings.resources.size());
+        bindings.resources.push_back(std::move(resource));
+    }
 
     for (const auto& [stage, stageVal] : entryPoints) {
 
         if (stage == ShaderStage::Vertex) {
-            auto* programLayout = linked->getLayout();
             auto* entryPoint = programLayout->getEntryPointByIndex(stageVal.linkedIndex);
-
             auto* param = entryPoint->getParameterByIndex(0);
-
             auto* typeLayout = param->getTypeLayout();
 
             uint32_t fieldCount = typeLayout->getFieldCount();
@@ -1049,7 +1084,7 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc, 
                 input.semanticIndex = semanticIndex;
                 input.location = location;
 
-                program.vertexBindings.inputs.push_back(input);
+                bindings.inputs.push_back(input);
             }
         }
 
@@ -1109,7 +1144,7 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc, 
         return {error_msg.str()};
     }
     program.Sign();
-    out_VertexBindingsDesc = program.vertexBindings;
+    out_VertexBindingsDesc = program.bindings;
 
     return program.External();
 }
@@ -1289,7 +1324,7 @@ ExResult<GLuint> GLGraphicsBackend::CreateVertexArray(GLRenderPipeline& pipeline
         return ExError{"Invalid/Out-of-use Pipeline shader"};
     }
     auto& shader = *m_Programs.Get(pipeline.userDesc.shader);
-    auto& shaderVertexInputs = shader.vertexBindings.inputs;
+    auto& shaderVertexInputs = shader.bindings.inputs;
 
     for (const auto& input : shaderVertexInputs) {
         const MeshVertexAttribute* meshAttr = nullptr;
@@ -1782,9 +1817,12 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             if (!m_Programs.IsValid(shaderHandle)) {
                 return {"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Invalid Pipeline Shader handle"};
             }
-            auto programId = m_Programs.Get(shaderHandle)->id;
+
+            auto& program = *m_Programs.Get(shaderHandle);
+            auto programId = program.id;
         
             if (implicitBinds) {
+                auto& bindingsIntern = program.bindings;
                 auto& bindings = res.userDesc.bindings;
                 auto& slotCache = pipeline.bindingSlotCache;
 
@@ -1809,11 +1847,15 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
                     for (uint32_t i{0}; i < bindings.size(); i++) { // Update uniform block indices
                         auto& binding = bindings[i];
-                        auto& resources = binding.resources;
+
+                        if (bindingsIntern.resIdByName.find(binding.bindPoint) == bindingsIntern.resIdByName.end()) {
+                            return utils::ExError{"Target program doesn't have any bindpoint with name: " + binding.bindPoint};
+                        }
+                        auto& bindingResource = bindingsIntern.resources[bindingsIntern.resIdByName[binding.bindPoint]];
 
                         bool IsTexResource {
-                            binding.type == BindingType::SampledTexture ||
-                            binding.type == BindingType::StorageTexture
+                            bindingResource.type == ResourceType::Texture ||
+                            bindingResource.type == ResourceType::StorageTexture
                         };
 
                         if (IsTexResource) {
@@ -1825,7 +1867,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
                             for (uint32_t j{0}; j < resources.size(); i++) {
                                 iTexUnitsCache[j] = texUnit++;
-                                iTexLocsCache[j] = m_GL->GetUniformLocation(programId, binding.bindName.c_str());
+                                iTexLocsCache[j] = m_GL->GetUniformLocation(programId, binding.bindPoint.c_str());
                             }
                         } else { // ETC. Uniforms, SSBOs... (Blocks)
                             auto& iBlockIdxCache = cache.blockIndices[i];
@@ -1833,7 +1875,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                             iBlockIdxCache.resize(resources.size());
 
                             for (uint32_t j{0}; j < resources.size(); i++) {
-                                iBlockIdxCache[j] = m_GL->GetUniformBlockIndex(programId, binding.bindName.c_str());
+                                iBlockIdxCache[j] = m_GL->GetUniformBlockIndex(programId, binding.bindPoint.c_str());
                             }
                         }
                     }

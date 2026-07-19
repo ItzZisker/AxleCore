@@ -58,7 +58,7 @@ public:
     virtual utils::ExResult<RenderPassDesc> DescribeRenderPass(const RenderPassHandle& handle) = 0;
 
     virtual utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) = 0;
-    virtual utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, std::vector<Binding> bindings) = 0;
+    virtual utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, std::vector<ResourceBinding> bindings) = 0;
     virtual utils::ExError DestroyResourceSet(const ResourceSetHandle& handle) = 0;
     virtual utils::ExResult<ResourceSetDesc> DescribeResourceSet(const ResourceSetHandle& handle) = 0;
 
