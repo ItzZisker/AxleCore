@@ -1,9 +1,5 @@
 #pragma once
 
-#include "axle/core/window/AX_IWindow.hpp"
-
-#include "axle/graphics/cmd/AX_IGraphicsBackend.hpp"
-
 #include "axle/utils/AX_MagicPool.hpp"
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
@@ -12,9 +8,13 @@
 #include <cstdint>
 #include <iostream>
 #include <mutex>
+#include <deque>
 
 #define AX_THR_RENDER_OWNED public core::ThreadOwned<core::ThreadContextGfx>
 #define AX_THR_WINDOW_OWNED public core::ThreadOwned<core::ThreadContextWnd>
+
+namespace axle::gfx { class IGraphicsBackend; };
+namespace axle::core { class IWindow; };
 
 namespace axle::core {
 

@@ -85,6 +85,7 @@ set(PROJECT_SRC
     src/core/app/AX_Application.cpp
 
     src/core/concurrency/AX_ThreadCycler.cpp
+    src/core/concurrency/AX_ThreadContextGfx.cpp
     # src/core/concurrency/AX_Future.cpp
     # src/core/concurrency/AX_MainThread.cpp
     # src/core/concurrency/AX_TaskQueueRunnable.cpp

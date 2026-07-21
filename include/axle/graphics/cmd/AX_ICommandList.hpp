@@ -1,5 +1,6 @@
 #pragma once
 
+#include "axle/core/concurrency/AX_ThreadCycler.hpp"
 #include "axle/graphics/AX_GraphicsParams.hpp"
 
 #include "axle/utils/AX_Expected.hpp"
@@ -116,11 +117,9 @@ struct CommandDrawIndirectIndexed {
     uint32_t stride;
 };
 
-class ICommandList {
-protected:
-    SharedPtr<core::ThreadContextGfx> m_GfxThread{nullptr};
+class ICommandList : AX_THR_RENDER_OWNED {
 public:
-    ICommandList(SharedPtr<core::ThreadContextGfx> gfxThread) : m_GfxThread(gfxThread) {}
+    ICommandList(ThreadGfxScope gfxThread) : ThreadOwned(gfxThread) {}
     virtual ~ICommandList() = default;
 
     AX_NON_COPYABLE_NON_MOVABLE(ICommandList);

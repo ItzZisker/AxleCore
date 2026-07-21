@@ -135,9 +135,10 @@ struct VAOKeyLookup {
 
 struct BindingSlotCache {
     uint32_t resourceSetVersion;
-    std::vector<std::vector<uint32_t>> blockIndices;
-    std::vector<std::vector<uint32_t>> textureUnits;
-    std::vector<std::vector<uint32_t>> textureLocations;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> blockIndices;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> blockUnits;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> textureUnits;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> textureLocations;
 };
 
 struct GLRenderPipeline : public GLInternal<RenderPipelineDesc, RenderPipelineHandle> {
@@ -154,8 +155,11 @@ struct GLTexture : public GLInternal<TextureDesc, TextureHandle> {
     GLuint resolveId{0};
 };
 
+struct GLSampler : public GLInternal<SamplerDesc, SamplerHandle> {
+    GLuint id{0};
+};
+
 struct GLRenderPass : public GLInternal<RenderPassDesc, RenderPassHandle> {
-    RenderPassDesc desc;
     GLCommandBinding<FramebufferHandle> fbInUse{};
 };
 
@@ -225,7 +229,7 @@ private:
     utils::ExResult<GLuint> CreateVertexArray(GLRenderPipeline& pipeline);
     utils::ExError PrepVertexArray(GLRenderPipeline& pipeline);
 public:
-    GLGraphicsBackend(gfx::IRenderContext* context);
+    GLGraphicsBackend(const GraphicsBackendDesc& desc);
     ~GLGraphicsBackend() override;
 
     SharedPtr<gfx::IRenderContext> GetContext() const { return m_Context; }
@@ -248,9 +252,15 @@ public:
     utils::ExResult<BufferDesc> DescribeBuffer(const BufferHandle& handle) override;
 
     utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) override;
-    utils::ExError UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) override;
+    utils::ExError GenerateMipMaps(const TextureHandle& handle) override;
+    utils::ExError UpdateTexture(const TextureHandle& handle, const void* data) override;
     utils::ExError DestroyTexture(const TextureHandle& handle) override;
     utils::ExResult<TextureDesc> DescribeTexture(const TextureHandle& handle) override;
+
+    utils::ExResult<SamplerHandle> CreateSampler(const SamplerDesc& desc) override;
+    utils::ExError UpdateSampler(const SamplerHandle& handle, const SamplerDesc& subDesc) override;
+    utils::ExError DestroySampler(const SamplerHandle& handle) override;
+    utils::ExResult<SamplerDesc> DescribeSampler(const SamplerHandle& handle) override;
 
     utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) override;
     utils::ExError DestroyFramebuffer(const FramebufferHandle& handle) override;
@@ -274,7 +284,7 @@ public:
     utils::ExResult<RenderPassDesc> DescribeRenderPass(const RenderPassHandle& handle) override;
 
     utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) override;
-    utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, std::vector<ResourceBinding> bindings) override;
+    utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, const std::vector<ResourceBinding>& bindings) override;
     utils::ExError DestroyResourceSet(const ResourceSetHandle& handle) override;
     utils::ExResult<ResourceSetDesc> DescribeResourceSet(const ResourceSetHandle& handle) override;
 
@@ -288,6 +298,7 @@ public:
 private:
     utils::MagicPool<GLBuffer>           m_Buffers{};
     utils::MagicPool<GLTexture>          m_Textures{};
+    utils::MagicPool<GLSampler>          m_Samplers{};
     utils::MagicPool<GLProgram>          m_Programs{};
     utils::MagicPool<GLRenderPipeline>   m_RenderPipelines{};
     utils::MagicPool<GLComputePipeline>  m_ComputePipelines{};

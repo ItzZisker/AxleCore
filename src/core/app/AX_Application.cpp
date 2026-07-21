@@ -58,7 +58,7 @@ utils::ExError Application::InitCurrent(
 
     auto wndCtx = m_WndThread->GetContext();
 
-    utils::ExError gfxRes = m_GfxThread->StartGfx([wndCtx, spec = std::move(spec)]() -> ExResult<SharedPtr<gfx::IGraphicsBackend>> {
+    utils::ExError gfxRes = m_GfxThread->StartGfx([this, wndCtx, spec = std::move(spec)]() -> ExResult<SharedPtr<gfx::IGraphicsBackend>> {
         gfx::IRenderContext* ctxPtr{nullptr};
         int32_t combinedTypes = gfx::IRenderContext::CombinedTypes();
         auto& sortedTypesByOS = gfx::IRenderContext::SortedTypesByPlatform();
@@ -102,8 +102,13 @@ utils::ExError Application::InitCurrent(
 #endif
         }
         AX_PROPAGATE_ERROR(ctxPtr->Init(wndCtx, spec.surfaceDesc));
+        
+        gfx::GraphicsBackendDesc gfxDesc;
+        gfxDesc.nonowning_context = ctxPtr;
+        gfxDesc.gfxThread = m_GfxThread;
+        
         switch (ctxPtr->GetType()) {
-            case gfx::GfxType::GL330: return {std::make_shared<gfx::GLGraphicsBackend>(ctxPtr)};
+            case gfx::GfxType::GL330: return {std::make_shared<gfx::GLGraphicsBackend>(gfxDesc)};
             default: ExError("Unsupported GfxType");
         }
     });

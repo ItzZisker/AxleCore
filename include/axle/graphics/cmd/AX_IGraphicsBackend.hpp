@@ -1,6 +1,7 @@
 #pragma once
 
-#include "axle/graphics/cmd/AX_ICommandList.hpp"
+#include "axle/core/concurrency/AX_ThreadCycler.hpp"
+
 #include "axle/graphics/ctx/AX_IRenderContext.hpp"
 #include "axle/graphics/AX_GraphicsParams.hpp"
 
@@ -9,8 +10,14 @@
 
 namespace axle::gfx {
 
-class IGraphicsBackend {
+struct GraphicsBackendDesc {
+    gfx::IRenderContext* nonowning_context;
+    ThreadGfxScope gfxThread;
+};
+
+class IGraphicsBackend : AX_THR_RENDER_OWNED {
 public:
+    IGraphicsBackend(const GraphicsBackendDesc& desc) : ThreadOwned(desc.gfxThread) {}
     virtual ~IGraphicsBackend() = default;
 
     AX_NON_COPYABLE_NON_MOVABLE(IGraphicsBackend);
@@ -32,9 +39,15 @@ public:
     virtual utils::ExResult<BufferDesc> DescribeBuffer(const BufferHandle& handle) = 0;
 
     virtual utils::ExResult<TextureHandle> CreateTexture(const TextureDesc& desc) = 0;
-    virtual utils::ExError UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) = 0;
+    virtual utils::ExError GenerateMipMaps(const TextureHandle& handle) = 0;
+    virtual utils::ExError UpdateTexture(const TextureHandle& handle, const void* data) = 0;
     virtual utils::ExError DestroyTexture(const TextureHandle& handle) = 0;
     virtual utils::ExResult<TextureDesc> DescribeTexture(const TextureHandle& handle) = 0;
+
+    virtual utils::ExResult<SamplerHandle> CreateSampler(const SamplerDesc& desc) = 0;
+    virtual utils::ExError UpdateSampler(const SamplerHandle& handle, const SamplerDesc& subDesc) = 0;
+    virtual utils::ExError DestroySampler(const SamplerHandle& handle) = 0;
+    virtual utils::ExResult<SamplerDesc> DescribeSampler(const SamplerHandle& handle) = 0;
 
     virtual utils::ExResult<FramebufferHandle> CreateFramebuffer(const FramebufferDesc& handle) = 0;
     virtual utils::ExError DestroyFramebuffer(const FramebufferHandle& handle) = 0;
@@ -58,7 +71,7 @@ public:
     virtual utils::ExResult<RenderPassDesc> DescribeRenderPass(const RenderPassHandle& handle) = 0;
 
     virtual utils::ExResult<ResourceSetHandle> CreateResourceSet(const ResourceSetDesc& desc) = 0;
-    virtual utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, std::vector<ResourceBinding> bindings) = 0;
+    virtual utils::ExError UpdateResourceSet(const ResourceSetHandle& handle, const std::vector<ResourceBinding>& bindings) = 0;
     virtual utils::ExError DestroyResourceSet(const ResourceSetHandle& handle) = 0;
     virtual utils::ExResult<ResourceSetDesc> DescribeResourceSet(const ResourceSetHandle& handle) = 0;
 

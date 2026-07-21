@@ -31,8 +31,8 @@ using namespace axle::utils;
 
 namespace axle::gfx {
 
-GLGraphicsBackend::GLGraphicsBackend(IRenderContext* context) {
-    m_Context = SharedPtr<IRenderContext>(context);
+GLGraphicsBackend::GLGraphicsBackend(const GraphicsBackendDesc& desc) : IGraphicsBackend(desc) {
+    m_Context = SharedPtr<IRenderContext>(desc.nonowning_context);
 
     slang::createGlobalSession(m_SlangGlobal.writeRef());
 
@@ -83,14 +83,17 @@ GLGraphicsBackend::~GLGraphicsBackend() {
 }
 
 const GraphicsCaps& GLGraphicsBackend::GetCaps() const {
+    if (!m_Thread->ValidateThread()) throw std::runtime_error("Invalid Thread caller, must be Graphics Thread Owner");
     return m_Capabilities;
 }
 
 bool GLGraphicsBackend::SupportsCap(GraphicsCapEnum cap) {
+    if (!m_Thread->ValidateThread()) throw std::runtime_error("Invalid Thread caller, must be Graphics Thread Owner");
     return m_Capabilities.caps[static_cast<int32_t>(cap)];
 };
 
 ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     GraphicsCaps result{};
 
     const char* versionStr = (const char*)m_GL->GetString(GL_VERSION);
@@ -209,16 +212,19 @@ ExResult<GraphicsCaps> GLGraphicsBackend::QueryCaps() {
 
 // GL implicit
 utils::ExResult<SwapchainHandle> GLGraphicsBackend::CreateSwapchain(const SwapchainDesc&) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     return SwapchainHandle{0, 1};
 }
 
 // GL implicit
 utils::ExError GLGraphicsBackend::DestroySwapchain(const SwapchainHandle&) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     return ExError::NoError();
 }
 
 // GL implicit
 utils::ExError GLGraphicsBackend::ResizeSwapchain(const SwapchainHandle&, uint32_t width, uint32_t height) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     m_SurfaceInfo.width = width;
     m_SurfaceInfo.height = height;
     return ExError::NoError();
@@ -226,6 +232,7 @@ utils::ExError GLGraphicsBackend::ResizeSwapchain(const SwapchainHandle&, uint32
 
 // GL implicit
 utils::ExResult<SwapchainDesc> GLGraphicsBackend::DescribeSwapchain(const SwapchainHandle& handle) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     SwapchainDesc desc;
     desc.imageCount = 1;
     desc.surface = m_SurfaceInfo;
@@ -233,6 +240,7 @@ utils::ExResult<SwapchainDesc> GLGraphicsBackend::DescribeSwapchain(const Swapch
 }
 
 ExResult<BufferHandle> GLGraphicsBackend::CreateBuffer(const BufferDesc& desc) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (desc.usage == BufferUsage::Storage && !m_Capabilities.Has(GraphicsCapEnum::ShaderStorageBuffers))
         return ExError{"Storage buffers not supported on this OpenGL backend (requires 4.3+)"};
 
@@ -259,6 +267,7 @@ ExResult<BufferHandle> GLGraphicsBackend::CreateBuffer(const BufferDesc& desc) {
 }
 
 ExError GLGraphicsBackend::UpdateBuffer(const BufferHandle& handle, size_t offset, size_t size, const void* data) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Buffers.IsValid(handle))
         return {"Invalid Handle"};
 
@@ -275,6 +284,7 @@ ExError GLGraphicsBackend::UpdateBuffer(const BufferHandle& handle, size_t offse
 }
 
 ExError GLGraphicsBackend::DestroyBuffer(const BufferHandle& handle) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Buffers.IsValid(handle))
         return {"Invalid Handle"};
 
@@ -288,6 +298,7 @@ ExError GLGraphicsBackend::DestroyBuffer(const BufferHandle& handle) {
 }
 
 utils::ExResult<BufferDesc> GLGraphicsBackend::DescribeBuffer(const BufferHandle& handle) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Buffers.IsValid(handle)) {
         return {"Invalid Handle"};
     } else {
@@ -296,6 +307,7 @@ utils::ExResult<BufferDesc> GLGraphicsBackend::DescribeBuffer(const BufferHandle
 }
 
 static uint32_t CalcFullMipCount(uint32_t w, uint32_t h, uint32_t d = 1) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     uint32_t size = std::max({w, h, d});
     uint32_t levels = 1;
     while (size > 1) {
@@ -306,6 +318,7 @@ static uint32_t CalcFullMipCount(uint32_t w, uint32_t h, uint32_t d = 1) {
 }
 
 ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc) {
+    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (desc.width == 0 || desc.height == 0)
         return ExError{"Invalid dimensions"};
 
@@ -318,7 +331,7 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
     GLenum type = ToGLTextureType(desc.format);
     bool compressed = TextureFormatIsS3TC(desc.format) || TextureFormatIsASTC(desc.format);
 
-    uint32_t mip = desc.subDesc.mipLevel;
+    uint32_t mip = desc.mipLevels;
     if (mip == 0) {
         uint32_t depth = (desc.type == TextureType::Texture3D) ? desc.depth : 1;
         mip = CalcFullMipCount(desc.width, desc.height, depth);
@@ -332,8 +345,8 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
     // Upload base level (mip 0)
     switch (desc.type) {
         case TextureType::Texture2D: {
-            const void* data = desc.pixelsByLayers[0].size() == 0 ? nullptr : desc.pixelsByLayers[0].data();
-            GLsizei dataSize = (GLsizei)desc.pixelsByLayers[0].size();
+            const void* data = desc.initialData[0].size() == 0 ? nullptr : desc.initialData[0].data();
+            GLsizei dataSize = (GLsizei)desc.initialData[0].size();
 
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexImage2D(
@@ -351,8 +364,8 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
         } break;
 
         case TextureType::Array2D: {
-            const void* data = desc.pixelsByLayers[0].size() == 0 ? nullptr : desc.pixelsByLayers[0].data();
-            GLsizei dataSize = (GLsizei)desc.pixelsByLayers[0].size();
+            const void* data = desc.initialData[0].size() == 0 ? nullptr : desc.initialData[0].data();
+            GLsizei dataSize = (GLsizei)desc.initialData[0].size();
 
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexImage3D(
@@ -370,8 +383,8 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
         } break;
 
         case TextureType::Texture3D: {
-            const void* data = desc.pixelsByLayers[0].size() == 0 ? nullptr : desc.pixelsByLayers[0].data();
-            GLsizei dataSize = (GLsizei)desc.pixelsByLayers[0].size();
+            const void* data = desc.initialData[0].size() == 0 ? nullptr : desc.initialData[0].data();
+            GLsizei dataSize = (GLsizei)desc.initialData[0].size();
 
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexImage3D(
@@ -389,15 +402,15 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
         } break;
 
         case TextureType::Cubemap: {
-            if (desc.pixelsByLayers.size() != 6) {
+            if (desc.initialData.size() != 6) {
                 GL_CALL(m_GL->DeleteTextures(1, &tex.id));
                 return ExError{"Invalid pixelsByLayers, should be size of 6, each representing a side of cubemap"};
             }
             for (uint32_t i = 0; i < 6; ++i) {
-                const void* data = desc.pixelsByLayers[i].size() == 0
+                const void* data = desc.initialData[i].size() == 0
                     ? nullptr
-                    : desc.pixelsByLayers[i].data();
-                GLsizei dataSize = (GLsizei)desc.pixelsByLayers[i].size();
+                    : desc.initialData[i].data();
+                GLsizei dataSize = (GLsizei)desc.initialData[i].size();
 
                 if (compressed) {
                     GL_CALL(m_GL->CompressedTexImage2D(
@@ -417,47 +430,33 @@ ExResult<TextureHandle> GLGraphicsBackend::CreateTexture(const TextureDesc& desc
             }
         } break;
     }
-
-    // Sampler state
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_S, ToGLTextureWrap(desc.subDesc.wrapS)));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_T, ToGLTextureWrap(desc.subDesc.wrapT)));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_R, ToGLTextureWrap(desc.subDesc.wrapR)));
-
-    GLenum glMin = ToGLMinFilter(desc.subDesc.minFilter, desc.subDesc.mipFilter);
-    GLenum glMag = ToGLMagFilter(desc.subDesc.magFilter);
-
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, glMin));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, glMag));
-
-    // Border
-    if (desc.subDesc.wrapS == TextureWrap::ClampToBorder ||
-        desc.subDesc.wrapT == TextureWrap::ClampToBorder ||
-        desc.subDesc.wrapR == TextureWrap::ClampToBorder)
-    {
-        GL_CALL(m_GL->TexParameterfv(target, GL_TEXTURE_BORDER_COLOR, &desc.subDesc.borderColor.r));
-    }
-
-    // Anisotropy
-    if (desc.subDesc.aniso > 0.0f) {
-        float aniso = std::min(desc.subDesc.aniso, m_Capabilities.maxAniso);
-        GL_CALL(m_GL->TexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso));
-    }
-
-    // Mip chain
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_BASE_LEVEL, 0));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MAX_LEVEL, mip - 1));
-
-    if (desc.subDesc.generateMips && mip > 1) {
-        GL_CALL(m_GL->GenerateMipmap(target));
-    }
-
     GL_CALL(m_GL->BindTexture(target, 0));
 
     tex.Sign();
     return tex.External();
 }
 
-static TextureImageDescriptor Describe(const TextureDesc& desc, int mip) {
+utils::ExError GLGraphicsBackend::GenerateMipMaps(const TextureHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
+    if (!m_Textures.IsValid(handle))
+        return {"Invalid TextureHandle"};
+
+    auto& tex = *m_Textures.Get(handle);
+
+    if (tex.userDesc.samples != SampleCount::Sample1)
+        return {"Cannot generate mipmaps for multisampled textures"};
+
+    GLenum target = ToGLTextureTarget(tex.userDesc.type);
+
+    GL_CALL(m_GL->BindTexture(target, tex.id));
+    GL_CALL(m_GL->GenerateMipmap(target));
+    GL_CALL(m_GL->BindTexture(target, 0));
+
+    return utils::ExError::NoError();
+}
+
+static TextureImageDescriptor ToImageDescriptor(const TextureDesc& desc, int mip) {
     TextureImageDescriptor imgDesc;
     imgDesc.type = desc.type;
     imgDesc.format = desc.format;
@@ -468,8 +467,8 @@ static TextureImageDescriptor Describe(const TextureDesc& desc, int mip) {
     return imgDesc;
 }
 
-static GLenum GetCubemapFaceFromSubDesc(const TextureSubDesc& subDesc) {
-    switch (subDesc.updateThisCubemapFace) {
+static GLenum GetCubemapFaceFromDesc(const TextureDesc& desc) {
+    switch (desc.updateThisCubemapFace) {
         case TextureCubemapFace::NegativeX: return GL_TEXTURE_CUBE_MAP_NEGATIVE_X;
         case TextureCubemapFace::NegativeY: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;
         case TextureCubemapFace::NegativeZ: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;
@@ -480,7 +479,9 @@ static GLenum GetCubemapFaceFromSubDesc(const TextureSubDesc& subDesc) {
     return GL_NONE;
 }
 
-ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const TextureSubDesc& subDesc, const void* data) {
+ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const void* data) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Textures.IsValid(handle))
         return {"Invalid Handle"};
 
@@ -493,14 +494,14 @@ ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const Text
     GLenum internalFormat = ToGLTextureInternalFormat(desc.format);
     bool compressed = TextureFormatIsS3TC(desc.format) || TextureFormatIsASTC(desc.format);
 
-    uint32_t mip = subDesc.mipLevel;
+    uint32_t mip = desc.mipLevels;
 
     GL_CALL(m_GL->BindTexture(target, tex.id));
     GL_CALL(m_GL->PixelStorei(GL_UNPACK_ALIGNMENT, 1));
 
     switch (desc.type) {
         case TextureType::Texture2D: {
-            GLsizei imageSize = compressed ? CalcImageSize(Describe(desc, mip)) : 0;
+            GLsizei imageSize = compressed ? CalcImageSize(ToImageDescriptor(desc, mip)) : 0;
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexSubImage2D(
                     target, mip,
@@ -524,7 +525,7 @@ ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const Text
         } break;
 
         case TextureType::Array2D: {
-            GLsizei imageSize = compressed ? CalcImageSize(Describe(desc, mip)) : 0;
+            GLsizei imageSize = compressed ? CalcImageSize(ToImageDescriptor(desc, mip)) : 0;
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexSubImage3D(
                     target, mip,
@@ -550,7 +551,7 @@ ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const Text
         } break;
 
         case TextureType::Texture3D: {
-            GLsizei imageSize = compressed ? CalcImageSize(Describe(desc, mip)) : 0;
+            GLsizei imageSize = compressed ? CalcImageSize(ToImageDescriptor(desc, mip)) : 0;
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexSubImage3D(
                     target, mip,
@@ -577,8 +578,8 @@ ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const Text
 
         case TextureType::Cubemap: {
             // Caller must pass data for one face only.
-            GLenum face = GetCubemapFaceFromSubDesc(subDesc);
-            GLsizei imageSize = compressed ? CalcImageSize(Describe(desc, mip)) : 0;
+            GLenum face = GetCubemapFaceFromDesc(desc);
+            GLsizei imageSize = compressed ? CalcImageSize(ToImageDescriptor(desc, mip)) : 0;
 
             if (compressed) {
                 GL_CALL(m_GL->CompressedTexSubImage2D(
@@ -603,39 +604,13 @@ ExError GLGraphicsBackend::UpdateTexture(const TextureHandle& handle, const Text
         } break;
     }
 
-    // Update sampler state
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_S, ToGLTextureWrap(subDesc.wrapS)));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_T, ToGLTextureWrap(subDesc.wrapT)));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_WRAP_R, ToGLTextureWrap(subDesc.wrapR)));
-
-    GLenum glMin = ToGLMinFilter(subDesc.minFilter, subDesc.mipFilter);
-    GLenum glMag = ToGLMagFilter(subDesc.magFilter);
-
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, glMin));
-    GL_CALL(m_GL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, glMag));
-
-    if (subDesc.wrapS == TextureWrap::ClampToBorder ||
-        subDesc.wrapT == TextureWrap::ClampToBorder ||
-        subDesc.wrapR == TextureWrap::ClampToBorder)
-    {
-        GL_CALL(m_GL->TexParameterfv(target, GL_TEXTURE_BORDER_COLOR, &subDesc.borderColor.r));
-    }
-
-    if (subDesc.aniso > 0.0f) {
-        float aniso = std::min(subDesc.aniso, m_Capabilities.maxAniso);
-        GL_CALL(m_GL->TexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso));
-    }
-
-    if (subDesc.generateMips)
-        GL_CALL(m_GL->GenerateMipmap(target));
-
-    tex.userDesc.subDesc = subDesc;
-
     GL_CALL(m_GL->BindTexture(target, 0));
     return ExError::NoError();
 }
 
 ExError GLGraphicsBackend::DestroyTexture(const TextureHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (m_Textures.IsValid(handle))
         return {"Invalid Handle"};
 
@@ -647,6 +622,8 @@ ExError GLGraphicsBackend::DestroyTexture(const TextureHandle& handle) {
 }
 
 ExResult<TextureDesc> GLGraphicsBackend::DescribeTexture(const TextureHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Textures.IsValid(handle)) {
         return {"Invalid Handle"};
     } else {
@@ -654,12 +631,147 @@ ExResult<TextureDesc> GLGraphicsBackend::DescribeTexture(const TextureHandle& ha
     }
 }
 
+utils::ExResult<SamplerHandle> GLGraphicsBackend::CreateSampler(const SamplerDesc& desc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
+    auto& sampler = *m_Samplers.Reserve();
+    sampler.userDesc = desc;
+
+    GL_CALL(m_GL->GenSamplers(1, &sampler.id));
+
+    GL_CALL(m_GL->SamplerParameteri(sampler.id, GL_TEXTURE_WRAP_S, ToGLTextureWrap(desc.wrapS)));
+    GL_CALL(m_GL->SamplerParameteri(sampler.id, GL_TEXTURE_WRAP_T, ToGLTextureWrap(desc.wrapT)));
+    GL_CALL(m_GL->SamplerParameteri(sampler.id, GL_TEXTURE_WRAP_R, ToGLTextureWrap(desc.wrapR)));
+
+    GLenum glMin = ToGLMinFilter(desc.minFilter, desc.mipFilter);
+    GLenum glMag = ToGLMagFilter(desc.magFilter);
+
+    GL_CALL(m_GL->SamplerParameteri(sampler.id, GL_TEXTURE_MIN_FILTER, glMin));
+    GL_CALL(m_GL->SamplerParameteri(sampler.id, GL_TEXTURE_MAG_FILTER, glMag));
+
+    if (desc.wrapS == TextureWrap::ClampToBorder ||
+        desc.wrapT == TextureWrap::ClampToBorder ||
+        desc.wrapR == TextureWrap::ClampToBorder)
+    {
+        GL_CALL(m_GL->SamplerParameterfv(
+            sampler.id,
+            GL_TEXTURE_BORDER_COLOR,
+            &desc.borderColor.r
+        ));
+    }
+
+    if (desc.maxAnisotropy > 1.0f &&
+        m_Capabilities.Has(GraphicsCapEnum::Anisotropy))
+    {
+        float aniso = std::min(desc.maxAnisotropy, m_Capabilities.maxAniso);
+
+        GL_CALL(m_GL->SamplerParameterf(
+            sampler.id,
+            GL_TEXTURE_MAX_ANISOTROPY_EXT,
+            aniso
+        ));
+    }
+
+    sampler.Sign();
+    return sampler.External();
+}
+
+utils::ExError GLGraphicsBackend::UpdateSampler(const SamplerHandle& handle, const SamplerDesc& desc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
+    if (!m_Samplers.IsValid(handle))
+        return {"Invalid Handle"};
+
+    auto& sampler = *m_Samplers.Get(handle);
+
+    sampler.userDesc = desc;
+
+    GL_CALL(m_GL->SamplerParameteri(
+        sampler.id,
+        GL_TEXTURE_WRAP_S,
+        ToGLTextureWrap(desc.wrapS))
+    );
+    GL_CALL(m_GL->SamplerParameteri(
+        sampler.id,
+        GL_TEXTURE_WRAP_T,
+        ToGLTextureWrap(desc.wrapT))
+    );
+    GL_CALL(m_GL->SamplerParameteri(
+        sampler.id,
+        GL_TEXTURE_WRAP_R,
+        ToGLTextureWrap(desc.wrapR))
+    );
+
+    GLenum glMin = ToGLMinFilter(desc.minFilter, desc.mipFilter);
+    GLenum glMag = ToGLMagFilter(desc.magFilter);
+
+    GL_CALL(m_GL->SamplerParameteri(
+        sampler.id,
+        GL_TEXTURE_MIN_FILTER,
+        glMin)
+    );
+    GL_CALL(m_GL->SamplerParameteri(
+        sampler.id,
+        GL_TEXTURE_MAG_FILTER,
+        glMag)
+    );
+
+    if (desc.wrapS == TextureWrap::ClampToBorder ||
+        desc.wrapT == TextureWrap::ClampToBorder ||
+        desc.wrapR == TextureWrap::ClampToBorder)
+    {
+        GL_CALL(m_GL->SamplerParameterfv(
+            sampler.id,
+            GL_TEXTURE_BORDER_COLOR,
+            &desc.borderColor.r)
+        );
+    }
+
+    if (m_Capabilities.Has(GraphicsCapEnum::Anisotropy)) {
+        float aniso = std::min(desc.maxAnisotropy,
+                               m_Capabilities.maxAniso);
+
+        GL_CALL(m_GL->SamplerParameterf(
+            sampler.id,
+            GL_TEXTURE_MAX_ANISOTROPY_EXT,
+            aniso)
+        );
+    }
+
+    return utils::ExError::NoError();
+}
+
+utils::ExError GLGraphicsBackend::DestroySampler(const SamplerHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
+    if (m_Samplers.IsValid(handle))
+        return {"Invalid Handle"};
+
+    auto& sampler = *m_Samplers.Get(handle);
+    GL_CALL(m_GL->DeleteSamplers(1, &sampler.id));
+    sampler.id = 0;
+    m_Samplers.Delete(handle);
+    return ExError::NoError();
+}
+
+utils::ExResult<SamplerDesc> GLGraphicsBackend::DescribeSampler(const SamplerHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
+    if (!m_Samplers.IsValid(handle)) {
+        return {"Invalid Handle"};
+    } else {
+        return m_Samplers.Get(handle)->userDesc;
+    }
+}
+
 ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const FramebufferDesc& desc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_RenderPasses.IsValid(desc.renderPass))
         return ExError{"Invalid RenderPass handle"};
 
     auto& rp = *m_RenderPasses.Get(desc.renderPass);
-    const RenderPassDesc& rpDesc = rp.desc;
+    const RenderPassDesc& rpDesc = rp.userDesc;
 
     if (desc.colorAttachments.size() != rpDesc.colorAttachments.size())
         return ExError{"Framebuffer color attachment count does not match RenderPass"};
@@ -794,14 +906,14 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
     bool needsDSResolve = false;
     for (size_t i{0}; i < desc.colorAttachments.size(); i++) {
         auto& tex = *m_Textures.Get(desc.colorAttachments[i]);
-        if (tex.userDesc.samples > SampleCount::Sample1 && rp.desc.colorAttachments[i].hasResolve) {
+        if (tex.userDesc.samples > SampleCount::Sample1 && rp.userDesc.colorAttachments[i].hasResolve) {
             needsResolve = true;
             break;
         }
     }
     if (hasDepth || hasStencil) {
         auto& dsTex = *m_Textures.Get(desc.depthStencilTexture);
-        if (dsTex.userDesc.samples > SampleCount::Sample1 && rp.desc.depthStencilAttachment.hasResolve) {
+        if (dsTex.userDesc.samples > SampleCount::Sample1 && rp.userDesc.depthStencilAttachment.hasResolve) {
             needsDSResolve = true;
         }
     }
@@ -886,6 +998,8 @@ ExResult<FramebufferHandle> GLGraphicsBackend::CreateFramebuffer(const Framebuff
 }
 
 ExError GLGraphicsBackend::DestroyFramebuffer(const FramebufferHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (m_Framebuffers.IsEqual(handle, m_DefaultBackbuffer))
         return {"Cannot delete singular default backbuffer FBO, OpenGL is implicit"};
     if (!m_Framebuffers.IsValid(handle))
@@ -900,6 +1014,8 @@ ExError GLGraphicsBackend::DestroyFramebuffer(const FramebufferHandle& handle) {
 }
 
 ExResult<FramebufferDesc> GLGraphicsBackend::DescribeFramebuffer(const FramebufferHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Framebuffers.IsValid(handle)) {
         return {"Invalid Handle"};
     } else {
@@ -908,6 +1024,8 @@ ExResult<FramebufferDesc> GLGraphicsBackend::DescribeFramebuffer(const Framebuff
 }
 
 ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc, ShaderInputState& out_VertexBindingsDesc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
 
     if (desc.pipelineType == PipelineType::Graphics) {
         if (desc.entryPointVertex.empty()) {
@@ -1150,6 +1268,8 @@ ExResult<ShaderHandle> GLGraphicsBackend::CreateProgram(const ShaderDesc& desc, 
 }
 
 ExError GLGraphicsBackend::DestroyProgram(const ShaderHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Programs.IsValid(handle))
         return {"Invalid Handle"};
 
@@ -1163,6 +1283,8 @@ ExError GLGraphicsBackend::DestroyProgram(const ShaderHandle& handle) {
 }
 
 ExResult<ShaderDesc> GLGraphicsBackend::DescribeProgram(const ShaderHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Programs.IsValid(handle)) {
         return {"Invalid Handle"};
     } else {
@@ -1171,6 +1293,8 @@ ExResult<ShaderDesc> GLGraphicsBackend::DescribeProgram(const ShaderHandle& hand
 }
 
 ExResult<RenderPipelineHandle> GLGraphicsBackend::CreateRenderPipeline(const RenderPipelineDesc& desc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_Programs.IsValid(desc.shader))
         return ExError("Invalid Pipeline Shader");
 
@@ -1182,6 +1306,8 @@ ExResult<RenderPipelineHandle> GLGraphicsBackend::CreateRenderPipeline(const Ren
 }
 
 ExError GLGraphicsBackend::DestroyRenderPipeline(const RenderPipelineHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_RenderPipelines.IsValid(handle))
         return {"Invalid Handle"};
     auto& pipeline = *m_RenderPipelines.Get(handle);
@@ -1201,6 +1327,8 @@ ExError GLGraphicsBackend::DestroyRenderPipeline(const RenderPipelineHandle& han
 }
 
 ExResult<RenderPipelineDesc> GLGraphicsBackend::DescribeRenderPipeline(const RenderPipelineHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_RenderPipelines.IsValid(handle)) {
         return {"Invalid Handle"};
     } else {
@@ -1209,6 +1337,8 @@ ExResult<RenderPipelineDesc> GLGraphicsBackend::DescribeRenderPipeline(const Ren
 }
 
 ExResult<ComputePipelineHandle> GLGraphicsBackend::CreateComputePipeline(const ComputePipelineDesc& desc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     auto& pipeline = *m_ComputePipelines.Reserve();
     pipeline.userDesc = desc;
     pipeline.alive = true;
@@ -1217,6 +1347,8 @@ ExResult<ComputePipelineHandle> GLGraphicsBackend::CreateComputePipeline(const C
 }
 
 ExError GLGraphicsBackend::DestroyComputePipeline(const ComputePipelineHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_ComputePipelines.IsValid(handle))
         return {"Invalid Handle"};
 
@@ -1225,6 +1357,8 @@ ExError GLGraphicsBackend::DestroyComputePipeline(const ComputePipelineHandle& h
 }
 
 ExResult<ComputePipelineDesc> GLGraphicsBackend::DescribeComputePipeline(const ComputePipelineHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_ComputePipelines.IsValid(handle)) {
         return {"Invalid Handle"};
     } else {
@@ -1233,6 +1367,8 @@ ExResult<ComputePipelineDesc> GLGraphicsBackend::DescribeComputePipeline(const C
 }
 
 ExResult<RenderPassHandle> GLGraphicsBackend::CreateDefaultRenderPass(const DefaultRenderPassDesc& desc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     auto& pass = *m_RenderPasses.Reserve();
     RenderPassDesc rpdesc{};
     AttachmentDesc colorDesc{};
@@ -1251,20 +1387,24 @@ ExResult<RenderPassHandle> GLGraphicsBackend::CreateDefaultRenderPass(const Defa
         rpdesc.depthStencilAttachment.samples = SampleCount::Sample1;
         rpdesc.depthStencilAttachment.hasResolve = false;
     }    
-    pass.desc = rpdesc;
+    pass.userDesc = rpdesc;
     pass.Sign();
 
     return pass.External();
 }
 
 ExResult<RenderPassHandle> GLGraphicsBackend::CreateRenderPass(const RenderPassDesc& desc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     auto& pass = *m_RenderPasses.Reserve();
-    pass.desc = desc;
+    pass.userDesc = desc;
     pass.Sign();
     return pass.External();
 }
 
 ExError GLGraphicsBackend::DestroyRenderPass(const RenderPassHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_RenderPasses.IsValid(handle))
         return {"Invalid Handle"};
 
@@ -1273,6 +1413,8 @@ ExError GLGraphicsBackend::DestroyRenderPass(const RenderPassHandle& handle) {
 }
 
 ExResult<RenderPassDesc> GLGraphicsBackend::DescribeRenderPass(const RenderPassHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_RenderPasses.IsValid(handle)) {
         return {"Invalid Handle"};
     } else {
@@ -1281,6 +1423,8 @@ ExResult<RenderPassDesc> GLGraphicsBackend::DescribeRenderPass(const RenderPassH
 }
 
 ExError GLGraphicsBackend::Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, uint32_t z) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (x > m_Capabilities.maxWorkGroupCount[0] ||
         y > m_Capabilities.maxWorkGroupCount[1] ||
         z > m_Capabilities.maxWorkGroupCount[2]
@@ -1295,6 +1439,8 @@ ExError GLGraphicsBackend::Dispatch(ICommandList& cmd, uint32_t x, uint32_t y, u
 }
 
 ExError GLGraphicsBackend::Barrier(ICommandList&, std::vector<ResourceTransition> transitions) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     GLenum bits = 0;
 
     for (size_t i{0}; i < transitions.size(); i++) {
@@ -1307,6 +1453,8 @@ ExError GLGraphicsBackend::Barrier(ICommandList&, std::vector<ResourceTransition
 }
 
 ExResult<GLuint> GLGraphicsBackend::CreateVertexArray(GLRenderPipeline& pipeline) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     GLuint vao{};
 
     GL_CALL(m_GL->GenVertexArrays(1, &vao));
@@ -1391,6 +1539,8 @@ ExResult<GLuint> GLGraphicsBackend::CreateVertexArray(GLRenderPipeline& pipeline
 }
 
 ExError GLGraphicsBackend::PrepVertexArray(GLRenderPipeline& pipeline) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!pipeline.alive) {
         return ExError{"PrepVertexArray() Failed: Dead/Invalid pipeline"};
     }
@@ -1420,6 +1570,8 @@ ExError GLGraphicsBackend::PrepVertexArray(GLRenderPipeline& pipeline) {
 }
 
 ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStream& args) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (type >= CommandType::BindVertexBuffer) {
         if (!m_CurrentRenderPass.bound)
             return {"GLCommand::Execute \"GLCommandType::BindVertices/DrawXYZ\" Failed: No RenderPass bound, use BeginRenderPass()"};
@@ -1461,15 +1613,15 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             GL_CALL(m_GL->BindFramebuffer(GL_FRAMEBUFFER, fb.fbo));
 
             std::vector<GLenum> drawBuffers(fb.fbo != 0 ?
-                pass.desc.colorAttachments.size() :
-                std::max(pass.desc.colorAttachments.size(), (std::size_t)1)
+                pass.userDesc.colorAttachments.size() :
+                std::max(pass.userDesc.colorAttachments.size(), (std::size_t)1)
             );
 
             if (fb.fbo !=  0) {
                 if (drawBuffers.size() > m_Capabilities.maxColorAttachments) {
                     return {"GLCommand::Execute \"BeginRenderPass\" Failed: Maximum MRT supported by device is " + std::to_string(m_Capabilities.maxColorAttachments)};
                 }
-                for (size_t i = 0; i < pass.desc.colorAttachments.size(); ++i)
+                for (size_t i = 0; i < pass.userDesc.colorAttachments.size(); ++i)
                     drawBuffers[i] = GL_COLOR_ATTACHMENT0 + i;
 
                 GL_CALL(m_GL->DrawBuffers((GLsizei)drawBuffers.size(), drawBuffers.data()));    
@@ -1480,8 +1632,8 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             }
 
             // Clear attachments based on LoadOp
-            for (size_t i = 0; i < pass.desc.colorAttachments.size(); ++i) {
-                auto& att = pass.desc.colorAttachments[i];
+            for (size_t i = 0; i < pass.userDesc.colorAttachments.size(); ++i) {
+                auto& att = pass.userDesc.colorAttachments[i];
 
                 if (att.passOps.load == LoadOp::Clear) {
                     auto colors = cmd.clear.clearColor;
@@ -1489,14 +1641,14 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                 }
             }
             if (fb.hasDepth) {
-                auto& depthStencil = pass.desc.depthStencilAttachment;
+                auto& depthStencil = pass.userDesc.depthStencilAttachment;
 
                 if (depthStencil.passOps.load == LoadOp::Clear) {
                     GL_CALL(m_GL->ClearBufferfv(GL_DEPTH, 0, &cmd.clear.clearDepth));
                 }
             }
             if (fb.hasStencil) {
-                auto& depthStencil = pass.desc.depthStencilAttachment;
+                auto& depthStencil = pass.userDesc.depthStencilAttachment;
 
                 if (depthStencil.passOps.load == LoadOp::Clear) {
                     GL_CALL(m_GL->ClearBufferiv(GL_STENCIL, 0, (const GLint*)&cmd.clear.clearStencil));
@@ -1521,7 +1673,7 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                 GL_CALL(m_GL->BindFramebuffer(GL_READ_FRAMEBUFFER, fb.fbo));
                 GL_CALL(m_GL->BindFramebuffer(GL_DRAW_FRAMEBUFFER, fb.resolveFbo));
 
-                for (size_t i = 0; i < pass.desc.colorAttachments.size(); ++i) {
+                for (size_t i = 0; i < pass.userDesc.colorAttachments.size(); ++i) {
                     GL_CALL(m_GL->ReadBuffer(GL_COLOR_ATTACHMENT0 + i));
                     GL_CALL(m_GL->DrawBuffer(GL_COLOR_ATTACHMENT0 + i));
 
@@ -1539,8 +1691,8 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
             if (fb.fbo !=  0) {
                 std::vector<GLenum> invalidateAttachments;
 
-                for (size_t i = 0; i < pass.desc.colorAttachments.size(); ++i) {
-                    if (pass.desc.colorAttachments[i].passOps.store == StoreOp::Discard) {
+                for (size_t i = 0; i < pass.userDesc.colorAttachments.size(); ++i) {
+                    if (pass.userDesc.colorAttachments[i].passOps.store == StoreOp::Discard) {
                         if (fb.fbo != 0) {
                             invalidateAttachments.push_back(GL_COLOR_ATTACHMENT0 + i);
                         } else {
@@ -1550,12 +1702,12 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
                     }
                 }
 
-                if (pass.desc.depthStencilAttachment.passOps.store == StoreOp::Discard) {
-                    if (pass.desc.hasDepth && pass.desc.hasStencil) {
+                if (pass.userDesc.depthStencilAttachment.passOps.store == StoreOp::Discard) {
+                    if (pass.userDesc.hasDepth && pass.userDesc.hasStencil) {
                         invalidateAttachments.push_back(fb.fbo != 0 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_STENCIL);
-                    } else if (pass.desc.hasDepth) {
+                    } else if (pass.userDesc.hasDepth) {
                         invalidateAttachments.push_back(fb.fbo != 0 ? GL_DEPTH_ATTACHMENT : GL_DEPTH);
-                    } else if (pass.desc.hasStencil) {
+                    } else if (pass.userDesc.hasStencil) {
                         invalidateAttachments.push_back(fb.fbo != 0 ? GL_STENCIL_ATTACHMENT : GL_STENCIL);
                     }
                 }
@@ -1820,157 +1972,220 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 
             auto& program = *m_Programs.Get(shaderHandle);
             auto programId = program.id;
-        
-            if (implicitBinds) {
-                auto& bindingsIntern = program.bindings;
-                auto& bindings = res.userDesc.bindings;
-                auto& slotCache = pipeline.bindingSlotCache;
 
-                auto lastCache = slotCache.find(cmd.handle);
-                auto found = lastCache != slotCache.end();
+            auto& bindingsShader = program.bindings;
+            auto& bindingsUser = res.userDesc.bindings;
 
-                if (!found || (found && lastCache->second.resourceSetVersion != res.userDesc.version)) {
-                    if (!found) slotCache[cmd.handle] = {};
-                    auto& cache = slotCache[cmd.handle];
-                    cache.resourceSetVersion = res.userDesc.version; // Update version
+            auto& slotCache = pipeline.bindingSlotCache;
 
-                    cache.blockIndices.clear();
-                    cache.blockIndices.resize(bindings.size());
+            auto lastCache = slotCache.find(cmd.handle);
+            auto found = lastCache != slotCache.end();
 
-                    cache.textureUnits.clear();
-                    cache.textureUnits.resize(bindings.size());
+            if (!found || (found && lastCache->second.resourceSetVersion != res.userDesc.version)) {
+                if (!found) slotCache[cmd.handle] = {};
+                auto& cache = slotCache[cmd.handle];
 
-                    cache.textureLocations.clear();
-                    cache.textureLocations.resize(bindings.size());
+                cache.resourceSetVersion = res.userDesc.version; // Update version
+                cache.blockIndices.clear();
+                cache.textureUnits.clear();
+                cache.textureLocations.clear();
 
-                    uint32_t texUnit{0};
+                for (auto& bindingUser : bindingsUser) {
+                    auto bindingShaderItr = bindingsShader.resIdByName.find(bindingUser.bindPoint);
+                    if (bindingShaderItr == bindingsShader.resIdByName.end()) {
+                        return utils::ExError{"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Target GPU program (Shader) doesn't have any bindpoint with name: " + bindingUser.bindPoint};
+                    }
+                    auto bindingShaderId = bindingShaderItr->second;
+                    auto& bindingShader = bindingsShader.resources[bindingShaderId];
 
-                    for (uint32_t i{0}; i < bindings.size(); i++) { // Update uniform block indices
-                        auto& binding = bindings[i];
+                    bindingUser.__shader_res_id = bindingShaderId;
+                }
 
-                        if (bindingsIntern.resIdByName.find(binding.bindPoint) == bindingsIntern.resIdByName.end()) {
-                            return utils::ExError{"Target program doesn't have any bindpoint with name: " + binding.bindPoint};
+                uint32_t texUnit{0};
+                uint32_t blockUnit{0};
+
+                for (auto& bindingUser : bindingsUser) { // Update uniform block indices
+                    auto bindingShaderId = bindingUser.__shader_res_id;
+                    auto& bindingShader = bindingsShader.resources[bindingShaderId];
+
+                    bool IsTexResource {
+                        bindingShader.type == ResourceType::Texture ||
+                        bindingShader.type == ResourceType::StorageTexture
+                    };
+
+                    if (IsTexResource != (bindingUser.resourceHandle.kind == ResourceKind::Texture)) {
+                        return utils::ExError{"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Target GPU program (Shader) bindpoint type mismatch (Buffer != Texture or vice versa): " + bindingUser.bindPoint};
+                    }
+                    if (bindingUser.isArray != bindingShader.isArray) {
+                        return utils::ExError{"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Target GPU program (Shader) bindpoint is misleading as array type: " + bindingUser.bindPoint};
+                    }
+                    if (bindingUser.isArray && (bindingUser.arrayIndex >= bindingShader.arraySize)) {
+                        return utils::ExError{"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: Target GPU program (Shader) bindpoint arrayIndex out of bounds: " + bindingUser.bindPoint};
+                    }
+
+                    std::string glBindPoint = bindingUser.isArray
+                        ? std::string(bindingUser.bindPoint + "[" + std::to_string(bindingUser.arrayIndex) + "]")
+                        : bindingUser.bindPoint;
+
+                    auto bindIdx = bindingUser.isArray ? bindingUser.arrayIndex : 0;
+                    auto bindSize = bindingShader.isArray ? bindingShader.arraySize : 1;
+
+                    if (implicitBinds && IsTexResource) {
+                        int32_t uniformLoc = m_GL->GetUniformLocation(programId, glBindPoint.c_str());
+                        if (uniformLoc < 0) 
+                            return utils::ExError{"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: GL: Target Uniform Location of bindpoint not found: " + glBindPoint};
+
+                        if (cache.textureUnits.find(bindingShaderId) == cache.textureUnits.end()) {
+                            cache.textureUnits[bindingShaderId] = {};
+                            cache.textureUnits[bindingShaderId].resize(bindSize);
                         }
-                        auto& bindingResource = bindingsIntern.resources[bindingsIntern.resIdByName[binding.bindPoint]];
 
-                        bool IsTexResource {
-                            bindingResource.type == ResourceType::Texture ||
-                            bindingResource.type == ResourceType::StorageTexture
-                        };
+                        if (cache.textureLocations.find(bindingShaderId) == cache.textureLocations.end()) {
+                            cache.textureLocations[bindingShaderId] = {};
+                            cache.textureLocations[bindingShaderId].resize(bindSize);
+                        }
 
-                        if (IsTexResource) {
-                            auto& iTexUnitsCache = cache.textureUnits[i];
-                            auto& iTexLocsCache = cache.textureLocations[i];
-                            
-                            iTexUnitsCache.resize(resources.size());
-                            iTexLocsCache.resize(resources.size());
+                        cache.textureLocations[bindingShaderId][bindIdx] = (uint32_t)uniformLoc;
+                        cache.textureUnits[bindingShaderId][bindIdx] = texUnit++;
+                    } else if (!IsTexResource) { // ETC. Uniforms, SSBOs... (Blocks)
+                        uint32_t uniformLoc = m_GL->GetUniformBlockIndex(programId, glBindPoint.c_str());
+                        if (uniformLoc == GL_INVALID_INDEX) 
+                            return utils::ExError{"GLCommand::Execute \"GLCommandType::BindResourceSet\" Failed: GL: Target Uniform Location of bindpoint not found: " + glBindPoint};
 
-                            for (uint32_t j{0}; j < resources.size(); i++) {
-                                iTexUnitsCache[j] = texUnit++;
-                                iTexLocsCache[j] = m_GL->GetUniformLocation(programId, binding.bindPoint.c_str());
-                            }
-                        } else { // ETC. Uniforms, SSBOs... (Blocks)
-                            auto& iBlockIdxCache = cache.blockIndices[i];
+                        if (cache.blockUnits.find(bindingShaderId) == cache.blockUnits.end()) {
+                            cache.blockUnits[bindingShaderId] = {};
+                            cache.blockUnits[bindingShaderId].resize(bindSize);
+                        }
 
-                            iBlockIdxCache.resize(resources.size());
+                        if (implicitBinds && cache.blockIndices.find(bindingShaderId) == cache.blockIndices.end()) {
+                            cache.blockIndices[bindingShaderId] = {};
+                            cache.blockIndices[bindingShaderId].resize(bindSize);
+                        }
 
-                            for (uint32_t j{0}; j < resources.size(); i++) {
-                                iBlockIdxCache[j] = m_GL->GetUniformBlockIndex(programId, binding.bindPoint.c_str());
+                        if (implicitBinds) {
+                            cache.blockIndices[bindingShaderId][bindIdx] = uniformLoc;
+
+                            switch (bindingShader.type) {
+                                case ResourceType::StorageBuffer:
+                                    GL_CALL(m_GL->ShaderStorageBlockBinding(programId, uniformLoc, blockUnit));
+                                break;
+                                case ResourceType::UniformBuffer:
+                                    GL_CALL(m_GL->UniformBlockBinding(programId, uniformLoc, blockUnit));
+                                break;
                             }
                         }
+                        cache.blockUnits[bindingShaderId][bindIdx] = blockUnit++;
                     }
                 }
             }
 
-            for (uint32_t iBind{0}; iBind < res.userDesc.bindings.size(); iBind++) {
-                auto& b = res.userDesc.bindings[iBind];
-                auto& resources = b.resources;
+            for (auto& bindingUser : res.userDesc.bindings) {
+                auto bindingShaderId = bindingUser.__shader_res_id;
+                auto& bindingShader = bindingsShader.resources[bindingShaderId];
 
-                for (uint32_t jArr{0}; jArr < resources.size(); jArr++) {
-                    uint32_t blockIndex, texUnit, texLoc;
-                    auto& resource = resources[jArr];
+                uint32_t texUnit{0}; // for implicit GL (< std140) binds
+                uint32_t texIndex{0}; // modern binding
+                uint32_t blockIndex{0}; // modern binding
+                uint32_t blockUnit{0}; // modern & implicit binding
 
-                    if (implicitBinds) {
-                        if (b.type == BindingType::SampledTexture || b.type == BindingType::StorageTexture) {
-                            texUnit = pipeline.bindingSlotCache[cmd.handle].textureUnits[iBind][jArr];
-                            texLoc = pipeline.bindingSlotCache[cmd.handle].textureLocations[iBind][jArr];
-                        } else {
-                            blockIndex = pipeline.bindingSlotCache[cmd.handle].blockIndices[iBind][jArr];
-                        }
+                uint32_t bindCacheIdx = bindingUser.isArray ? bindingUser.arrayIndex : 0;
+
+                if (implicitBinds) {
+                    if (bindingUser.resourceHandle.kind == ResourceKind::Texture) {
+                        texUnit = pipeline.bindingSlotCache[cmd.handle].textureUnits[bindingShaderId][bindCacheIdx];
+                        texIndex = pipeline.bindingSlotCache[cmd.handle].textureLocations[bindingShaderId][bindCacheIdx];
+                    } else {
+                        blockIndex = pipeline.bindingSlotCache[cmd.handle].blockIndices[bindingShaderId][bindCacheIdx];
                     }
+                } else {
+                    if (bindingUser.resourceHandle.kind == ResourceKind::Texture) {
+                        texUnit = bindingShader.bindingIndex;
+                        texIndex = bindingShader.bindingIndex;
+                    } else {
+                        blockIndex = bindingShader.bindingIndex;
+                    }
+                }
+                blockUnit = pipeline.bindingSlotCache[cmd.handle].blockUnits[bindingShaderId][bindCacheIdx];
 
-                    switch (b.type) {
-                        case BindingType::UniformBuffer: {
-                            if (!m_Buffers.IsValid(resource.index, resource.generation))
-                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle"};
-                            if (resource.kind != ResourceKind::Buffer)
-                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle, ResourceKind != Buffer"};
+                auto resource = bindingUser.resourceHandle;
 
-                            GL_CALL(m_GL->BindBufferRange(
-                                GL_UNIFORM_BUFFER,
-                                b.slot,
-                                m_Buffers.Get(resource.AsBuffer())->id,
-                                b.offset,
-                                b.range
-                            ));
+                switch (bindingShader.type) {
+                    case ResourceType::UniformBuffer: {
+                        if (!m_Buffers.IsValid(resource.index, resource.generation))
+                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::UniformBuffer\" Failed: Invalid Buffer handle"};
 
-                            if (implicitBinds) {
-                                GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
-                            }
-                            break;
+                        GL_CALL(m_GL->BindBufferRange(
+                            GL_UNIFORM_BUFFER,
+                            blockUnit,
+                            m_Buffers.Get(resource.AsBuffer())->id,
+                            bindingUser.offset,
+                            bindingUser.range
+                        ));
+                        break;
+                    }
+                    case ResourceType::StorageBuffer: {
+                        if (!m_Buffers.IsValid(resource.index, resource.generation))
+                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageBuffer\" Failed: Invalid Buffer handle"};
+
+                        GL_CALL(m_GL->BindBufferRange(
+                            GL_SHADER_STORAGE_BUFFER,
+                            blockUnit,
+                            m_Buffers.Get(resource.AsBuffer())->id,
+                            bindingUser.offset,
+                            bindingUser.range
+                        ));
+                        break;
+                    }
+                    case ResourceType::Texture: {
+                        if (!m_Textures.IsValid(resource.index, resource.generation))
+                            return {"GLCommand::Execute \"GLCommandType::BindResourceSet::SampledTexture\" Failed: Invalid Texture handle"};
+
+                        auto& texture = *m_Textures.Get(resource.AsTexture());
+
+                        GLenum target = ToGLTextureTarget(texture.userDesc.type);
+                        
+                        GL_CALL(m_GL->ActiveTexture(GL_TEXTURE0 + texUnit));
+                        GL_CALL(m_GL->BindTexture(target, texture.id));
+
+                        if (implicitBinds) {
+                            GL_CALL(m_GL->Uniform1i(texIndex, texUnit));
                         }
-                        case BindingType::StorageBuffer: {
-                            if (!m_Buffers.IsValid(resource.index, resource.generation))
-                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageBuffer\" Failed: Invalid Buffer handle"};
+                        break;
+                    }
+                    // TODO: This
+                    case ResourceType::StorageTexture: {
+                        // if (!m_Textures.IsValid(resource.index, resource.generation))
+                        //     return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Invalid Texture handle"};
+                        // if (!m_Capabilities.Has(GraphicsCapEnum::ImageLoadStore))
+                        //     return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Host: Image Load/Store Unsupported"};
 
-                            GL_CALL(m_GL->BindBufferRange(
-                                GL_SHADER_STORAGE_BUFFER,
-                                b.slot,
-                                m_Buffers.Get(resource.AsBuffer())->id,
-                                b.offset,
-                                b.range
-                            ));
+                        // auto texSlot = implicitBinds ? texUnit : b.slot;
+                        // GL_CALL(m_GL->BindImageTexture(
+                        //     texSlot,
+                        //     m_Textures.Get(resource.AsTexture())->id,
+                        //     0,
+                        //     GL_FALSE,
+                        //     0,
+                        //     GL_READ_WRITE,
+                        //     ToGLTextureFormat(m_Textures.Get(resource.AsTexture())->userDesc.format)
+                        // ));
 
-                            if (implicitBinds) {
-                                GL_CALL(m_GL->UniformBlockBinding(programId, blockIndex, b.slot));
-                            }
-                            break;
-                        }
-                        case BindingType::SampledTexture: {
-                            if (!m_Textures.IsValid(resource.index, resource.generation))
-                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::SampledTexture\" Failed: Invalid Texture handle"};
-                            
-                            auto texSlot = implicitBinds ? texUnit : b.slot;
-                            GL_CALL(m_GL->ActiveTexture(GL_TEXTURE0 + texSlot));
-                            GL_CALL(m_GL->BindTexture(GL_TEXTURE_2D, m_Textures.Get(resource.AsTexture())->id));
+                        // if (implicitBinds) {
+                        //     GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
+                        // }
+                        // break;
+                    }
+                    default: {
+                        return utils::ExError{"This shouldn't happen, bruh"};
+                    }
+                }
 
-                            if (implicitBinds) {
-                                GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
-                            }
-                            break;
-                        }
-                        case BindingType::StorageTexture: {
-                            if (!m_Textures.IsValid(resource.index, resource.generation))
-                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Invalid Texture handle"};
-                            if (!m_Capabilities.Has(GraphicsCapEnum::ImageLoadStore))
-                                return {"GLCommand::Execute \"GLCommandType::BindResourceSet::StorageTexture\" Failed: Host: Image Load/Store Unsupported"};
-
-                            auto texSlot = implicitBinds ? texUnit : b.slot;
-                            GL_CALL(m_GL->BindImageTexture(
-                                texSlot,
-                                m_Textures.Get(resource.AsTexture())->id,
-                                0,
-                                GL_FALSE,
-                                0,
-                                GL_READ_WRITE,
-                                ToGLTextureFormat(m_Textures.Get(resource.AsTexture())->userDesc.format)
-                            ));
-
-                            if (implicitBinds) {
-                                GL_CALL(m_GL->Uniform1i(texLoc, texSlot));
-                            }
-                            break;
-                        }
+                if (resource.kind == ResourceKind::Texture) {
+                    if (m_Samplers.IsValid(bindingUser.sampler)) {
+                        auto& sampler = *m_Samplers.Get(bindingUser.sampler);
+                        GL_CALL(m_GL->BindSampler(texUnit, sampler.id));
+                    } else {
+                        GL_CALL(m_GL->BindSampler(texUnit, 0));
                     }
                 }
             }
@@ -2099,6 +2314,8 @@ ExError GLGraphicsBackend::InternalExecute(CommandType type, data::BufferDataStr
 }
 
 ExError GLGraphicsBackend::Execute(ICommandList& cmd) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     auto& glCmd = static_cast<GLCommandList&>(cmd);
 
     if (!glCmd.ValidateThread()) {
@@ -2139,16 +2356,22 @@ ExError GLGraphicsBackend::Execute(ICommandList& cmd) {
 }
 
 utils::ExResult<uint32_t> GLGraphicsBackend::AcquireNextImage() {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     return 0; // OpenGL always has single backbuffer
 }
 
 utils::ExResult<FramebufferHandle> GLGraphicsBackend::GetSwapchainFramebuffer(uint32_t imageIndex) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (imageIndex != 0)
         return ExError{"OpenGL has only one single backbuffer and is (FBO 0)"};
     return m_DefaultBackbuffer;
 }
 
 utils::ExError GLGraphicsBackend::Present(uint32_t imageIndex) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (imageIndex != 0)
         return ExError{"OpenGL has only one backbuffer"};
 
@@ -2157,6 +2380,8 @@ utils::ExError GLGraphicsBackend::Present(uint32_t imageIndex) {
 }
 
 utils::ExResult<ResourceSetHandle> GLGraphicsBackend::CreateResourceSet(const ResourceSetDesc& desc) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     auto& handle = *m_ResourceSets.Reserve();
     handle.userDesc = desc;
     handle.alive = true;
@@ -2164,7 +2389,9 @@ utils::ExResult<ResourceSetHandle> GLGraphicsBackend::CreateResourceSet(const Re
     return handle.External();
 }
 
-utils::ExError GLGraphicsBackend::UpdateResourceSet(const ResourceSetHandle& handle, std::vector<Binding> bindings) {
+utils::ExError GLGraphicsBackend::UpdateResourceSet(const ResourceSetHandle& handle, const std::vector<ResourceBinding>& bindings) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_ResourceSets.IsValid(handle))
         return {"Invalid handle"};
     auto& res = *m_ResourceSets.Get(handle);
@@ -2177,6 +2404,8 @@ utils::ExError GLGraphicsBackend::UpdateResourceSet(const ResourceSetHandle& han
 }
 
 utils::ExError GLGraphicsBackend::DestroyResourceSet(const ResourceSetHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_ResourceSets.IsValid(handle))
         return {"Invalid handle"};
 
@@ -2185,6 +2414,8 @@ utils::ExError GLGraphicsBackend::DestroyResourceSet(const ResourceSetHandle& ha
 }
 
 ExResult<ResourceSetDesc> GLGraphicsBackend::DescribeResourceSet(const ResourceSetHandle& handle) {
+    if (!m_Thread->ValidateThread())
+        return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     if (!m_ResourceSets.IsValid(handle)) {
         return {"Invalid Handle"};
     } else {

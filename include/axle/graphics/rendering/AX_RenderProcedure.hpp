@@ -1,5 +1,6 @@
 #pragma once
 
+#include "axle/graphics/cmd/AX_ICommandList.hpp"
 #include "axle/graphics/scene/AX_ModelInstance.hpp"
 
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
