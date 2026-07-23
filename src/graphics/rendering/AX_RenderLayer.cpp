@@ -72,7 +72,7 @@ ThreadInvocation<utils::ExResult<RLRegistry>> RenderLayer::GetCurrentRegistry() 
     });
 }
 
-ThreadInvocation<utils::ExError> RenderLayer::RegisterWork(FramebufferHandle fb) {
+ThreadInvocation<utils::ExError> RenderLayer::RegisterWork(const FramebufferHandle& fb) {
     return ThreadInvocation<utils::ExError>(m_Thread, [&](){
         if (m_RLRegistry.active) return utils::ExError{"Already has active registry"};
 

@@ -28,10 +28,7 @@ public:
 
     ThreadInvocation<utils::ExResult<RenderPipelineHandle>> GetOrCreate(const RenderPipelineDesc& desc);
     
-    ThreadInvocation<utils::ExResult<RenderPipelineDesc>> Describe(const RenderPipelineHandle& handle);
     ThreadInvocation<utils::ExResult<RenderPipelineDesc>> Describe(std::size_t pipelineHash);
-
-    ThreadInvocation<utils::ExError> Destroy(const RenderPipelineHandle& handle);
     ThreadInvocation<utils::ExError> Destroy(std::size_t pipelineHash);
 };
 

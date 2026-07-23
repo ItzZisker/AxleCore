@@ -48,8 +48,15 @@ RenderPipelineHandle RPPipelineResolver::ResolveUnsafe(const RPPipelineResolveCo
         return RenderPipelineHandle{utils::INVALID_HANDLE};
 
     pipelineDesc.vertexLayout = drawBindsMap.at(drawCallCtx.meshId).layout;
+    
+    RPShaderContext rpshdrCtx {
+        .shaderId = desiredMeshState.shaderId,
+        .vertexLayout = pipelineDesc.vertexLayout,
+        .transformInput = RPShaderTransformInputType::Uniform, // TODO: Read Renderbatch descriptor and check if its instanced rendering or not, etc.
+        .skinned = false // TODO: We have to know when to use the animation/skinned shader, the mesh should also contains the skin data (boneIds/weights)
+    };
 
-    auto resShdr = m_Desc.shaderProcMgr->GetOrGenerateUnsafe(desiredMeshState.shaderId, pipelineDesc.vertexLayout);
+    auto resShdr = m_Desc.shaderProcMgr->GetOrGenerateUnsafe(rpshdrCtx);
     if (!resShdr.has_value())
         return RenderPipelineHandle{utils::INVALID_HANDLE};
 

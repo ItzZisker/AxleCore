@@ -307,7 +307,6 @@ utils::ExResult<BufferDesc> GLGraphicsBackend::DescribeBuffer(const BufferHandle
 }
 
 static uint32_t CalcFullMipCount(uint32_t w, uint32_t h, uint32_t d = 1) {
-    if (!m_Thread->ValidateThread()) return utils::ExError("Invalid Thread caller, must be Graphics Thread Owner");
     uint32_t size = std::max({w, h, d});
     uint32_t levels = 1;
     while (size > 1) {

@@ -65,7 +65,7 @@ utils::ExResult<gfx::ShaderHandle> RPShaderManager::GetOrGenerateUnsafe(const RP
     auto rpCtxHash = RPShaderContext_Hash(ctx);
 
     if (m_ShaderCache.find(rpCtxHash) != m_ShaderCache.end())
-        return m_ShaderCache[rpCtxHash];
+        return m_ShaderCache[rpCtxHash].handle;
 
     auto foundItr = m_DescsById.find(ctx.shaderId);
     if (foundItr == m_DescsById.end())
@@ -99,8 +99,11 @@ utils::ExResult<gfx::ShaderHandle> RPShaderManager::GetOrGenerateUnsafe(const RP
     shaderDesc.defines = rpShaderDesc.defines;
 
     auto gbgfx = m_Thread->GetContext();
+    ShaderInputState inputs;
 
-    gbgfx->CreateProgram(shaderDesc);
+    AX_DECL_OR_PROPAGATE(shaderHandle, gbgfx->CreateProgram(shaderDesc, inputs))
+
+    shaderStructure.
 }
 
 ThreadInvocation<utils::ExResult<gfx::ShaderHandle>> RPShaderManager::GetOrGenerate(const RPShaderContext& ctx) {

@@ -2,6 +2,8 @@
 
 #include "axle/core/concurrency/AX_ThreadCycler.hpp"
 
+#include "axle/graphics/AX_GraphicsParams.hpp"
+
 #include "axle/utils/AX_MagicPool.hpp"
 #include "axle/utils/AX_Expected.hpp"
 #include "axle/utils/AX_Types.hpp"
@@ -71,7 +73,7 @@ public:
 
     ThreadInvocation<utils::ExResult<RLRegistry>> GetCurrentRegistry();
 
-    ThreadInvocation<utils::ExError> RegisterWork(FramebufferHandle fb);
+    ThreadInvocation<utils::ExError> RegisterWork(const FramebufferHandle& fb);
     ThreadInvocation<utils::ExError> UnRegisterWork();
 };
 

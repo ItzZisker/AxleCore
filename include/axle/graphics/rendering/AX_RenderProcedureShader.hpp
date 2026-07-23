@@ -34,12 +34,17 @@ struct RPShaderContext {
     bool skinned;
 };
 
+struct RPShaderKeep {
+    gfx::ShaderHandle handle;
+    gfx::ShaderInputState inputs;
+};
+
 std::size_t RPShaderContext_Hash(const RPShaderContext& ctx);
 
 class RPShaderManager : AX_THR_RENDER_OWNED {
 private:
     std::unordered_map<utils::UUID, RPShaderDesc> m_DescsById;
-    std::unordered_map<std::size_t, gfx::ShaderHandle> m_ShaderCache; // Keyed by hashed RPShaderContext
+    std::unordered_map<std::size_t, RPShaderKeep> m_ShaderCache; // Keyed by hashed RPShaderContext
 
     utils::UUID m_Transaction{utils::UUID::Generate()};
 public:

@@ -19,64 +19,46 @@ PipelineManager::~PipelineManager() {
     }).SyncCall();
 }
 
-ThreadInvocation<ExResult<RenderPipelineHandle>> PipelineManager::Create(const RenderPipelineDesc& desc) {
-    return ThreadInvocation<ExResult<RenderPipelineHandle>>(m_Thread, [&, descCpy = desc]() -> ExResult<RenderPipelineHandle> {
-        auto gbgfx = m_Thread->GetContext();
-        return gbgfx->CreateRenderPipeline(descCpy);
+ExResult<RenderPipelineHandle> PipelineManager::Create(const RenderPipelineDesc& desc) {
+    auto gbgfx = m_Thread->GetContext();
+    return gbgfx->CreateRenderPipeline(desc);
+}
+
+ThreadInvocation<ExResult<RenderPipelineHandle>> PipelineManager::GetOrCreate(const RenderPipelineDesc& desc) {
+    return MThreadInvocation(m_Thread, [&, descCpy = desc]() -> ExResult<RenderPipelineHandle> {
+        const size_t hash = RPipeline_Hash_PipelineDesc(descCpy);
+
+        auto it = m_PipelineLookup.find(hash);
+        if (it != m_PipelineLookup.end())
+            return it->second;
+
+        AX_DECL_OR_PROPAGATE(handle, PipelineManager::Create(descCpy));
+        m_PipelineLookup[hash] = handle;
+
+        return handle;
     });
 }
 
-ExResult<RenderPipelineHandle> PipelineManager::GetOrCreate(const RenderPipelineDesc& desc) {
-    const size_t hash = RPipeline_Hash_PipelineDesc(desc);
-
-    auto it = m_PipelineLookup.find(hash);
-    if (it != m_PipelineLookup.end())
-        return it->second;
-
-    AX_DECL_OR_PROPAGATE(handle, PipelineManager::Create(desc));
-    m_PipelineLookup[hash] = handle;
-
-    return handle;
+ThreadInvocation<utils::ExResult<RenderPipelineDesc>> PipelineManager::Describe(std::size_t pipelineHash) {
+    return MThreadInvocation(m_Thread, [&, pipelineHash]() -> ExResult<RenderPipelineDesc> {
+        auto foundItr = m_PipelineLookup.find(pipelineHash);
+        if (foundItr == m_PipelineLookup.end()) {
+            return utils::ExError{"No pipeline handle found referencing hash"};
+        }
+        auto backend = m_Thread->GetContext();
+        return backend->DescribeRenderPipeline(foundItr->second);
+    });
 }
 
-utils::ExResult<RenderPipelineDesc> PipelineManager::Describe(const RenderPipelineHandle& handle) {
-    auto lambdaDescribe = [
-        handleCpy = handle,
-        gfxThread = m_GfxThread
-    ]() -> ExResult<RenderPipelineDesc> {
-        auto backend = gfxThread->GetContext();
-        return backend->DescribeRenderPipeline(handleCpy);
-    };
-    return core::InstaFutureOrQueue(*m_GfxThread, lambdaDescribe).get();
-}
-
-utils::ExResult<RenderPipelineDesc> PipelineManager::Describe(std::size_t pipelineHash) {
-    auto foundItr = m_PipelineLookup.find(pipelineHash);
-    if (foundItr == m_PipelineLookup.end()) {
-        return utils::ExError{"No pipeline handle found referencing hash"};
-    }
-    auto handle = foundItr->second;
-    return PipelineManager::Describe(handle);
-}
-
-utils::ExError PipelineManager::Destroy(const RenderPipelineHandle& handle) {
-    auto lambdaDescribe = [
-        handleCpy = handle,
-        gfxThread = m_GfxThread
-    ]() -> ExError {
-        auto backend = gfxThread->GetContext();
-        return backend->DestroyRenderPipeline(handleCpy);
-    };
-    return core::InstaFutureOrQueue(*m_GfxThread, lambdaDescribe).get();
-}
-
-utils::ExError PipelineManager::Destroy(std::size_t pipelineHash) {
-    auto foundItr = m_PipelineLookup.find(pipelineHash);
-    if (foundItr == m_PipelineLookup.end()) {
-        return utils::ExError{"No pipeline handle found referencing hash"};
-    }
-    auto handle = foundItr->second;
-    return PipelineManager::Destroy(handle);
+ThreadInvocation<utils::ExError> PipelineManager::Destroy(std::size_t pipelineHash) {
+    return MThreadInvocation(m_Thread, [&, pipelineHash]() -> ExError {
+        auto foundItr = m_PipelineLookup.find(pipelineHash);
+        if (foundItr == m_PipelineLookup.end()) {
+            return utils::ExError{"No pipeline handle found referencing hash"};
+        }
+        auto backend = m_Thread->GetContext();
+        return backend->DestroyRenderPipeline(foundItr->second);
+    });
 }
 
 std::size_t RPipeline_Hash_StencilOpState(const StencilOpState& s) {
